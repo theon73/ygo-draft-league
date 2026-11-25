@@ -83,7 +83,15 @@ The sheet works, but it depends on people following the rules and on manual upke
 | Realtime | SSE to start (draft room, activity feed) | Upgrade to WebSocket/STOMP only if two-way realtime is needed |
 | Card data | YGOPRODeck API, imported into our DB | Cache card images locally/CDN; filter by TCG date for the format |
 | Notifications | Discord webhook | Picks on the clock, trades, results |
-| Hosting | TBD (Fly.io / Railway / Render / own infra) | One container for the backend; static frontend served by the backend or a CDN |
+| Hosting | Split: Cloudflare (frontend), Fly.io or Railway (backend), managed Postgres | See "Hosting" below. Budget: a few dollars a month |
+
+**Hosting (decided 2026-11-25).** Split hosting, keeping the Java/Spring + Postgres stack:
+- **Frontend:** static Vite build on Cloudflare (Workers static assets or Pages). Free.
+- **Backend:** the Spring Boot app as one Docker container on **Fly.io or Railway** (choose at deploy time). Paying a few dollars a month is fine. Size the instance for the JVM, which needs roughly 512 MB.
+- **Database:** managed Postgres with a free or cheap tier (Neon or Supabase, or the host's own Postgres). Keep it plain Postgres so the provider can be swapped.
+- **Ruled out:** running the backend on Cloudflare Workers. Workers can't run a JVM; it would mean rewriting the backend in TypeScript, or Cloudflare Containers on a paid plan, and D1 is SQLite, not Postgres.
+- **Same-origin API:** serve the API under the frontend's domain, either by having Cloudflare route `/api/*` to the backend or with an `api.` subdomain on the same domain. Session cookies then work without cross-site cookie or CORS problems, matching the dev proxy setup.
+- Card images (downloaded from YGOPRODeck, not hotlinked) can live in Cloudflare R2 or on the backend's volume. Decide in Phase 1.
 
 Local dev: `docker compose up -d` for Postgres, `./gradlew bootRun` for the backend (port 8080), `npm run dev` for the frontend (port 5173, proxies `/api` to 8080).
 
@@ -310,7 +318,7 @@ The sheet remains useful as a **requirements reference**: it shows what a real s
 
 ## 8. Open questions
 
-- Hosting target and budget? Own domain?
+- Own domain? (Hosting itself is decided; see §2.) Fly.io vs Railway, and which Postgres provider, are decided at first deploy.
 - Google vs Discord login (or both)? Is everyone in the league on Discord? *(Needed early now: accounts are Phase 1.)*
 - How much card text and image data to store vs fetch (YGOPRODeck asks that images be downloaded, not hotlinked)?
 - Where to get real-set pack data (rarity odds, pack composition) for pack drafts? YGOPRODeck has set lists and rarities but not pull rates.
