@@ -42,3 +42,13 @@ dependencies {
 tasks.named('test') {
     useJUnitPlatform()
 }
+
+// One-shot catalog sync from YGOPRODeck, then exit. Add -Pforce to re-import an unchanged version.
+tasks.register('syncCatalog', org.springframework.boot.gradle.tasks.run.BootRun) {
+    group = 'application'
+    description = 'Sync the card catalog from YGOPRODeck, then exit.'
+    mainClass = 'com.ygoleague.LeagueApplication'
+    classpath = sourceSets.main.runtimeClasspath
+    args '--app.catalog.sync-and-exit=true', '--spring.main.web-application-type=none'
+    if (project.hasProperty('force')) args '--app.catalog.sync.force=true'
+}

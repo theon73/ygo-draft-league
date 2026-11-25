@@ -1,0 +1,703 @@
+{
+ "data": [
+  {
+   "id": 26202165,
+   "name": "Sangan",
+   "typeline": [
+    "Fiend",
+    "Effect"
+   ],
+   "type": "Effect Monster",
+   "humanReadableCardType": "Effect Monster",
+   "frameType": "effect",
+   "desc": "If this card is sent from the field to the GY: Add 1 monster with 1500 or less ATK from your Deck to your hand, but you cannot activate cards, or the effects of cards, with that name for the rest of this turn. You can only use this effect of \"Sangan\" once per turn.",
+   "race": "Fiend",
+   "atk": 1000,
+   "def": 600,
+   "level": 3,
+   "attribute": "DARK",
+   "card_sets": [
+    {
+     "set_name": "Dark Beginning 2",
+     "set_code": "DB2-EN042",
+     "set_rarity": "Rare",
+     "set_rarity_code": "(R)",
+     "set_price": "0"
+    },
+    {
+     "set_name": "Dark Legends",
+     "set_code": "DLG1-EN037",
+     "set_rarity": "Super Rare",
+     "set_rarity_code": "(SR)",
+     "set_price": "43.64"
+    }
+   ],
+   "banlist_info": {
+    "ban_goat": "Limited"
+   },
+   "card_images": [
+    {
+     "id": 26202165,
+     "image_url": "https://images.ygoprodeck.com/images/cards/26202165.jpg",
+     "image_url_small": "https://images.ygoprodeck.com/images/cards_small/26202165.jpg",
+     "image_url_cropped": "https://images.ygoprodeck.com/images/cards_cropped/26202165.jpg"
+    }
+   ],
+   "card_prices": [
+    {
+     "cardmarket_price": "0.10",
+     "tcgplayer_price": "0.28",
+     "ebay_price": "1.99",
+     "amazon_price": "1.54",
+     "coolstuffinc_price": "0.79"
+    }
+   ],
+   "misc_info": [
+    {
+     "views": 2260973,
+     "viewsweek": 3196,
+     "upvotes": 31,
+     "downvotes": 2,
+     "formats": [
+      "GOAT",
+      "OCG GOAT",
+      "Duel Links",
+      "Common Charity",
+      "Edison",
+      "TCG",
+      "OCG",
+      "Master Duel"
+     ],
+     "tcg_date": "2002-06-26",
+     "ocg_date": "1999-11-18",
+     "konami_id": 4054,
+     "has_effect": 1,
+     "md_rarity": "Rare"
+    }
+   ]
+  },
+  {
+   "id": 46986420,
+   "name": "Dark Magician",
+   "typeline": [
+    "Spellcaster",
+    "Normal"
+   ],
+   "type": "Normal Monster",
+   "humanReadableCardType": "Normal Monster",
+   "frameType": "normal",
+   "desc": "''The ultimate wizard in terms of attack and defense.''",
+   "race": "Spellcaster",
+   "atk": 2500,
+   "def": 2100,
+   "level": 7,
+   "attribute": "DARK",
+   "archetype": "Dark Magician",
+   "card_sets": [
+    {
+     "set_name": "2016 Mega-Tins",
+     "set_code": "CT13-EN003",
+     "set_rarity": "Ultra Rare",
+     "set_rarity_code": "(UR)",
+     "set_price": "6.97"
+    },
+    {
+     "set_name": "2017 Mega-Tins",
+     "set_code": "CT14-EN001",
+     "set_rarity": "Secret Rare",
+     "set_rarity_code": "(ScR)",
+     "set_price": "9.66"
+    }
+   ],
+   "card_images": [
+    {
+     "id": 46986420,
+     "image_url": "https://images.ygoprodeck.com/images/cards/46986420.jpg",
+     "image_url_small": "https://images.ygoprodeck.com/images/cards_small/46986420.jpg",
+     "image_url_cropped": "https://images.ygoprodeck.com/images/cards_cropped/46986420.jpg"
+    },
+    {
+     "id": 46986421,
+     "image_url": "https://images.ygoprodeck.com/images/cards/46986421.jpg",
+     "image_url_small": "https://images.ygoprodeck.com/images/cards_small/46986421.jpg",
+     "image_url_cropped": "https://images.ygoprodeck.com/images/cards_cropped/46986421.jpg"
+    },
+    {
+     "id": 46986414,
+     "image_url": "https://images.ygoprodeck.com/images/cards/46986414.jpg",
+     "image_url_small": "https://images.ygoprodeck.com/images/cards_small/46986414.jpg",
+     "image_url_cropped": "https://images.ygoprodeck.com/images/cards_cropped/46986414.jpg"
+    },
+    {
+     "id": 46986415,
+     "image_url": "https://images.ygoprodeck.com/images/cards/46986415.jpg",
+     "image_url_small": "https://images.ygoprodeck.com/images/cards_small/46986415.jpg",
+     "image_url_cropped": "https://images.ygoprodeck.com/images/cards_cropped/46986415.jpg"
+    },
+    {
+     "id": 46986416,
+     "image_url": "https://images.ygoprodeck.com/images/cards/46986416.jpg",
+     "image_url_small": "https://images.ygoprodeck.com/images/cards_small/46986416.jpg",
+     "image_url_cropped": "https://images.ygoprodeck.com/images/cards_cropped/46986416.jpg"
+    },
+    {
+     "id": 46986417,
+     "image_url": "https://images.ygoprodeck.com/images/cards/46986417.jpg",
+     "image_url_small": "https://images.ygoprodeck.com/images/cards_small/46986417.jpg",
+     "image_url_cropped": "https://images.ygoprodeck.com/images/cards_cropped/46986417.jpg"
+    },
+    {
+     "id": 46986418,
+     "image_url": "https://images.ygoprodeck.com/images/cards/46986418.jpg",
+     "image_url_small": "https://images.ygoprodeck.com/images/cards_small/46986418.jpg",
+     "image_url_cropped": "https://images.ygoprodeck.com/images/cards_cropped/46986418.jpg"
+    },
+    {
+     "id": 46986419,
+     "image_url": "https://images.ygoprodeck.com/images/cards/46986419.jpg",
+     "image_url_small": "https://images.ygoprodeck.com/images/cards_small/46986419.jpg",
+     "image_url_cropped": "https://images.ygoprodeck.com/images/cards_cropped/46986419.jpg"
+    },
+    {
+     "id": 36996508,
+     "image_url": "https://images.ygoprodeck.com/images/cards/36996508.jpg",
+     "image_url_small": "https://images.ygoprodeck.com/images/cards_small/36996508.jpg",
+     "image_url_cropped": "https://images.ygoprodeck.com/images/cards_cropped/36996508.jpg"
+    }
+   ],
+   "card_prices": [
+    {
+     "cardmarket_price": "0.02",
+     "tcgplayer_price": "0.33",
+     "ebay_price": "0.99",
+     "amazon_price": "14.45",
+     "coolstuffinc_price": "0.39"
+    }
+   ],
+   "misc_info": [
+    {
+     "views": 4696578,
+     "viewsweek": 2247,
+     "upvotes": 1,
+     "downvotes": 0,
+     "formats": [
+      "GOAT",
+      "Speed Duel",
+      "OCG GOAT",
+      "Duel Links",
+      "Speed Duel",
+      "Common Charity",
+      "Edison",
+      "TCG",
+      "OCG",
+      "Master Duel"
+     ],
+     "treated_as": "Dark Magician",
+     "tcg_date": "2002-03-08",
+     "ocg_date": "1999-02-04",
+     "konami_id": 4041,
+     "has_effect": 0,
+     "md_rarity": "Ultra Rare"
+    }
+   ]
+  },
+  {
+   "id": 1861629,
+   "name": "Decode Talker",
+   "typeline": [
+    "Cyberse",
+    "Link",
+    "Effect"
+   ],
+   "type": "Link Monster",
+   "humanReadableCardType": "Link Effect Monster",
+   "frameType": "link",
+   "desc": "2+ Effect Monsters\r\nGains 500 ATK for each monster it points to. When your opponent activates a card or effect that targets a card(s) you control (Quick Effect): You can Tribute 1 monster this card points to; negate the activation, and if you do, destroy that card.",
+   "race": "Cyberse",
+   "atk": 2300,
+   "def": null,
+   "level": 0,
+   "attribute": "DARK",
+   "archetype": "Code Talker",
+   "linkval": 3,
+   "linkmarkers": [
+    "Top",
+    "Bottom-Left",
+    "Bottom-Right"
+   ],
+   "card_sets": [
+    {
+     "set_name": "Duel Devastator",
+     "set_code": "DUDE-EN023",
+     "set_rarity": "Ultra Rare",
+     "set_rarity_code": "(UR)",
+     "set_price": "1.54"
+    },
+    {
+     "set_name": "Duel Power",
+     "set_code": "DUPO-EN106",
+     "set_rarity": "Ultra Rare",
+     "set_rarity_code": "(UR)",
+     "set_price": "1.56"
+    }
+   ],
+   "card_images": [
+    {
+     "id": 1861629,
+     "image_url": "https://images.ygoprodeck.com/images/cards/1861629.jpg",
+     "image_url_small": "https://images.ygoprodeck.com/images/cards_small/1861629.jpg",
+     "image_url_cropped": "https://images.ygoprodeck.com/images/cards_cropped/1861629.jpg"
+    },
+    {
+     "id": 1861630,
+     "image_url": "https://images.ygoprodeck.com/images/cards/1861630.jpg",
+     "image_url_small": "https://images.ygoprodeck.com/images/cards_small/1861630.jpg",
+     "image_url_cropped": "https://images.ygoprodeck.com/images/cards_cropped/1861630.jpg"
+    }
+   ],
+   "card_prices": [
+    {
+     "cardmarket_price": "0.03",
+     "tcgplayer_price": "0.16",
+     "ebay_price": "1.99",
+     "amazon_price": "0.25",
+     "coolstuffinc_price": "0.39"
+    }
+   ],
+   "misc_info": [
+    {
+     "views": 909003,
+     "viewsweek": 189,
+     "upvotes": 63,
+     "downvotes": 20,
+     "formats": [
+      "Common Charity",
+      "Duel Links",
+      "TCG",
+      "OCG",
+      "Master Duel"
+     ],
+     "treated_as": "Decode Talker",
+     "tcg_date": "2017-07-20",
+     "ocg_date": "2017-03-25",
+     "konami_id": 13036,
+     "has_effect": 1,
+     "md_rarity": "Ultra Rare"
+    }
+   ]
+  },
+  {
+   "id": 84013237,
+   "name": "Number 39: Utopia",
+   "typeline": [
+    "Warrior",
+    "Xyz",
+    "Effect"
+   ],
+   "type": "XYZ Monster",
+   "humanReadableCardType": "Xyz Effect Monster",
+   "frameType": "xyz",
+   "desc": "2 Level 4 monsters\r\nWhen a monster declares an attack: You can detach 1 material from this card; negate the attack. If this card is targeted for an attack, while it has no material: Destroy this card.",
+   "race": "Warrior",
+   "atk": 2500,
+   "def": 2000,
+   "level": 4,
+   "attribute": "LIGHT",
+   "archetype": "Utopia",
+   "card_sets": [
+    {
+     "set_name": "Battle Pack: Epic Dawn",
+     "set_code": "BP01-EN024",
+     "set_rarity": "Rare",
+     "set_rarity_code": "(R)",
+     "set_price": "2.41"
+    },
+    {
+     "set_name": "Battle Pack: Epic Dawn",
+     "set_code": "BP01-EN024",
+     "set_rarity": "Starfoil Rare",
+     "set_rarity_code": "(SFR)",
+     "set_price": "2.7"
+    }
+   ],
+   "card_images": [
+    {
+     "id": 84013237,
+     "image_url": "https://images.ygoprodeck.com/images/cards/84013237.jpg",
+     "image_url_small": "https://images.ygoprodeck.com/images/cards_small/84013237.jpg",
+     "image_url_cropped": "https://images.ygoprodeck.com/images/cards_cropped/84013237.jpg"
+    },
+    {
+     "id": 84013238,
+     "image_url": "https://images.ygoprodeck.com/images/cards/84013238.jpg",
+     "image_url_small": "https://images.ygoprodeck.com/images/cards_small/84013238.jpg",
+     "image_url_cropped": "https://images.ygoprodeck.com/images/cards_cropped/84013238.jpg"
+    }
+   ],
+   "card_prices": [
+    {
+     "cardmarket_price": "0.11",
+     "tcgplayer_price": "0.22",
+     "ebay_price": "1.99",
+     "amazon_price": "0.78",
+     "coolstuffinc_price": "0.25"
+    }
+   ],
+   "misc_info": [
+    {
+     "beta_name": "Number 39",
+     "views": 1685342,
+     "viewsweek": 483,
+     "upvotes": 62,
+     "downvotes": 15,
+     "formats": [
+      "Duel Links",
+      "Common Charity",
+      "TCG",
+      "OCG",
+      "Master Duel"
+     ],
+     "treated_as": "Number 39: Utopia",
+     "tcg_date": "2011-07-08",
+     "ocg_date": "2011-03-19",
+     "konami_id": 9575,
+     "has_effect": 1,
+     "md_rarity": "Ultra Rare"
+    }
+   ]
+  },
+  {
+   "id": 16178683,
+   "name": "Odd-Eyes Pendulum Dragon",
+   "typeline": [
+    "Dragon",
+    "Pendulum",
+    "Effect"
+   ],
+   "type": "Pendulum Effect Monster",
+   "humanReadableCardType": "Pendulum Effect Monster",
+   "frameType": "effect_pendulum",
+   "desc": "[ Pendulum Effect ] \nYou can reduce the battle damage you take from an attack involving a Pendulum Monster you control to 0. During your End Phase: You can destroy this card, and if you do, add 1 Pendulum Monster with 1500 or less ATK from your Deck to your hand. You can only use each Pendulum Effect of \"Odd-Eyes Pendulum Dragon\" once per turn.\n\n[ Monster Effect ] \nIf this card battles an opponent's monster, any battle damage this card inflicts to your opponent is doubled.",
+   "race": "Dragon",
+   "pend_desc": "You can reduce the battle damage you take from an attack involving a Pendulum Monster you control to 0. During your End Phase: You can destroy this card, and if you do, add 1 Pendulum Monster with 1500 or less ATK from your Deck to your hand. You can only use each Pendulum Effect of \"Odd-Eyes Pendulum Dragon\" once per turn.",
+   "monster_desc": "If this card battles an opponent's monster, any battle damage this card inflicts to your opponent is doubled.",
+   "atk": 2500,
+   "def": 2000,
+   "level": 7,
+   "attribute": "DARK",
+   "archetype": "-Eyes Dragon",
+   "scale": 4,
+   "card_sets": [
+    {
+     "set_name": "2015 Mega-Tins",
+     "set_code": "CT12-EN001",
+     "set_rarity": "Platinum Secret Rare",
+     "set_rarity_code": "(PS)",
+     "set_price": "3.53"
+    },
+    {
+     "set_name": "25th Anniversary Tin: Dueling Heroes",
+     "set_code": "TN23-EN011",
+     "set_rarity": "Quarter Century Secret Rare",
+     "set_rarity_code": "",
+     "set_price": "0"
+    }
+   ],
+   "card_images": [
+    {
+     "id": 16178683,
+     "image_url": "https://images.ygoprodeck.com/images/cards/16178683.jpg",
+     "image_url_small": "https://images.ygoprodeck.com/images/cards_small/16178683.jpg",
+     "image_url_cropped": "https://images.ygoprodeck.com/images/cards_cropped/16178683.jpg"
+    },
+    {
+     "id": 16178681,
+     "image_url": "https://images.ygoprodeck.com/images/cards/16178681.jpg",
+     "image_url_small": "https://images.ygoprodeck.com/images/cards_small/16178681.jpg",
+     "image_url_cropped": "https://images.ygoprodeck.com/images/cards_cropped/16178681.jpg"
+    },
+    {
+     "id": 16178682,
+     "image_url": "https://images.ygoprodeck.com/images/cards/16178682.jpg",
+     "image_url_small": "https://images.ygoprodeck.com/images/cards_small/16178682.jpg",
+     "image_url_cropped": "https://images.ygoprodeck.com/images/cards_cropped/16178682.jpg"
+    }
+   ],
+   "card_prices": [
+    {
+     "cardmarket_price": "0.11",
+     "tcgplayer_price": "0.17",
+     "ebay_price": "12.99",
+     "amazon_price": "1.39",
+     "coolstuffinc_price": "0.25"
+    }
+   ],
+   "misc_info": [
+    {
+     "views": 554787,
+     "viewsweek": 294,
+     "upvotes": 3,
+     "downvotes": 3,
+     "formats": [
+      "Duel Links",
+      "Common Charity",
+      "TCG",
+      "OCG",
+      "Master Duel"
+     ],
+     "treated_as": "Odd-Eyes Pendulum Dragon",
+     "tcg_date": "2014-08-14",
+     "ocg_date": "2014-04-19",
+     "konami_id": 11213,
+     "has_effect": 1,
+     "md_rarity": "Ultra Rare"
+    }
+   ]
+  },
+  {
+   "id": 55144522,
+   "name": "Pot of Greed",
+   "type": "Spell Card",
+   "humanReadableCardType": "Normal Spell",
+   "frameType": "spell",
+   "desc": "Draw 2 cards.",
+   "race": "Normal",
+   "archetype": "Greed",
+   "card_sets": [
+    {
+     "set_name": "2025 Mega-Pack Tin",
+     "set_code": "MP25-EN050",
+     "set_rarity": "Starlight Rare",
+     "set_rarity_code": "(StR)",
+     "set_price": "0"
+    },
+    {
+     "set_name": "Battle Pack 2: War of the Giants",
+     "set_code": "BP02-EN129",
+     "set_rarity": "Mosaic Rare",
+     "set_rarity_code": "(MSR)",
+     "set_price": "0"
+    }
+   ],
+   "banlist_info": {
+    "ban_tcg": "Forbidden",
+    "ban_ocg": "Forbidden",
+    "ban_goat": "Limited"
+   },
+   "card_images": [
+    {
+     "id": 55144522,
+     "image_url": "https://images.ygoprodeck.com/images/cards/55144522.jpg",
+     "image_url_small": "https://images.ygoprodeck.com/images/cards_small/55144522.jpg",
+     "image_url_cropped": "https://images.ygoprodeck.com/images/cards_cropped/55144522.jpg"
+    }
+   ],
+   "card_prices": [
+    {
+     "cardmarket_price": "0.15",
+     "tcgplayer_price": "4.42",
+     "ebay_price": "4.95",
+     "amazon_price": "6.18",
+     "coolstuffinc_price": "3.99"
+    }
+   ],
+   "misc_info": [
+    {
+     "views": 2307049,
+     "viewsweek": 2565,
+     "upvotes": 134,
+     "downvotes": 28,
+     "formats": [
+      "GOAT",
+      "OCG GOAT",
+      "Duel Links",
+      "Common Charity",
+      "Edison",
+      "TCG",
+      "OCG",
+      "Master Duel"
+     ],
+     "tcg_date": "2002-03-08",
+     "ocg_date": "1999-05-27",
+     "konami_id": 4844,
+     "has_effect": 1,
+     "md_rarity": "Ultra Rare"
+    }
+   ]
+  },
+  {
+   "id": 10678778,
+   "name": "Aegaion the Sea Castrum",
+   "typeline": [
+    "Machine",
+    "Xyz",
+    "Effect"
+   ],
+   "type": "XYZ Monster",
+   "humanReadableCardType": "Xyz Effect Monster",
+   "frameType": "xyz",
+   "desc": "2 Level 8 monsters\nDuring either player's turn: You can banish 1 random face-down monster from your opponent's Extra Deck, face-up, and if you do, this card's ATK becomes equal to the banished monster's. During either player's turn: You can detach 1 Xyz Material from this card, then target 1 of your opponent's banished Fusion, Synchro, or Xyz Monsters; return it to the Extra Deck, and if you do, destroy 1 monster your opponent controls with the same monster card type (Fusion, Synchro, or Xyz). You can only use each effect of \"Aegaion the Sea Castrum\" once per turn.",
+   "race": "Machine",
+   "atk": -1,
+   "def": 3000,
+   "level": 8,
+   "attribute": "WATER",
+   "card_sets": [
+    {
+     "set_name": "2016 Mega-Tin Mega Pack",
+     "set_code": "MP16-EN213",
+     "set_rarity": "Common",
+     "set_rarity_code": "(C)",
+     "set_price": "0"
+    },
+    {
+     "set_name": "Breakers of Shadow",
+     "set_code": "BOSH-EN055",
+     "set_rarity": "Common",
+     "set_rarity_code": "(C)",
+     "set_price": "0"
+    }
+   ],
+   "card_images": [
+    {
+     "id": 10678778,
+     "image_url": "https://images.ygoprodeck.com/images/cards/10678778.jpg",
+     "image_url_small": "https://images.ygoprodeck.com/images/cards_small/10678778.jpg",
+     "image_url_cropped": "https://images.ygoprodeck.com/images/cards_cropped/10678778.jpg"
+    }
+   ],
+   "card_prices": [
+    {
+     "cardmarket_price": "0.06",
+     "tcgplayer_price": "0.15",
+     "ebay_price": "1.40",
+     "amazon_price": "0.25",
+     "coolstuffinc_price": "0.25"
+    }
+   ],
+   "misc_info": [
+    {
+     "views": 122290,
+     "viewsweek": 63,
+     "upvotes": 13,
+     "downvotes": 0,
+     "formats": [
+      "Common Charity",
+      "TCG",
+      "OCG",
+      "Master Duel"
+     ],
+     "tcg_date": "2016-01-14",
+     "ocg_date": "2015-10-17",
+     "konami_id": 12163,
+     "has_effect": 1,
+     "question_atk": 1,
+     "md_rarity": "Rare"
+    }
+   ]
+  },
+  {
+   "id": 300302022,
+   "name": "Ancient Fusion",
+   "type": "Skill Card",
+   "humanReadableCardType": "Skill - Dr. Vellian C",
+   "frameType": "skill",
+   "desc": "Once per Duel, you can discard 1 card to Fusion Summon 1 \"Ancient Gear\" Fusion Monster from your Extra Deck, using monsters from your field as Fusion Material. If 1 of those materials is an \"Ancient Gear Golem\" monster, you can also use monsters from your hand and/or Deck as the other material. Your opponent takes no damage for the rest of this turn. Any battle damage your opponent takes from that Fusion Monster is halved.",
+   "race": "Dr. Vellian C",
+   "archetype": "Fusion",
+   "card_sets": [
+    {
+     "set_name": "Speed Duel GX: Duel Academy Box",
+     "set_code": "SGX1-ENS04",
+     "set_rarity": "Common",
+     "set_rarity_code": "(C)",
+     "set_price": "0"
+    }
+   ],
+   "card_images": [
+    {
+     "id": 300302022,
+     "image_url": "https://images.ygoprodeck.com/images/cards/300302022.jpg",
+     "image_url_small": "https://images.ygoprodeck.com/images/cards_small/300302022.jpg",
+     "image_url_cropped": "https://images.ygoprodeck.com/images/cards_cropped/300302022.jpg"
+    }
+   ],
+   "card_prices": [
+    {
+     "cardmarket_price": "0.00",
+     "tcgplayer_price": "0.11",
+     "ebay_price": "4.74",
+     "amazon_price": "49.99",
+     "coolstuffinc_price": "0.79"
+    }
+   ],
+   "misc_info": [
+    {
+     "views": 5742,
+     "viewsweek": 21,
+     "upvotes": 0,
+     "downvotes": 0,
+     "formats": [
+      "Speed Duel",
+      "Common Charity"
+     ],
+     "tcg_date": "2022-03-17",
+     "has_effect": 1
+    }
+   ]
+  },
+  {
+   "id": 11714098,
+   "name": "30,000-Year White Turtle",
+   "typeline": [
+    "Aqua",
+    "Normal"
+   ],
+   "type": "Normal Monster",
+   "humanReadableCardType": "Normal Monster",
+   "frameType": "normal",
+   "desc": "''A huge turtle that has existed for over 30,000 years.''",
+   "race": "Aqua",
+   "atk": 1250,
+   "def": 2100,
+   "level": 5,
+   "attribute": "WATER",
+   "card_images": [
+    {
+     "id": 11714098,
+     "image_url": "https://images.ygoprodeck.com/images/cards/11714098.jpg",
+     "image_url_small": "https://images.ygoprodeck.com/images/cards_small/11714098.jpg",
+     "image_url_cropped": "https://images.ygoprodeck.com/images/cards_cropped/11714098.jpg"
+    }
+   ],
+   "card_prices": [
+    {
+     "cardmarket_price": "0.00",
+     "tcgplayer_price": "0.00",
+     "ebay_price": "10.00",
+     "amazon_price": "0.50",
+     "coolstuffinc_price": "0.00"
+    }
+   ],
+   "misc_info": [
+    {
+     "views": 168166,
+     "viewsweek": 105,
+     "upvotes": 33,
+     "downvotes": 16,
+     "formats": [
+      "OCG GOAT",
+      "Duel Links",
+      "OCG",
+      "Master Duel"
+     ],
+     "ocg_date": "1999-10-17",
+     "konami_id": 4455,
+     "has_effect": 0,
+     "md_rarity": "Common"
+    }
+   ],
+   "card_sets": []
+  }
+ ]
+}
