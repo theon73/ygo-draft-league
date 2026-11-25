@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
 class LeagueInviteTest {
 
     private final AppUser commish = new AppUser("Commish");
-    private final League league = new League("Test League", "test-league", commish);
+    private final League league = new League("Test League", commish);
     private final Instant now = Instant.parse("2026-11-25T12:00:00Z");
 
     @Test

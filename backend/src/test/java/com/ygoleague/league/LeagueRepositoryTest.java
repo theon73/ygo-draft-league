@@ -28,16 +28,16 @@ class LeagueRepositoryTest {
     @BeforeEach
     void setUp() {
         theo = em.persist(new AppUser("Theo"));
-        league = em.persist(new League("Classic League", "classic-league", theo));
+        league = em.persist(new League("Classic League", theo));
         em.persist(LeagueMember.forUser(league, theo, "Theo", LeagueRole.COMMISSIONER));
         em.flush();
     }
 
     @Test
     void myLeaguesListsEveryLeagueTheUserBelongsTo() {
-        League other = em.persist(new League("Another League", "another", theo));
+        League other = em.persist(new League("Another League", theo));
         em.persist(LeagueMember.forUser(other, theo, "Theo", LeagueRole.VIEWER));
-        League notMine = em.persist(new League("Not Mine", "not-mine", theo));
+        League notMine = em.persist(new League("Not Mine", theo));
         em.flush();
 
         List<String> names = leagues.findAllForUser(theo.getId()).stream().map(League::getName).toList();
@@ -63,12 +63,6 @@ class LeagueRepositoryTest {
     }
 
     @Test
-    void slugMustBeUrlSafe() {
-        assertThrows(DataIntegrityViolationException.class,
-                () -> leagues.saveAndFlush(new League("Bad", "Bad Slug!", theo)));
-    }
-
-    @Test
     void inviteMustBeEitherOpenOrClaimNotBoth() {
         LeagueMember placeholder = em.persistAndFlush(LeagueMember.placeholder(league, "Oli", LeagueRole.PLAYER));
         assertThrows(DataIntegrityViolationException.class, () -> jdbc.update("""
@@ -78,7 +72,7 @@ class LeagueRepositoryTest {
 
     @Test
     void claimInviteCannotPointAtAnotherLeaguesMember() {
-        League other = em.persist(new League("Other", "other", theo));
+        League other = em.persist(new League("Other", theo));
         LeagueMember foreign = em.persistAndFlush(LeagueMember.placeholder(other, "Oli", LeagueRole.PLAYER));
         assertThrows(DataIntegrityViolationException.class, () -> jdbc.update("""
                 insert into league_invite (league_id, code, member_id, max_uses, created_by)

@@ -31,7 +31,7 @@ class SeasonRepositoryTest {
     @BeforeEach
     void setUp() {
         theo = em.persist(new AppUser("Theo"));
-        league = em.persist(new League("Classic League", "classic-league", theo));
+        league = em.persist(new League("Classic League", theo));
         member = em.persist(LeagueMember.forUser(league, theo, "Theo", LeagueRole.COMMISSIONER));
         season = em.persist(new Season(league, "Season 1"));
         em.flush();
@@ -109,7 +109,7 @@ class SeasonRepositoryTest {
     }
 
     private LeagueMember outsider() {
-        League other = em.persist(new League("Other", "other", theo));
+        League other = em.persist(new League("Other", theo));
         return em.persistAndFlush(LeagueMember.placeholder(other, "Outsider", LeagueRole.PLAYER));
     }
 

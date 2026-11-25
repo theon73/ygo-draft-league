@@ -118,7 +118,8 @@ AuditEvent (everything, append-only)
 
 **Key entities**
 - **User**: a login identity (OAuth subject, display name, avatar). Global and not tied to any league.
-- **League**: name, slug, created by a user. Holds seasons. Visible to members only.
+- **League**: name, created by a user. Holds seasons. Visible to members only.
+- **Public ids (decided 2026-11-25).** URLs never expose raw database ids and there are no slugs. Each URL-facing entity gets an opaque id encoded from its primary key with [Sqids](https://sqids.org) over `[type tag, id]`, e.g. `/leagues/lIri2her`. The encoding is reversible, so there's no extra column and uniqueness is guaranteed. Decoding rejects non-canonical strings and ids of the wrong type. The alphabet, min length and type tags are **permanent** (changing them breaks every link), and a pinned test guards them. This hides ids and counts but is not security; per-league authorization is. A readable suffix (`/leagues/lIri2her/goat-format`) can be added later, computed from the name and ignored on lookup.
 - **LeagueMember**: a membership and role (`COMMISSIONER` / `PLAYER` / `VIEWER`) in one league. Commissioner is a role, not a special user, and a league can have co-commissioners. `user` is nullable, so a commissioner can add placeholder players who claim the spot later. `VIEWER` is read-only access for an account the commissioner has allowlisted.
 - **LeagueInvite**: an invite link or code the commissioner hands out to join a league.
 - **SeasonPlayer**: a league member taking part in one season (seat, team name). Not every member plays every season.

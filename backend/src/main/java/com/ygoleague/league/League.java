@@ -12,7 +12,10 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.time.Instant;
 
-/** A league: the tenant everything else hangs off. Visible to its members only. */
+/**
+ * A league: the tenant everything else hangs off. Visible to its members only. URLs identify it
+ * by an opaque public id derived from {@code id} (see {@code common.PublicIds}).
+ */
 @Entity
 @Table(name = "league")
 public class League {
@@ -24,10 +27,6 @@ public class League {
     @Column(nullable = false)
     private String name;
 
-    /** URL-safe identifier: lowercase letters/digits separated by single hyphens. */
-    @Column(nullable = false, unique = true)
-    private String slug;
-
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "created_by")
     private AppUser createdBy;
@@ -37,15 +36,13 @@ public class League {
 
     protected League() {}
 
-    public League(String name, String slug, AppUser createdBy) {
+    public League(String name, AppUser createdBy) {
         this.name = name;
-        this.slug = slug;
         this.createdBy = createdBy;
     }
 
     public Long getId() { return id; }
     public String getName() { return name; }
-    public String getSlug() { return slug; }
     public AppUser getCreatedBy() { return createdBy; }
     public Instant getCreatedAt() { return createdAt; }
 
