@@ -81,7 +81,7 @@ The sheet works, but it depends on people following the rules and on manual upke
 | DB | PostgreSQL 17 | Flyway migrations |
 | Auth | Spring Security OAuth2 Login (Google and/or Discord) | Session cookie for the SPA; per-league roles: `COMMISSIONER`, `PLAYER`, `VIEWER`. Dev-only login for local work (see Phase 1) |
 | Realtime | SSE to start (draft room, activity feed) | Upgrade to WebSocket/STOMP only if two-way realtime is needed |
-| Card data | YGOPRODeck API, imported into our DB | Cache card images locally/CDN; filter by TCG date for the format |
+| Card data | YGOPRODeck API, synced weekly into our DB | See §3 "Card catalog". Images: separate ticket (cache on first view) |
 | Notifications | Discord webhook | Picks on the clock, trades, results |
 | Hosting | Split: Cloudflare (frontend), Fly.io or Railway (backend), managed Postgres | See "Hosting" below. Budget: a few dollars a month |
 
@@ -91,7 +91,7 @@ The sheet works, but it depends on people following the rules and on manual upke
 - **Database:** managed Postgres with a free or cheap tier (Neon or Supabase, or the host's own Postgres). Keep it plain Postgres so the provider can be swapped.
 - **Ruled out:** running the backend on Cloudflare Workers. Workers can't run a JVM; it would mean rewriting the backend in TypeScript, or Cloudflare Containers on a paid plan, and D1 is SQLite, not Postgres.
 - **Same-origin API:** serve the API under the frontend's domain, either by having Cloudflare route `/api/*` to the backend or with an `api.` subdomain on the same domain. Session cookies then work without cross-site cookie or CORS problems, matching the dev proxy setup.
-- Card images (downloaded from YGOPRODeck, not hotlinked) can live in Cloudflare R2 or on the backend's volume. Decide in Phase 1.
+- Card images: YGOPRODeck asks that images be downloaded, not hotlinked. Plan (decided 2026-11-25): a cached image endpoint that fetches each image the first time it's viewed and serves it from storage behind an interface (local disk in dev, Cloudflare R2 in prod; a classic pool is ~2–3k cards, well inside R2's free tier). Images never go in Postgres. Until that ticket lands, the UI links to the card's YGOPRODeck page. The DB only stores passcodes, which are also the image ids, so this needs no schema change.
 
 Local dev: `docker compose up -d` for Postgres, `./gradlew bootRun` for the backend (port 8080), `npm run dev` for the frontend (port 5173, proxies `/api` to 8080).
 
@@ -112,7 +112,7 @@ League ──< Season ──< SeasonPlayer >── LeagueMember   (member.user n
               ├── Stage (regular | playoffs; format: round-robin | swiss | h2h | ladder) ──< Match ──< Game
               ├── Deck ──< DeckCard          (per player, per week or match; policy from rules)
               └── Playoff bracket (derived from standings + format)
-BanList ──< BanListEntry   (global dated TCG lists; season rules reference one + overrides)
+BanList ──< BanListEntry   (official dated TCG lists from repo files, or league-owned custom lists)
 AuditEvent (everything, append-only)
 ```
 
@@ -123,7 +123,8 @@ AuditEvent (everything, append-only)
 - **LeagueMember**: a membership and role (`COMMISSIONER` / `PLAYER` / `VIEWER`) in one league. Commissioner is a role, not a special user, and a league can have co-commissioners. `user` is nullable, so a commissioner can add placeholder players who claim the spot later. `VIEWER` is read-only access for an account the commissioner has allowlisted.
 - **LeagueInvite**: an invite link or code the commissioner hands out to join a league.
 - **SeasonPlayer**: a league member taking part in one season (seat, team name). Not every member plays every season.
-- **Card**: global catalog (name, type, race, attribute, level, ATK/DEF, archetype, text, TCG release date, image id). Sourced from YGOPRODeck.
+- **Card**: global catalog (name, type, race, attribute, level/rank/link, ATK/DEF, archetype, current text, TCG/OCG release dates, passcodes). Sourced from YGOPRODeck; see "Card catalog" below.
+- **CardTextVersion**: superseded wording with the date it stopped applying, for formats that play older text (e.g. Goat). Text as of date D = earliest version with `validUntil > D`, else current text. Curated; no source yet.
 - **CardSet / CardPrint**: TCG sets and the printings of each card in them (set code, rarity). Used for pool building by set and for real-set pack drafts.
 - **PoolCard**: a card's membership in a season's pool, plus season flags: `copies` (draftable copies; 1 = exclusive), `maxPlayable`, `softBanned`, `unusable` (derived), `requiresOwnership` (e.g. Polymerization). Ban status comes from the season's ban list plus overrides. Holdings come from the ownership projection.
 - **SeasonRules**: a versioned rules document per season (`effectiveFromWeek`, `rules`, `schemaVersion`). Legality checks use the version in effect at the time.
@@ -132,6 +133,20 @@ AuditEvent (everything, append-only)
 - **Match / Game**: week, players, seeds, games won, winner, replay links; reported by one player and confirmed by the other.
 - **Stage / Match / Game**: a season has one or more stages (regular season, playoffs), each with a format. Matches are generic so that round-robin, Swiss, H2H weeks and ladder all fit.
 - **Deck**: list of (poolCardId, copies) for main/side/extra. Validated on save. The submission policy (none / optional / required-and-locked) and visibility to opponents come from the rules.
+
+**Card catalog (built in YGO-3, 2026-11-25).**
+- **Scope:** TCG only. Cards with no TCG date (OCG-only, ~500) and Speed Duel Skill Cards are skipped. Tokens are kept, and pool building can filter them.
+- **Identity:** YGOPRODeck's `id` is **not** stable. It's just the first artwork listed, and the order differs between responses (Dark Magician comes back as 46986414 or 46986420). Cards match on `konami_id` (unique; missing for ~12 tokens/unreleased cards), falling back to any shared passcode. A card stores every artwork's passcode.
+- **Sync:** weekly scheduled job plus `./gradlew syncCatalog` (`-Pforce` to re-import). Skipped when YGOPRODeck's `checkDBVer` version is unchanged. One transaction with an advisory lock. Unchanged cards are detected by a content hash over the record with prices, popularity and ordering normalized away. Nothing is ever deleted. Each run is logged in `catalog_sync`. No HTTP trigger yet (see admin access below).
+- **Sets:** the set name is the key, because set codes are prefixes several products share (both 2013 tin waves are `CT10`).
+- **Size:** ~14k cards, ~45k prints, ~40 MB including the raw JSON. A full sync takes ~6 s.
+
+**Ban lists (YGO-4, decided 2026-11-25).**
+- **Official lists:** dated TCG lists live as YAML files in the repo (one per list, card names as on Yugipedia, optional passcode to disambiguate). An importer matches names to the catalog and fails on any name it can't match. Theo will help source historical lists from Yugipedia.
+- **Custom lists:** league-owned, with Forbidden / Limited / Semi-Limited statuses. A custom list starts from scratch or as a copy of any existing list. These replace the earlier idea of per-season overrides.
+- YGOPRODeck's `banlist_info` only carries *current* TCG/OCG/Goat statuses, so it isn't a historical source.
+
+**Site admin access (decided 2026-11-25).** Global actions (catalog sync, official ban list edits) need a platform-level admin, separate from league roles. Admin status comes from an **allowlist of login identities in server config/env**, never a DB flag and never settable through any API, so a bug in user editing can't escalate anyone. Admin actions are idempotent or versioned, and audit-logged. Until an admin UI exists, these run only on a schedule, from the CLI, or via repo files.
 
 **RulesConfig (what the commissioner can change).** The values below are *our league's* settings, given as an example. Every field is per season and versioned (see SeasonRules). New leagues start from sensible defaults or a clone of a previous season.
 ```yaml
@@ -265,7 +280,10 @@ playoffs:
   - **Real OAuth locally**, via separate dev OAuth apps with `localhost` redirect URIs, to test the actual login flow occasionally.
   - **Prod guardrails:** the controller is `@Profile("dev")` (absent from prod, not just disabled). `dev` is never a default profile. Startup fails if `dev` is active alongside a prod marker (`prod` profile or a non-localhost DB URL). A test asserts `/api/dev/login` returns 404 without the `dev` profile.
   - A fake OIDC provider (e.g. Keycloak in compose) is only worth adding if the real flow starts breaking in ways the dev login hides.
-- Card catalog import from YGOPRODeck (cards, sets, prints, images cached locally) and global dated TCG ban lists.
+- **YGO-3 (done):** card catalog sync from YGOPRODeck (cards, sets, prints, card text versions, sync log).
+- **YGO-4:** ban lists (official YAML files + importer, league-owned custom lists).
+- **YGO-5:** login, the dev login, and the site admin allowlist.
+- Later in Phase 1: create a league, invites, placeholder members, viewer allowlist, "My leagues"; cached card image endpoint.
 
 **Phase 2: Season setup**
 - Season creation: rules config UI (typed, versioned), seat order / randomizer.
@@ -327,6 +345,6 @@ The sheet remains useful as a **requirements reference**: it shows what a real s
 
 - Own domain? (Hosting itself is decided; see §2.) Fly.io vs Railway, and which Postgres provider, are decided at first deploy.
 - Google vs Discord login (or both)? Is everyone in the league on Discord? *(Needed early now: accounts are Phase 1.)*
-- How much card text and image data to store vs fetch (YGOPRODeck asks that images be downloaded, not hotlinked)?
+- A source for historical (pre-errata) card text, so `card_text_version` doesn't have to be curated by hand?
 - Where to get real-set pack data (rarity odds, pack composition) for pack drafts? YGOPRODeck has set lists and rarities but not pull rates.
 - Expose league data to Claude via an MCP server so the Claude Helper sheet isn't needed?

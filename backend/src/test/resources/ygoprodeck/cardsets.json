@@ -1,0 +1,85 @@
+[
+ {
+  "set_name": "2015 Mega-Tins",
+  "set_code": "CT12",
+  "num_of_cards": 6,
+  "tcg_date": "2015-09-17",
+  "set_image": "https://images.ygoprodeck.com/images/sets/CT12.jpg"
+ },
+ {
+  "set_name": "2016 Mega-Tin Mega Pack",
+  "set_code": "MP16",
+  "num_of_cards": 239,
+  "tcg_date": "2016-09-01",
+  "set_image": "https://images.ygoprodeck.com/images/sets/MP16.jpg"
+ },
+ {
+  "set_name": "2016 Mega-Tins",
+  "set_code": "CT13",
+  "num_of_cards": 12,
+  "tcg_date": "2016-09-01",
+  "set_image": "https://images.ygoprodeck.com/images/sets/CT13.jpg"
+ },
+ {
+  "set_name": "2017 Mega-Tins",
+  "set_code": "CT14",
+  "num_of_cards": 8,
+  "tcg_date": "2017-08-24",
+  "set_image": "https://images.ygoprodeck.com/images/sets/CT14.jpg"
+ },
+ {
+  "set_name": "2025 Mega-Pack Tin",
+  "set_code": "MP25",
+  "num_of_cards": 450,
+  "tcg_date": "2025-09-04",
+  "set_image": "https://images.ygoprodeck.com/images/sets/MP25.jpg"
+ },
+ {
+  "set_name": "25th Anniversary Tin: Dueling Heroes",
+  "set_code": "TN23",
+  "num_of_cards": 16,
+  "tcg_date": "2023-09-07",
+  "set_image": "https://images.ygoprodeck.com/images/sets/TN23.jpg"
+ },
+ {
+  "set_name": "Battle Pack 2: War of the Giants",
+  "set_code": "BP02",
+  "num_of_cards": 215,
+  "tcg_date": "2013-06-28",
+  "set_image": "https://images.ygoprodeck.com/images/sets/BP02.jpg"
+ },
+ {
+  "set_name": "Battle Pack: Epic Dawn",
+  "set_code": "BP01",
+  "num_of_cards": 220,
+  "tcg_date": "2012-05-24",
+  "set_image": "https://images.ygoprodeck.com/images/sets/BP01.jpg"
+ },
+ {
+  "set_name": "Breakers of Shadow",
+  "set_code": "BOSH",
+  "num_of_cards": 100,
+  "tcg_date": "2016-01-14",
+  "set_image": "https://images.ygoprodeck.com/images/sets/BOSH.jpg"
+ },
+ {
+  "set_name": "Dark Beginning 2",
+  "set_code": "DB",
+  "num_of_cards": 264,
+  "tcg_date": "2005-07-27"
+ },
+ {
+  "set_name": "Duel Devastator",
+  "set_code": "DUDE",
+  "num_of_cards": 56,
+  "tcg_date": "2019-10-10",
+  "set_image": "https://images.ygoprodeck.com/images/sets/DUDE.jpg"
+ },
+ {
+  "set_name": "Duel Power",
+  "set_code": "DUPO",
+  "num_of_cards": 106,
+  "tcg_date": "2019-04-03",
+  "set_image": "https://images.ygoprodeck.com/images/sets/DUPO.jpg"
+ }
+]
