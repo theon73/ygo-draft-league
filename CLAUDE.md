@@ -10,7 +10,7 @@ General-purpose web app for running Yu-Gi-Oh draft leagues, fantasy-football sty
 ## Commands
 - DB: `docker compose up -d`
 - Backend: `cd backend && ./gradlew bootRun`
-- Backend tests: `cd backend && ./gradlew test`
+- Backend tests: `cd backend && ./gradlew test` (repository tests use Testcontainers, so Docker must be running)
 - Frontend: `cd frontend && npm install && npm run dev`
 - Frontend typecheck/build: `npm run build`
 

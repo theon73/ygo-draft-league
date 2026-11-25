@@ -18,8 +18,3 @@ export interface Health {
   status: string;
   time: string;
 }
-
-export interface Player {
-  id: number;
-  displayName: string;
-}
