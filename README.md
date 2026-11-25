@@ -19,4 +19,4 @@ npm run dev                                # UI on :5173
 
 Check: http://localhost:8080/api/health and http://localhost:5173
 
-Backend tests: `cd backend && ./gradlew test`. Prereqs: JDK 21, Docker, Node 20+. The Gradle wrapper downloads Gradle itself, so no separate install is needed.
+Backend tests: `cd backend && ./gradlew test`. Prereqs: JDK 21, Docker, Node 22 LTS (Vite 7 needs 20.19+ or 22.12+). The Gradle wrapper downloads Gradle itself, so no separate install is needed.
