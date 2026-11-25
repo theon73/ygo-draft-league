@@ -10,8 +10,7 @@ See [PLANNING.md](PLANNING.md) for the plan.
 docker compose up -d                       # Postgres on :5432
 
 cd backend
-mvn -N wrapper:wrapper                     # first time only, creates ./mvnw
-./mvnw spring-boot:run                     # API on :8080
+./gradlew bootRun                          # API on :8080 (Windows: gradlew.bat bootRun)
 
 cd ../frontend
 npm install
@@ -19,3 +18,5 @@ npm run dev                                # UI on :5173
 ```
 
 Check: http://localhost:8080/api/health and http://localhost:5173
+
+Backend tests: `cd backend && ./gradlew test`. Prereqs: JDK 21, Docker, Node 20+. The Gradle wrapper downloads Gradle itself, so no separate install is needed.

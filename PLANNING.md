@@ -33,7 +33,7 @@ The sheet works, but it depends on people following the rules and on manual upke
 | Layer | Choice | Notes |
 |---|---|---|
 | Frontend | React + TypeScript + Vite | React Router; add TanStack Query for server state |
-| Backend | Spring Boot 4 (Java 21), Maven | Spring MVC, Data JPA, Validation, Actuator |
+| Backend | Spring Boot 4 (Java 21), Gradle | Spring MVC, Data JPA, Validation, Actuator |
 | DB | PostgreSQL 17 | Flyway migrations |
 | Auth | Spring Security OAuth2 Login (Google and/or Discord) | Session cookie for the SPA; roles: `COMMISSIONER`, `PLAYER`, `VIEWER` |
 | Realtime | SSE to start (draft room, activity feed) | Upgrade to WebSocket/STOMP only if two-way realtime is needed |
@@ -41,7 +41,7 @@ The sheet works, but it depends on people following the rules and on manual upke
 | Notifications | Discord webhook | Picks on the clock, trades, results |
 | Hosting | TBD (Fly.io / Railway / Render / own infra) | One container for the backend; static frontend served by the backend or a CDN |
 
-Local dev: `docker compose up -d` for Postgres, `./mvnw spring-boot:run` for the backend (port 8080), `npm run dev` for the frontend (port 5173, proxies `/api` to 8080).
+Local dev: `docker compose up -d` for Postgres, `./gradlew bootRun` for the backend (port 8080), `npm run dev` for the frontend (port 5173, proxies `/api` to 8080).
 
 ---
 
