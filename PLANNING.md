@@ -79,7 +79,7 @@ The sheet works, but it depends on people following the rules and on manual upke
 | Frontend | React + TypeScript + Vite | React Router; add TanStack Query for server state |
 | Backend | Spring Boot 4 (Java 21), Gradle | Spring MVC, Data JPA, Validation, Actuator |
 | DB | PostgreSQL 17 | Flyway migrations |
-| Auth | Spring Security OAuth2 Login (Google and/or Discord) | Session cookie for the SPA; roles: `COMMISSIONER`, `PLAYER`, `VIEWER` |
+| Auth | Spring Security OAuth2 Login (Google and/or Discord) | Session cookie for the SPA; per-league roles: `COMMISSIONER`, `PLAYER`, `VIEWER`. Dev-only login for local work (see Phase 1) |
 | Realtime | SSE to start (draft room, activity feed) | Upgrade to WebSocket/STOMP only if two-way realtime is needed |
 | Card data | YGOPRODeck API, imported into our DB | Cache card images locally/CDN; filter by TCG date for the format |
 | Notifications | Discord webhook | Picks on the clock, trades, results |
@@ -256,8 +256,14 @@ playoffs:
 > Everything is created in the app; there's no import step to lean on. Accounts therefore come first, because every write needs an actor and every read needs a league role.
 
 **Phase 1: Accounts, leagues, card catalog**
-- Migrations for the core tenancy model: `app_user`, `league`, `league_member` (nullable user, role), `league_invite`, `season` scoped to a league, `season_player`, versioned `season_rules`. Delete the V1 player seed in a new migration; dev sample data goes in a dev-only seed instead.
+- Migrations for the core tenancy model: `app_user`, `league`, `league_member` (nullable user, role), `league_invite`, `season` scoped to a league, `season_player`, versioned `season_rules`. Delete the V1 player seed in a new migration (done in YGO-2); dev sample data goes in a dev-only seed instead.
 - OAuth2 login, "My leagues", create a league (creator becomes commissioner), invite links, placeholder members, viewer allowlist.
+- **Local auth (decided 2026-11-25).** There are three layers:
+  - **Dev login, `dev` profile only.** `POST /api/dev/login` (by user id or name) creates the same session and principal as a real OAuth login, resolving the user through `user_identity` with `provider = 'dev'`. Code after login is identical in dev and prod, and no permission checks are skipped. A dev-only seed (a separate Flyway location loaded only by the `dev` profile) creates test users and a sample league. When the backend reports dev mode, the frontend shows a "log in as…" switcher.
+  - **Automated tests** use Spring Security test support (mock principal / `oauth2Login()` in MockMvc), not the dev endpoint.
+  - **Real OAuth locally**, via separate dev OAuth apps with `localhost` redirect URIs, to test the actual login flow occasionally.
+  - **Prod guardrails:** the controller is `@Profile("dev")` (absent from prod, not just disabled). `dev` is never a default profile. Startup fails if `dev` is active alongside a prod marker (`prod` profile or a non-localhost DB URL). A test asserts `/api/dev/login` returns 404 without the `dev` profile.
+  - A fake OIDC provider (e.g. Keycloak in compose) is only worth adding if the real flow starts breaking in ways the dev login hides.
 - Card catalog import from YGOPRODeck (cards, sets, prints, images cached locally) and global dated TCG ban lists.
 
 **Phase 2: Season setup**
