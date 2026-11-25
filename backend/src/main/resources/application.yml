@@ -1,0 +1,22 @@
+spring:
+  application:
+    name: ygo-league
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/ygoleague}
+    username: ${DB_USER:ygoleague}
+    password: ${DB_PASSWORD:ygoleague}
+  jpa:
+    hibernate:
+      ddl-auto: validate   # Flyway owns the schema
+    open-in-view: false
+  flyway:
+    enabled: true
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
