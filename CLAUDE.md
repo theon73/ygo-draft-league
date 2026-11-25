@@ -3,14 +3,14 @@
 Web app for running a Yu-Gi-Oh classic-format draft league. **Read `PLANNING.md` first**: it covers goals, domain model, rules config, feature backlog and phases.
 
 ## Layout
-- `backend/`: Spring Boot 4, Java 21, Maven. Package root `com.ygoleague`.
+- `backend/`: Spring Boot 4, Java 21, Gradle (Groovy DSL, wrapper committed). Package root `com.ygoleague`.
 - `frontend/`: React + TypeScript + Vite. Dev server proxies `/api` to `localhost:8080`.
 - `docker-compose.yml`: local Postgres 17 (db/user/pass: `ygoleague`).
 
 ## Commands
 - DB: `docker compose up -d`
-- Backend: `cd backend && ./mvnw spring-boot:run` (generate the wrapper once with `mvn -N wrapper:wrapper` if it's missing)
-- Backend tests: `cd backend && ./mvnw test`
+- Backend: `cd backend && ./gradlew bootRun`
+- Backend tests: `cd backend && ./gradlew test`
 - Frontend: `cd frontend && npm install && npm run dev`
 - Frontend typecheck/build: `npm run build`
 
