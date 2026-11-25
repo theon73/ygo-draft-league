@@ -1,6 +1,6 @@
 # YGO Draft League
 
-League hub, draft room, transactions and deck validation for a Yu-Gi-Oh classic draft league.
+Fantasy-style platform for Yu-Gi-Oh draft leagues: create a league, configure the card pool and rules, then run the draft, transactions, deck validation and standings.
 
 See [PLANNING.md](PLANNING.md) for the plan.
 
