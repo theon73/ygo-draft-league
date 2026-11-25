@@ -1,6 +1,6 @@
 # YGO Draft League — Planning Doc
 
-Starting reference for building a web app to run Yu-Gi-Oh draft leagues. Our classic-format league is the first one on it, and the app replaces that league's Google Sheet as the system of record over time. This is a living doc: update it as decisions get made.
+Starting reference for building a web app to run Yu-Gi-Oh draft leagues. The design comes from running our classic-format league on a Google Sheet, but the target is **future leagues and seasons created in the app**, not moving the current one over (see §7). This is a living doc: update it as decisions get made.
 
 ---
 
@@ -13,7 +13,7 @@ Starting reference for building a web app to run Yu-Gi-Oh draft leagues. Our cla
 - The commissioner **invites players** and **configures everything** for each season: card pool (format date, sets, manual adds/removals), ban list, soft bans, copy limits, draft format (seats, rounds, picks per turn, timer), transaction rules, schedule format, tiebreakers and playoff structure.
 - A user can be in several leagues, holding a different role in each.
 
-Realistically Theo will be one of the few users, and our league is the main real-world case. That's fine, but the flexibility is the point. **Our league's players, rules and format (10 players, 25 rounds, March 2008, 3 trades + 3 FA a week, etc.) are just one configuration.** They belong in seed data, importer input and examples, never in code or schema assumptions. When a feature is designed around "how our league does it", the question to ask is: *what is the setting, and what is our league's value for it?*
+Realistically Theo will be one of the few users, and our league is the main real-world case. That's fine, but the flexibility is the point. **Our league's players, rules and format (10 players, 25 rounds, March 2008, 3 trades + 3 FA a week, etc.) are just one configuration.** They belong in dev seed data and examples, never in code or schema assumptions. When a feature is designed around "how our league does it", the question to ask is: *what is the setting, and what is our league's value for it?*
 
 ### Scope decisions (2026-11-25)
 
@@ -28,7 +28,7 @@ Realistically Theo will be one of the few users, and our league is the main real
 | Season continuity | **Fresh each season**: new pool, new draft. League history carries over; rosters don't. | ✓ |
 | Drafts per season | One draft, held at the start of the season | ✓ |
 | Competition | **Round-robin + playoffs**, **Swiss**, **weekly H2H schedule** (fantasy-style), **ad hoc / ladder** | Round-robin + playoffs |
-| Players without accounts | **Placeholders allowed**: the commissioner can add named players, and a user claims the spot later through an invite | ✓ (needed for the import) |
+| Players without accounts | **Placeholders allowed**: the commissioner can add named players, and a user claims the spot later through an invite | ✓ (lets a commissioner set up the season and draft order before everyone signs up) |
 | Rule changes | **Versioned.** Mid-season changes (ban list update, new soft ban) take effect from a given week. Past decks and transactions are judged by the rules in effect at that time. | ✓ |
 | Free agency | **First-come claims** with configurable limits. No waivers or FAAB bidding. | ✓ |
 | Trade assets | Cards, plus **transaction allowances** (e.g. "a card + one of my FA claims this week", so the receiver gets an extra FA move this week and the sender loses one). Legitimizes what our league already does informally. | Nice-to-have |
@@ -64,8 +64,8 @@ The sheet works, but it depends on people following the rules and on manual upke
 **Guiding principles**
 1. **House rules are config, not code.** Changing a soft ban, copy limit or tiebreak should be a settings change.
 2. **Every state change is an event.** Picks, trades, FA moves and results are stored append-only, and current state (ownership) is derived or projected from them. This gives the audit log, undo and history for free.
-3. **Ship read-only first.** A league hub that reads data is useful on day one. Write features come in where the sheet hurts most.
-4. **The sheet is the escape hatch.** Always support exporting to CSV/Sheets.
+3. **Follow the season lifecycle.** Build in the order a real season runs (set up the league and pool, then draft, then play) so each phase can be used for real before the next starts.
+4. **Exports are the escape hatch.** Always support exporting to CSV/Sheets.
 5. **Multi-league from day one.** Every season-scoped row hangs off a `League`, and every permission check is "what is this user's role *in this league*". Don't hardcode 10 players, 25 rounds or March 2008 (see §0).
 
 **Non-goals (for now):** playing duels in-app (Dueling Nexus handles that), real-money anything, native mobile apps, scaling for a large public user base (build for flexibility, not traffic).
@@ -245,30 +245,32 @@ playoffs:
 - Monorepo, Postgres via compose, Flyway V1, health + players endpoint, Vite app calling the API.
 - Snake-order calculator with unit tests (first piece of real domain logic).
 
-> The schema is multi-league from Phase 1 even before auth exists. Our league is imported as one `League` row like any other, so adding accounts and league creation later doesn't require reshaping data.
+> Everything is created in the app; there's no import step to lean on. Accounts therefore come first, because every write needs an actor and every read needs a league role.
 
-**Phase 1: Read-only league hub**
-- Add `league` / `league_member` tables and scope `season` to a league (new migration). Move the 10-player seed in V1 out of the schema path: in a later migration, either delete it or treat it as dev sample data, since real players should come from the importer.
-- Import from the current sheet (CSV export of Draft Pool, Draft Log, Match Schedule, Transactions, Rosters).
-- Card catalog import from YGOPRODeck (cutoff date filter) and image caching.
-- Pages: standings, schedule + replays, rosters with card art, draft board, season archive.
-- No auth needed yet; deploy behind an unlisted URL.
+**Phase 1: Accounts, leagues, card catalog**
+- Migrations for the core tenancy model: `app_user`, `league`, `league_member` (nullable user, role), `league_invite`, `season` scoped to a league, `season_player`, versioned `season_rules`. Delete the V1 player seed in a new migration; dev sample data goes in a dev-only seed instead.
+- OAuth2 login, "My leagues", create a league (creator becomes commissioner), invite links, placeholder members, viewer allowlist.
+- Card catalog import from YGOPRODeck (cards, sets, prints, images cached locally) and global dated TCG ban lists.
 
-**Phase 2: Accounts, league creation, transactions, deck validator**
-- OAuth2 login; users claim their imported league member; per-league roles.
-- Self-serve league creation, invites, season setup (rules config + card pool builder).
-- Event-sourced ownership; FA claims and trade proposals with validation.
-- Deck builder + `.ydk` export.
-- Match reporting with confirmation.
+**Phase 2: Season setup**
+- Season creation: rules config UI (typed, versioned), seat order / randomizer.
+- Card pool builder: cutoff date, include/exclude sets, manual add/remove, per-card flags (soft ban, requires ownership, copies), pool browser with filters.
 
 **Phase 3: Draft room**
-- Live draft over SSE, queue/watchlist, timer, commissioner tools, Discord notifications.
+- Snake draft with pick legality, draft board, and the draft log written as events.
+- Live updates over SSE, queue/watchlist, timer, pause/undo/commissioner override, Discord notifications.
 - Mock draft mode.
 
-**Phase 4: Stats, polish, social**
-- All-time stats, card stats, recaps, awards, playoff bracket automation.
+**Phase 4: Season play**
+- Event-sourced ownership; rosters with card art.
+- FA claims and trade proposals with validation, including allowance trades.
+- Round-robin schedule generation, match reporting with confirmation, replay links, standings with tiebreakers, playoff bracket.
+- Deck builder + `.ydk` export/import, deck submission policy per league.
 
-**Phase 5: Public polish**
+**Phase 5: Stats, polish, social**
+- Season archive, all-time stats, card stats, recaps, awards.
+
+**Phase 6: Deferred options + public polish**
 - The deferred options from §0: copy-based ownership, auction and pack drafts (real sets + cubes), Swiss / H2H / ladder competition.
 - Onboarding for new commissioners, rules presets (e.g. "Goat format", "Edison"), and hardening for strangers using it (rate limits, abuse handling).
 
@@ -295,20 +297,21 @@ GET    /api/seasons/{id}/export.csv
 
 ---
 
-## 7. Migration from the sheet
+## 7. Importing an existing league (optional, not planned)
 
-1. Export tabs to CSV: `Draft Pool`, `Draft Log`, `Draft Order`, `Match Schedule`, `Transactions`, `March 2008 TCG Ban List`, `Info`.
-2. One-off importer (`backend/.../importer`) that builds Season 1. Ownership is rebuilt by replaying draft picks and then transactions, then checked against the sheet's `Owner` column. Any mismatch is a bug in the import or in the sheet.
-3. Import the "Season 2, 2017" sheet as a second season to prove the model handles multiple seasons and formats.
-4. Keep the sheet as read-only history once the site is the source of truth.
+**Not a goal.** The current league runs to completion on its sheet, and the app is for future seasons. If development finishes while that season is still going, an import *might* be attempted. Nothing should be designed around it, but the event model makes it possible if we want it:
+
+1. Export the sheet tabs to CSV (`Draft Pool`, `Draft Log`, `Draft Order`, `Match Schedule`, `Transactions`, ban list, `Info`).
+2. A one-off importer creates the league, placeholder members and season, then replays draft picks and transactions as events. The resulting ownership is checked against the sheet's `Owner` column.
+
+The sheet remains useful as a **requirements reference**: it shows what a real season needs.
 
 ---
 
 ## 8. Open questions
 
 - Hosting target and budget? Own domain?
-- Google vs Discord login (or both)? Is everyone in the league on Discord?
-- Keep Sheets in sync during the transition (two-way) or do a hard cutover between seasons?
+- Google vs Discord login (or both)? Is everyone in the league on Discord? *(Needed early now: accounts are Phase 1.)*
 - How much card text and image data to store vs fetch (YGOPRODeck asks that images be downloaded, not hotlinked)?
 - Where to get real-set pack data (rarity odds, pack composition) for pack drafts? YGOPRODeck has set lists and rarities but not pull rates.
 - Expose league data to Claude via an MCP server so the Claude Helper sheet isn't needed?

@@ -16,7 +16,7 @@ General-purpose web app for running Yu-Gi-Oh draft leagues, fantasy-football sty
 
 ## Conventions
 - Schema changes only via new Flyway migrations in `backend/src/main/resources/db/migration` (never edit an applied one).
-- League rules (card pool, copy limits, ban list, draft rounds, transaction limits, tiebreakers) come from season config. Don't hardcode 10 players / 25 rounds / March 2008; our league's values belong in seed/import data only.
+- League rules (card pool, copy limits, ban list, draft rounds, transaction limits, tiebreakers) come from season config. Don't hardcode 10 players / 25 rounds / March 2008; our league's values belong in dev seed data and examples only. Migrating the current league from its sheet is not a goal.
 - Design wide, build narrow: schema and interfaces must allow every option in PLANNING.md §0 "Scope decisions", but only implement the v1 column unless asked.
 - Everything is league-scoped: season data hangs off a `League`, and authorization is per-league role (commissioner/player/viewer).
 - State changes (picks, trades, FA, results) are append-only events; ownership is derived from them.
