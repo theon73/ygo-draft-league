@@ -5,13 +5,13 @@ import AccountMenu from "./auth/AccountMenu";
 import Explore from "./pages/explore/Explore";
 import CardView from "./pages/explore/CardView";
 import BanListView from "./pages/explore/BanListView";
+import MyLeagues from "./pages/leagues/MyLeagues";
+import LeagueLayout from "./pages/leagues/LeagueLayout";
+import LeagueOverview from "./pages/leagues/LeagueOverview";
 
 const NAV = [
   { to: "/", label: "Home" },
-  { to: "/standings", label: "Standings" },
-  { to: "/rosters", label: "Rosters" },
-  { to: "/draft", label: "Draft" },
-  { to: "/transactions", label: "Transactions" },
+  { to: "/leagues", label: "Leagues" },
   { to: "/explore", label: "Explorer" },
 ];
 
@@ -32,10 +32,15 @@ export default function App() {
       <main>
         <Routes>
           <Route path="/" element={<Home />} />
-          <Route path="/standings" element={<Placeholder title="Standings" phase={4} />} />
-          <Route path="/rosters" element={<Placeholder title="Rosters" phase={4} />} />
-          <Route path="/draft" element={<Placeholder title="Draft Room" phase={3} />} />
-          <Route path="/transactions" element={<Placeholder title="Transactions" phase={4} />} />
+          <Route path="/leagues" element={<MyLeagues />} />
+          {/* League pages share LeagueLayout (loads the league, shows the tabs); children render inside it. */}
+          <Route path="/leagues/:leagueId" element={<LeagueLayout />}>
+            <Route index element={<LeagueOverview />} />
+            <Route path="standings" element={<Placeholder title="Standings" phase={4} />} />
+            <Route path="rosters" element={<Placeholder title="Rosters" phase={4} />} />
+            <Route path="draft" element={<Placeholder title="Draft Room" phase={3} />} />
+            <Route path="transactions" element={<Placeholder title="Transactions" phase={4} />} />
+          </Route>
           <Route path="/explore" element={<Explore />} />
           <Route path="/explore/cards/:id" element={<CardView />} />
           <Route path="/explore/banlists/:id" element={<BanListView />} />
