@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import {
   apiPost, apiPut, type DraftSlot, type DraftState, type PoolCard, type PoolCardPage, type PoolFacets, type PoolSummary, type RoundBlock,
@@ -14,34 +14,15 @@ import { usePoolParams } from "./usePoolParams";
 
 // The draft room (the season's Draft tab). Before the start: settings, a board preview, the
 // readiness checklist and Start draft. During: who's on the clock, the board filling in, and the
-// available cards to pick from. After: the final board.
-
-// Until live updates (SSE, YGO-17), the room re-fetches the draft every few seconds while it runs.
-const POLL_MS = 4000;
+// available cards to pick from. After: the final board. It refetches whenever the live connection
+// (held by SeasonLayout) says the draft changed.
 
 export default function SeasonDraftPage() {
   const { league, reload: reloadLeague } = useLeague();
-  const { season, reload: reloadSeason } = useSeason();
+  const { season, reload: reloadSeason, draftVersion } = useSeason();
   const base = `/leagues/${league.id}/seasons/${season.id}/draft`;
-  const draft = useApi<DraftState>(base);
+  const draft = useApi<DraftState>(base, String(draftVersion));
   const [error, setError] = useState<string | null>(null);
-  const status = draft.data?.status;
-
-  // Polling: a timer that refetches while the draft is in progress, skipped while the tab is hidden.
-  // The effect's cleanup clears the timer when the status changes or the page unmounts.
-  const { reload } = draft;
-  useEffect(() => {
-    if (status !== "IN_PROGRESS") return;
-    const timer = window.setInterval(() => { if (!document.hidden) reload(); }, POLL_MS);
-    return () => window.clearInterval(timer);
-  }, [status, reload]);
-
-  // When the last pick lands (ours or someone else's) the season becomes active: refresh its header.
-  const lastStatus = useRef(status);
-  useEffect(() => {
-    if (lastStatus.current === "IN_PROGRESS" && status === "COMPLETE") { reloadSeason(); reloadLeague(); }
-    lastStatus.current = status;
-  }, [status, reloadSeason, reloadLeague]);
 
   if (draft.error) return <p className="bad">Couldn't load the draft ({draft.error})</p>;
   if (!draft.data) return <p className="muted">Loading…</p>;

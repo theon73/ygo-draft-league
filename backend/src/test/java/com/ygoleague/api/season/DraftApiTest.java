@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.jayway.jsonpath.JsonPath;
@@ -29,6 +30,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.ResultMatcher;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
@@ -226,6 +228,32 @@ class DraftApiTest {
         pick(yugi, "Card 7", 7).andExpect(status().isConflict()).andExpect(jsonPath("$.message").value("The draft is over"));
     }
 
+    // ---- live updates (YGO-17) ----
+
+    @Test
+    void membersFollowTheDraftLiveAndOnlyCommittedChangesAreAnnounced() throws Exception {
+        AppUser joey = users.save(new AppUser("Joey"));   // not in the league
+        mvc.perform(get(draft("/events")).with(as(joey))).andExpect(status().isNotFound());
+
+        ready(3);
+        MvcResult stream = mvc.perform(get(draft("/events")).with(as(kaiba)).accept(MediaType.TEXT_EVENT_STREAM))
+                .andExpect(request().asyncStarted()).andReturn();
+        // The current state straight away, then one event per change.
+        Assertions.assertEquals(List.of("{\"status\":\"NOT_STARTED\",\"picksMade\":0,\"onTheClockSeat\":null}"), events(stream));
+
+        send(post(draft("/start")), yugi, null).andExpect(status().isOk());
+        pick(yugi, "Card 1", 1).andExpect(status().isOk());
+        pick(yugi, "Card 1", 2).andExpect(status().isConflict());   // refused: nothing to announce
+        Assertions.assertEquals(List.of(
+                "{\"status\":\"NOT_STARTED\",\"picksMade\":0,\"onTheClockSeat\":null}",
+                "{\"status\":\"IN_PROGRESS\",\"picksMade\":0,\"onTheClockSeat\":1}",
+                "{\"status\":\"IN_PROGRESS\",\"picksMade\":1,\"onTheClockSeat\":2}"), events(stream));
+
+        for (int i = 2; i <= 6; i++) pick(yugi, "Card " + i, i).andExpect(status().isOk());
+        List<String> all = events(stream);
+        Assertions.assertEquals("{\"status\":\"COMPLETE\",\"picksMade\":6,\"onTheClockSeat\":null}", all.getLast());
+    }
+
     // ---- helpers ----
 
     /** n players, rounds for 3 picks each... and everything else the checklist needs (20 cards, enough for 3 x 2). */
@@ -248,6 +276,12 @@ class DraftApiTest {
         settings("SNAKE", "[{\"fromRound\":1,\"toRound\":2,\"picksPerTurn\":1}]");
         rules("{\"startDate\":\"2030-01-07\",\"competitionFormat\":\"ROUND_ROBIN\",\"roundRobinCycles\":1,\"tcgCutoff\":\"2008-03-01\"}");
         send(post(pool("/generate")), yugi, null).andExpect(status().isOk());
+    }
+
+    /** The data lines of the draft events a stream has received so far. */
+    private static List<String> events(MvcResult stream) throws Exception {
+        return stream.getResponse().getContentAsString().lines()
+                .filter(l -> l.startsWith("data:")).map(l -> l.substring("data:".length())).toList();
     }
 
     private ResultActions pick(AppUser user, String card, int overallPick) throws Exception {
