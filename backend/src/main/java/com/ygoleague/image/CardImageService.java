@@ -81,12 +81,18 @@ public class CardImageService {
      * are skipped. Returns how many were queued.
      */
     public int prefetchUpTo(LocalDate tcgCutoff, ImageVariant variant) {
-        List<ImageKey> missing = jdbc.sql("select distinct unnest(passcodes) from card where tcg_date <= :d order by 1")
-                .param("d", tcgCutoff)
-                .query(Long.class).list().stream()
+        return prefetch(jdbc.sql("select distinct unnest(passcodes) from card where tcg_date <= :d order by 1")
+                .param("d", tcgCutoff).query(Long.class).list(), variant);
+    }
+
+    /** Queues these passcodes' images for background fetching (e.g. a season's pool); cached ones are skipped. */
+    public int prefetch(java.util.Collection<Long> passcodes, ImageVariant variant) {
+        List<ImageKey> missing = passcodes.stream()
+                .distinct()
                 .map(p -> new ImageKey(variant, p))
                 .filter(k -> !store.exists(k))
                 .toList();
+        if (missing.isEmpty()) return 0;
         AtomicInteger done = new AtomicInteger();
         prefetcher.execute(() -> {
             for (ImageKey key : missing) {

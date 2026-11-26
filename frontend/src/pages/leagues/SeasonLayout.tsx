@@ -25,6 +25,7 @@ export function useSeason(): SeasonContext {
 const TABS = [
   { to: "", label: "Setup", end: true },
   { to: "rules", label: "Rules" },
+  { to: "pool", label: "Pool" },
   { to: "draft", label: "Draft" },
   { to: "rosters", label: "Rosters" },
   { to: "standings", label: "Standings" },

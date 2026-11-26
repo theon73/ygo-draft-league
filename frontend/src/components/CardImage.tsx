@@ -13,22 +13,28 @@ export function cardImageUrl(passcode: number, size: CardImageSize): string {
 
 const MAX_RETRIES = 3;
 
-// A card image with a fixed-ratio placeholder while it loads. The backend answers 503 while an
-// image is still being fetched from YGOPRODeck for the first time, so a failed load is retried a
-// few times (5 s apart) before showing "unavailable".
-export default function CardImage({ passcode, size, alt, className }: {
+interface Props {
   passcode: number;
   size: CardImageSize;
   alt: string;
   className?: string;
-}) {
+}
+
+// A card image with a fixed-ratio placeholder while it loads. The backend answers 503 while an
+// image is still being fetched from YGOPRODeck for the first time, so a failed load is retried a
+// few times (5 s apart) before showing "unavailable".
+//
+// Keyed on passcode + size, so a different image always starts from fresh state. (An earlier
+// version reset its state in an effect instead; with images already in the browser cache the
+// load event could fire before that effect ran, the reset then hid an already-loaded image, and
+// with no second load event it stayed invisible.)
+export default function CardImage(props: Props) {
+  return <CardImageFor key={`${props.passcode}-${props.size}`} {...props} />;
+}
+
+function CardImageFor({ passcode, size, alt, className }: Props) {
   const [attempt, setAttempt] = useState(0);
   const [state, setState] = useState<"loading" | "loaded" | "failed">("loading");
-
-  useEffect(() => {
-    setAttempt(0);
-    setState("loading");
-  }, [passcode, size]);
 
   useEffect(() => {
     if (state !== "failed" || attempt >= MAX_RETRIES) return;
@@ -52,6 +58,11 @@ export default function CardImage({ passcode, size, alt, className }: {
           alt={alt}
           loading="lazy"
           decoding="async"
+          // Belt and braces: an image the browser already finished (e.g. from its cache) when the
+          // element attaches counts as loaded even if we never see its load event.
+          ref={(el) => {
+            if (el?.complete && el.naturalWidth > 0) setState((s) => (s === "loading" ? "loaded" : s));
+          }}
           onLoad={() => setState("loaded")}
           onError={() => setState("failed")}
         />

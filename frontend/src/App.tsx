@@ -14,6 +14,7 @@ import LeagueSettings from "./pages/leagues/LeagueSettings";
 import SeasonLayout from "./pages/leagues/SeasonLayout";
 import SeasonSetup from "./pages/leagues/SeasonSetup";
 import SeasonRulesPage from "./pages/leagues/SeasonRulesPage";
+import SeasonPoolPage from "./pages/leagues/SeasonPoolPage";
 import InvitePage, { PendingInviteRedirect } from "./pages/InvitePage";
 
 const NAV = [
@@ -51,6 +52,7 @@ export default function App() {
             <Route path="seasons/:seasonId" element={<SeasonLayout />}>
               <Route index element={<SeasonSetup />} />
               <Route path="rules" element={<SeasonRulesPage />} />
+              <Route path="pool" element={<SeasonPoolPage />} />
               <Route path="draft" element={<Placeholder title="Draft Room" phase={3} />} />
               <Route path="rosters" element={<Placeholder title="Rosters" phase={4} />} />
               <Route path="standings" element={<Placeholder title="Standings" phase={4} />} />

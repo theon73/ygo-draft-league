@@ -162,6 +162,21 @@ public class SeasonRulesService {
         return view(season, true);
     }
 
+    /** The latest rules (what applies during setup), or the empty document if none were saved. */
+    @Transactional(readOnly = true)
+    public SeasonRulesDocument latest(Season season) {
+        return rules.findFirstBySeasonIdOrderByVersionDesc(season.getId()).map(this::parse).orElse(SeasonRulesDocument.EMPTY);
+    }
+
+    /** The current week of the season (0 = pre-season, or no calendar yet). */
+    @Transactional(readOnly = true)
+    public int currentWeek(Season season) {
+        SeasonRulesDocument doc = latest(season);
+        int weeks = weekCount(season, doc);
+        if (doc.calendar().startDate() == null || weeks == 0) return 0;
+        return new SeasonCalendar(boundary(doc, season.getLeague()), doc.calendar().startDate(), weeks).weekNumberAt(Instant.now());
+    }
+
     // ---- Reading ------------------------------------------------------------------------------
 
     private RulesView view(Season season, boolean canManage) {
