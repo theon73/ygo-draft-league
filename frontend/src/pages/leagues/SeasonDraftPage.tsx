@@ -1,12 +1,23 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { apiPost, apiPut, type DraftState, type RoundBlock } from "../../api/client";
+import {
+  apiPost, apiPut, type DraftSlot, type DraftState, type PoolCard, type PoolCardPage, type PoolFacets, type PoolSummary, type RoundBlock,
+} from "../../api/client";
+import CardPreview from "../../components/CardPreview";
 import { useApi } from "../../hooks/useApi";
 import { useLeague } from "./LeagueLayout";
+import PoolFilters from "./PoolFilters";
+import PoolGrid from "./PoolGrid";
+import { poolQueryString } from "./poolQuery";
 import { useSeason } from "./SeasonLayout";
+import { usePoolParams } from "./usePoolParams";
 
 // The draft room (the season's Draft tab). Before the start: settings, a board preview, the
-// readiness checklist and Start draft. Picking during the draft arrives in YGO-16.
+// readiness checklist and Start draft. During: who's on the clock, the board filling in, and the
+// available cards to pick from. After: the final board.
+
+// Until live updates (SSE, YGO-17), the room re-fetches the draft every few seconds while it runs.
+const POLL_MS = 4000;
 
 export default function SeasonDraftPage() {
   const { league, reload: reloadLeague } = useLeague();
@@ -14,6 +25,23 @@ export default function SeasonDraftPage() {
   const base = `/leagues/${league.id}/seasons/${season.id}/draft`;
   const draft = useApi<DraftState>(base);
   const [error, setError] = useState<string | null>(null);
+  const status = draft.data?.status;
+
+  // Polling: a timer that refetches while the draft is in progress, skipped while the tab is hidden.
+  // The effect's cleanup clears the timer when the status changes or the page unmounts.
+  const { reload } = draft;
+  useEffect(() => {
+    if (status !== "IN_PROGRESS") return;
+    const timer = window.setInterval(() => { if (!document.hidden) reload(); }, POLL_MS);
+    return () => window.clearInterval(timer);
+  }, [status, reload]);
+
+  // When the last pick lands (ours or someone else's) the season becomes active: refresh its header.
+  const lastStatus = useRef(status);
+  useEffect(() => {
+    if (lastStatus.current === "IN_PROGRESS" && status === "COMPLETE") { reloadSeason(); reloadLeague(); }
+    lastStatus.current = status;
+  }, [status, reloadSeason, reloadLeague]);
 
   if (draft.error) return <p className="bad">Couldn't load the draft ({draft.error})</p>;
   if (!draft.data) return <p className="muted">Loading…</p>;
@@ -59,13 +87,91 @@ export default function SeasonDraftPage() {
         <>
           <DraftSummary draft={d} />
           <p className="muted">
-            {d.status === "IN_PROGRESS" ? "The draft is under way" : "The draft is complete"}: started
-            {d.startedAt && ` ${new Date(d.startedAt).toLocaleString()}`}{d.startedBy && ` by ${d.startedBy}`}.
-            {d.status === "IN_PROGRESS" && " Making picks comes next."}
+            Started{d.startedAt && ` ${new Date(d.startedAt).toLocaleString()}`}{d.startedBy && ` by ${d.startedBy}`}
+            {d.completedAt ? `; completed ${new Date(d.completedAt).toLocaleString()}. The season is under way.` : "."}
+            {" "}{d.picksMade} of {d.totalPicks} picks made.
           </p>
+          {d.status === "IN_PROGRESS" && <Clock draft={d} />}
         </>
       )}
       <Board draft={d} />
+      {d.status === "IN_PROGRESS" && <Picker draft={d} onPicked={() => draft.reload()} />}
+    </>
+  );
+}
+
+function Clock({ draft: d }: { draft: DraftState }) {
+  const c = d.onTheClock;
+  if (!c) return null;
+  const mine = d.mySeat === c.seat;
+  return (
+    <p className={`on-clock${mine ? " mine" : ""}`}>
+      {mine ? <strong>You're on the clock</strong> : <><strong>{c.displayName}</strong> is on the clock</>}
+      {" "}with pick #{c.overallPick} (round {c.round}{c.picksInTurn > 1 && `, pick ${c.pickInTurn} of ${c.picksInTurn} this turn`}).
+      {!mine && d.canPick && <span className="muted"> As a commissioner you can pick for them.</span>}
+    </p>
+  );
+}
+
+// The available cards, with the pool's filters (kept in this page's URL). Everyone can browse them
+// to plan; whoever may make the pick on the clock gets a Draft button on each card.
+function Picker({ draft: d, onPicked }: { draft: DraftState; onPicked: () => void }) {
+  const { league } = useLeague();
+  const { season } = useSeason();
+  const poolBase = `/leagues/${league.id}/seasons/${season.id}/pool`;
+  const { params, setParam, setParams, setList, clearFilters } = usePoolParams();
+  const page = Number(params.get("page") ?? 0);
+  const query = new URLSearchParams(poolQueryString(params, page, 50));
+  query.set("available", "true");
+  // Refetch whenever a pick is made, so taken cards drop out.
+  const cards = useApi<PoolCardPage>(`${poolBase}/cards?${query}`, String(d.picksMade));
+  const facets = useApi<PoolFacets>(`${poolBase}/facets`);
+  const summary = useApi<PoolSummary>(poolBase);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const clock = d.onTheClock;
+
+  const pick = async (c: PoolCard) => {
+    if (!clock) return;
+    const forWhom = d.mySeat === clock.seat ? "" : ` for ${clock.displayName}`;
+    if (!window.confirm(`Draft ${c.name}${forWhom} with pick #${clock.overallPick}? Picks are final.`)) return;
+    setBusy(true);
+    setError(null);
+    try {
+      // overallPick guards against a stale board: if someone else's pick landed first, it's refused.
+      await apiPost(`/leagues/${league.id}/seasons/${season.id}/draft/picks`, { cardId: c.cardId, overallPick: clock.overallPick });
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+      onPicked();
+    }
+  };
+
+  const lastPage = cards.data ? Math.max(0, Math.ceil(cards.data.total / cards.data.pageSize) - 1) : 0;
+  return (
+    <>
+      <h4>Available cards <span className="muted">({d.availableCards.toLocaleString()} left)</span></h4>
+      {error && <p className="bad">{error}</p>}
+      <PoolFilters key={`${params.get("q") ?? ""}|${params.get("cardText") ?? ""}`} params={params} setOne={setParam} setSome={setParams} setList={setList}
+                   clear={clearFilters} facets={facets.data} hasBanList={!!summary.data?.banList} />
+      {cards.error && <p className="bad">Couldn't load cards ({cards.error})</p>}
+      {cards.data && (
+        <>
+          <p className="muted">
+            {cards.data.total.toLocaleString()} card{cards.data.total === 1 ? "" : "s"}
+            {cards.data.total > cards.data.pageSize && ` · page ${page + 1} of ${lastPage + 1}`}
+          </p>
+          <PoolGrid cards={cards.data.items}
+                    action={d.canPick ? (c) => <button onClick={() => void pick(c)} disabled={busy}>Draft</button> : undefined} />
+          {cards.data.total > cards.data.pageSize && (
+            <p>
+              <button disabled={page === 0} onClick={() => setParam("page", String(page - 1))}>Previous</button>{" "}
+              <button disabled={page >= lastPage} onClick={() => setParam("page", String(page + 1))}>Next</button>
+            </p>
+          )}
+        </>
+      )}
     </>
   );
 }
@@ -168,11 +274,13 @@ function DraftSettings({ draft: d, base, onSaved }: { draft: DraftState; base: s
 // Rounds down the side, seats across the top; each cell shows that seat's pick numbers in that round.
 function Board({ draft: d }: { draft: DraftState }) {
   if (d.board.length === 0) return <p className="muted">The board appears once there are players and rounds.</p>;
-  const cell = new Map<string, number[]>();
+  // A cell holds every slot that seat has in that round (several with multi-pick turns).
+  const cell = new Map<string, DraftSlot[]>();
   for (const s of d.board) {
     const key = `${s.round}-${s.seat}`;
-    cell.set(key, [...(cell.get(key) ?? []), s.overallPick]);
+    cell.set(key, [...(cell.get(key) ?? []), s]);
   }
+  const current = d.onTheClock?.overallPick;
   return (
     <>
       <h4>Draft board</h4>
@@ -185,7 +293,7 @@ function Board({ draft: d }: { draft: DraftState }) {
             <tr>
               <th>Round</th>
               {d.seats.map((s) => (
-                <th key={s.seat}>
+                <th key={s.seat} className={s.seat === d.mySeat ? "mine" : undefined}>
                   {s.seat}. {s.displayName}
                   {s.teamName && <span className="muted"><br />{s.teamName}</span>}
                 </th>
@@ -197,7 +305,19 @@ function Board({ draft: d }: { draft: DraftState }) {
               <tr key={round}>
                 <th>{round}</th>
                 {d.seats.map((s) => (
-                  <td key={s.seat} className="slot">{(cell.get(`${round}-${s.seat}`) ?? []).map((n) => `#${n}`).join(" ")}</td>
+                  <td key={s.seat} className="slot">
+                    {(cell.get(`${round}-${s.seat}`) ?? []).map((slot) => (
+                      <div key={slot.overallPick} className={slot.overallPick === current ? "current" : slot.pick ? "picked" : undefined}>
+                        {slot.pick ? (
+                          <CardPreview cardId={slot.pick.cardId}>
+                            <span title={`#${slot.overallPick}, picked by ${slot.pick.madeBy}${slot.pick.onBehalf ? " for the player" : ""}`}>
+                              {slot.pick.name}
+                            </span>
+                          </CardPreview>
+                        ) : `#${slot.overallPick}`}
+                      </div>
+                    ))}
+                  </td>
                 ))}
               </tr>
             ))}

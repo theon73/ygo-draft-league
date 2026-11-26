@@ -6,7 +6,7 @@ export const MULTI_PARAMS = [
   "kind", "deck", "summon", "text", "ability", "attribute", "monsterType", "spellType", "trapType", "archetype", "banStatus",
 ] as const;
 export const RANGE_PARAMS = ["level", "rank", "link", "atk", "def", "scale"] as const;
-export const SINGLE_PARAMS = ["show", "q", "cardText", "sort"] as const;
+export const SINGLE_PARAMS = ["show", "q", "cardText", "sort", "available"] as const;
 
 export type MultiParam = (typeof MULTI_PARAMS)[number];
 export type RangeParam = (typeof RANGE_PARAMS)[number];

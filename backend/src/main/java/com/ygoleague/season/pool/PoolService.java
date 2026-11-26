@@ -65,12 +65,13 @@ public class PoolService {
      * @param banStatus    FORBIDDEN / LIMITED / SEMI_LIMITED on the season's ban list, or null
      * @param effectiveMax copies a player may play: the override if set, else the ban list's limit (0/1/2), else 3
      * @param race         monster type, or a spell/trap's subtype ("Quick-Play", "Continuous", ...)
+     * @param ownedBy      who holds the card (display names, in pick order), or null if nobody does
      */
     public record PoolCardView(long cardId, String name, String cardType, String archetype, LocalDate tcgDate, long passcode,
                                String source, boolean softBanned, boolean requiresOwnership, Integer maxPlayable,
                                String reason, int addedInWeek, Integer removedInWeek, String banStatus, int effectiveMax,
                                String race, String attribute, Integer level, Integer rank, Integer linkRating, Integer atk,
-                               Integer def) {}
+                               Integer def, String ownedBy) {}
 
     public record CardPage(long total, int page, int pageSize, List<PoolCardView> items) {}
 
@@ -116,7 +117,10 @@ public class PoolService {
     private static final String CARD_SELECT = """
             select c.id, c.name, c.card_type, c.archetype, c.tcg_date, c.passcodes[1] as passcode, p.source,
                    p.soft_banned, p.requires_ownership, p.max_playable, p.reason, p.added_in_week, p.removed_in_week, b.status,
-                   c.race, c.attribute, c.level, c.rank, c.link_rating, c.atk, c.def
+                   c.race, c.attribute, c.level, c.rank, c.link_rating, c.atk, c.def,
+                   (select string_agg(m.display_name, ', ' order by sp.seat) from card_holding h
+                    join season_player sp on sp.id = h.season_player_id join league_member m on m.id = sp.league_member_id
+                    where h.season_id = p.season_id and h.card_id = p.card_id) as owned_by
             from pool_card p join card c on c.id = p.card_id
             left join ban_list_entry b on b.revision_id = :rev and b.card_id = p.card_id
             """;
@@ -133,7 +137,7 @@ public class PoolService {
                 rs.getObject(5, LocalDate.class), rs.getLong(6), rs.getString(7), rs.getBoolean(8), rs.getBoolean(9),
                 override, rs.getString(11), rs.getInt(12), (Integer) rs.getObject(13), ban, override != null ? override : fromList,
                 rs.getString(15), rs.getString(16), (Integer) rs.getObject(17), (Integer) rs.getObject(18), (Integer) rs.getObject(19),
-                (Integer) rs.getObject(20), (Integer) rs.getObject(21));
+                (Integer) rs.getObject(20), (Integer) rs.getObject(21), rs.getString(22));
     }
 
     private Long banListRevision(Season season) {
@@ -200,8 +204,10 @@ public class PoolService {
      * @param cardText    a substring of the card's text (effect, flavor text; pendulum and monster effects alike), any case
      * @param monsterType monster types ("Spellcaster"); spellType / trapType: subtypes ("Quick-Play")
      * @param banStatus   FORBIDDEN, LIMITED, SEMI_LIMITED, or UNLIMITED (not on the list)
+     * @param available   only cards that can still be drafted: not soft-banned, not Forbidden (unless the
+     *                    draft allows it), and with a copy nobody holds
      */
-    public record PoolQuery(String q, String cardText, Filter show, List<Kind> kind, List<Deck> deck, List<SummonType> summon, List<Text> text,
+    public record PoolQuery(String q, String cardText, Filter show, Boolean available, List<Kind> kind, List<Deck> deck, List<SummonType> summon, List<Text> text,
                             List<Ability> ability, List<String> attribute, List<String> monsterType, List<String> spellType,
                             List<String> trapType, List<String> archetype, List<String> banStatus,
                             Integer levelMin, Integer levelMax, Integer rankMin, Integer rankMax, Integer linkMin, Integer linkMax,
@@ -237,6 +243,11 @@ public class PoolService {
             case BAN_LIST -> "p.removed_in_week is null and b.status is not null";
             case REMOVED -> "p.removed_in_week is not null";
         });
+
+        if (Boolean.TRUE.equals(query.available())) {
+            where.add("p.removed_in_week is null and not p.soft_banned and p.copies > " + PoolOwnership.HELD_COPIES);
+            if (!rules.latest(season).draft().forbiddenDraftable()) where.add("b.status is distinct from 'FORBIDDEN'");
+        }
 
         // Kinds: the ones chosen, or the ones the other filters imply. Each kind can carry its own subtype choice.
         boolean monsterFilters = !empty(query.monsterType()) || !empty(query.deck()) || !empty(query.summon()) || !empty(query.text())
