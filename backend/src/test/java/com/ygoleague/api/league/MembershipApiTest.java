@@ -4,7 +4,6 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -55,7 +54,7 @@ class MembershipApiTest {
 
     @Test
     void openInviteLetsAnyoneWithTheLinkJoinOnce() throws Exception {
-        String code = invite("{\"role\":\"PLAYER\",\"expiresInDays\":7}");
+        String code = invite("{\"expiresInDays\":7}");
 
         // Previewable signed out, so the page can name the league before sign-in.
         mvc.perform(get("/api/invites/" + code))
@@ -70,7 +69,7 @@ class MembershipApiTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.leagueId").value(league));
         mvc.perform(get("/api/leagues/" + league).with(as(kaiba)))
-                .andExpect(jsonPath("$.myRole").value("PLAYER"));
+                .andExpect(jsonPath("$.myRole").value("MEMBER"));
         mvc.perform(post("/api/invites/" + code + "/accept").with(csrf()).with(as(kaiba)))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.message").value("You're already in this league"));
@@ -79,16 +78,16 @@ class MembershipApiTest {
 
     @Test
     void usedUpRevokedExpiredAndUnknownInvitesDontWork() throws Exception {
-        String single = invite("{\"role\":\"VIEWER\",\"maxUses\":1}");
+        String single = invite("{\"maxUses\":1}");
         accept(single, kaiba).andExpect(status().isOk());
         accept(single, joey).andExpect(status().isGone()).andExpect(jsonPath("$.message").value("This invite has already been used"));
 
-        String revoked = invite("{\"role\":\"PLAYER\"}");
+        String revoked = invite("{}");
         send(delete("/api/leagues/" + league + "/invites/" + revoked), yugi, null).andExpect(status().isNoContent());
         mvc.perform(get("/api/invites/" + revoked)).andExpect(jsonPath("$.status").value("REVOKED"));
         accept(revoked, joey).andExpect(status().isGone());
 
-        String expired = invite("{\"role\":\"PLAYER\",\"expiresInDays\":1}");
+        String expired = invite("{\"expiresInDays\":1}");
         jdbc.update("update league_invite set expires_at = now() - interval '1 minute' where code = ?", expired);
         mvc.perform(get("/api/invites/" + expired)).andExpect(jsonPath("$.status").value("EXPIRED"));
         accept(expired, joey).andExpect(status().isGone());
@@ -96,12 +95,12 @@ class MembershipApiTest {
         mvc.perform(get("/api/invites/nope")).andExpect(status().isNotFound());
         accept("nope", joey).andExpect(status().isNotFound());
 
-        // The commissioner's list only shows invites that still work.
+        // The owner's list only shows invites that still work.
         mvc.perform(get("/api/leagues/" + league + "/invites").with(as(yugi))).andExpect(jsonPath("$.length()").value(0));
     }
 
     @Test
-    void placeholderSeatIsClaimedWithItsNameAndRole() throws Exception {
+    void placeholderSeatIsClaimedWithItsName() throws Exception {
         String seat = JsonPath.read(send(post("/api/leagues/" + league + "/members/placeholders"), yugi, "{\"displayName\":\"Joey W.\"}")
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.placeholder").value(true))
@@ -117,66 +116,59 @@ class MembershipApiTest {
                 .andExpect(jsonPath("$.members.length()").value(2))
                 .andExpect(jsonPath("$.members[?(@.displayName == 'Joey W.')].you").value(true))
                 .andExpect(jsonPath("$.members[?(@.displayName == 'Joey W.')].placeholder").value(false))
-                .andExpect(jsonPath("$.myRole").value("PLAYER"));
+                .andExpect(jsonPath("$.myRole").value("MEMBER"));
         accept(code, mai).andExpect(status().isGone());
-        // Claim invites can't be made for seats that already have an account.
+        // Claim invites can't be made for seats that already have an account, and are always single-use.
         invite("{\"placeholderId\":\"" + seat + "\"}", 409);
     }
 
     @Test
     void joiningWithATakenNameGetsANumber() throws Exception {
         AppUser otherYugi = users.save(new AppUser("Yugi"));
-        accept(invite("{\"role\":\"PLAYER\"}"), otherYugi).andExpect(status().isOk());
+        accept(invite("{}"), otherYugi).andExpect(status().isOk());
         mvc.perform(get("/api/leagues/" + league).with(as(otherYugi)))
                 .andExpect(jsonPath("$.members[?(@.you == true)].displayName").value("Yugi 2"));
     }
 
     @Test
-    void onlyCommissionersManageAndInvitesGrantPlayerOrViewerOnly() throws Exception {
-        accept(invite("{\"role\":\"PLAYER\"}"), kaiba).andExpect(status().isOk());
+    void onlyTheOwnerManagesTheGroup() throws Exception {
+        accept(invite("{}"), kaiba).andExpect(status().isOk());
 
-        send(post("/api/leagues/" + league + "/invites"), kaiba, "{\"role\":\"PLAYER\"}").andExpect(status().isForbidden());
+        send(post("/api/leagues/" + league + "/invites"), kaiba, "{}").andExpect(status().isForbidden());
         mvc.perform(get("/api/leagues/" + league + "/invites").with(as(kaiba))).andExpect(status().isForbidden());
-        send(post("/api/leagues/" + league + "/invites"), mai, "{\"role\":\"PLAYER\"}").andExpect(status().isNotFound());
+        send(post("/api/leagues/" + league + "/members/placeholders"), kaiba, "{\"displayName\":\"X\"}").andExpect(status().isForbidden());
+        send(post("/api/leagues/" + league + "/invites"), mai, "{}").andExpect(status().isNotFound());
 
-        invite("{\"role\":\"COMMISSIONER\"}", 400);
-        invite("{}", 400);
-        invite("{\"role\":\"PLAYER\",\"expiresInDays\":0}", 400);
-        invite("{\"role\":\"PLAYER\",\"maxUses\":0}", 400);
-    }
-
-    @Test
-    void aLeagueAlwaysKeepsACommissioner() throws Exception {
-        accept(invite("{\"role\":\"PLAYER\"}"), kaiba).andExpect(status().isOk());
-        String me = memberId(yugi, "Yugi");
-        String kaibaId = memberId(yugi, "Kaiba");
-
-        role(me, "PLAYER").andExpect(status().isConflict());
-        send(delete("/api/leagues/" + league + "/members/" + me), yugi, null).andExpect(status().isConflict());
-
-        role(kaibaId, "COMMISSIONER").andExpect(status().isOk()).andExpect(jsonPath("$.role").value("COMMISSIONER"));
-        role(me, "PLAYER").andExpect(status().isOk()).andExpect(jsonPath("$.you").value(true));
-        // Yugi is no longer a commissioner, so can't manage anymore.
-        role(kaibaId, "PLAYER").andExpect(status().isForbidden());
-
-        String seat = JsonPath.read(send(post("/api/leagues/" + league + "/members/placeholders"), kaiba, "{\"displayName\":\"Tea\"}")
+        invite("{\"expiresInDays\":0}", 400);
+        invite("{\"maxUses\":0}", 400);
+        String seat = JsonPath.read(send(post("/api/leagues/" + league + "/members/placeholders"), yugi, "{\"displayName\":\"Tea\"}")
                 .andReturn().getResponse().getContentAsString(), "$.id");
-        send(patch("/api/leagues/" + league + "/members/" + seat), kaiba, "{\"role\":\"COMMISSIONER\"}").andExpect(status().isBadRequest());
+        invite("{\"placeholderId\":\"" + seat + "\",\"maxUses\":5}", 400);
     }
 
     @Test
-    void removingMembers() throws Exception {
-        accept(invite("{\"role\":\"VIEWER\"}"), mai).andExpect(status().isOk());
-        accept(invite("{\"role\":\"PLAYER\"}"), joey).andExpect(status().isOk());
+    void theOwnerCantBeRemovedButMembersCan() throws Exception {
+        accept(invite("{}"), mai).andExpect(status().isOk());
+        accept(invite("{}"), joey).andExpect(status().isOk());
+        String yugiId = memberId(yugi, "Yugi");
         String maiId = memberId(yugi, "Mai");
         String joeyId = memberId(yugi, "Joey");
 
-        send(delete("/api/leagues/" + league + "/members/" + maiId), yugi, null).andExpect(status().isNoContent());
-        mvc.perform(get("/api/leagues/" + league).with(as(mai))).andExpect(status().isNotFound());
+        send(delete("/api/leagues/" + league + "/members/" + yugiId), yugi, null)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("The league owner can't be removed"));
+        send(delete("/api/leagues/" + league + "/members/" + maiId), kaiba, null).andExpect(status().isNotFound());   // not a member
 
-        // Someone who has played in a season stays, for the league's history.
+        // A season commissioner who isn't playing can be removed; their commissioner role goes with them.
         long leagueDbId = jdbc.queryForObject("select id from league", Long.class);
         long seasonId = jdbc.queryForObject("insert into season (league_id, name) values (?, 'S1') returning id", Long.class, leagueDbId);
+        jdbc.update("insert into season_commissioner (season_id, league_id, league_member_id) "
+                + "select ?, ?, id from league_member where display_name = 'Mai'", seasonId, leagueDbId);
+        send(delete("/api/leagues/" + league + "/members/" + maiId), yugi, null).andExpect(status().isNoContent());
+        mvc.perform(get("/api/leagues/" + league).with(as(mai))).andExpect(status().isNotFound());
+        org.junit.jupiter.api.Assertions.assertEquals(0, jdbc.queryForObject("select count(*) from season_commissioner", Long.class));
+
+        // Someone playing in a season stays until they're taken out of it.
         jdbc.update("insert into season_player (season_id, league_id, league_member_id) "
                 + "select ?, ?, id from league_member where display_name = 'Joey'", seasonId, leagueDbId);
         send(delete("/api/leagues/" + league + "/members/" + joeyId), yugi, null).andExpect(status().isConflict());
@@ -198,10 +190,6 @@ class MembershipApiTest {
 
     private ResultActions accept(String code, AppUser user) throws Exception {
         return mvc.perform(post("/api/invites/" + code + "/accept").with(csrf()).with(as(user)));
-    }
-
-    private ResultActions role(String memberId, String role) throws Exception {
-        return send(patch("/api/leagues/" + league + "/members/" + memberId), yugi, "{\"role\":\"" + role + "\"}");
     }
 
     private String memberId(AppUser viewer, String displayName) throws Exception {

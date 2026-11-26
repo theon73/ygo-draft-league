@@ -3,7 +3,6 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { apiPost, type InvitePreview } from "../api/client";
 import { useSession } from "../auth/session";
 import { useApi } from "../hooks/useApi";
-import { roleLabel } from "./leagues/roles";
 
 // Google sign-in leaves the app and comes back to "/", which would lose the invite. So before
 // sending someone to Google we remember the invite code in sessionStorage (per browser tab), and
@@ -28,8 +27,8 @@ export function PendingInviteRedirect() {
 }
 
 const STATUS_TEXT = {
-  EXPIRED: "This invite has expired. Ask the commissioner for a new link.",
-  REVOKED: "This invite was revoked. Ask the commissioner for a new link.",
+  EXPIRED: "This invite has expired. Ask the league owner for a new link.",
+  REVOKED: "This invite was revoked. Ask the league owner for a new link.",
   USED_UP: "This invite has already been used.",
 } as const;
 
@@ -46,7 +45,7 @@ export default function InvitePage() {
     return (
       <section>
         <h2>Invite not found</h2>
-        <p>This invite link isn't valid. Check you copied all of it, or ask the commissioner for a new one.</p>
+        <p>This invite link isn't valid. Check you copied all of it, or ask the league owner for a new one.</p>
       </section>
     );
   }
@@ -54,7 +53,7 @@ export default function InvitePage() {
   if (!preview.data || !session) return <p className="muted">Loading…</p>;
 
   const p = preview.data;
-  const what = p.kind === "CLAIM" ? `claim the seat "${p.seatName}" in` : `join as ${roleLabel[p.role!].toLowerCase()} in`;
+  const what = p.kind === "CLAIM" ? `claim the seat "${p.seatName}" in` : "join";
 
   const accept = async () => {
     setJoining(true);

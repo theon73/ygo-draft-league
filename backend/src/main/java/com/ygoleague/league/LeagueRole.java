@@ -1,17 +1,17 @@
 package com.ygoleague.league;
 
 /**
- * A member's role within one league. A user can hold different roles in different leagues.
- * Roles are ordered: a commissioner can do everything a player can, and a player everything a
- * viewer can (see {@link #includes}).
+ * A member's standing in a league, which is a group of people. Everything about play (who
+ * commissions a season, who plays in it) is per season: see {@code season.SeasonAccess}.
  */
 public enum LeagueRole {
-    /** Manages the league: rules, pool, members, overrides. A league can have several. */
-    COMMISSIONER(3),
-    /** Takes part in seasons: drafts, trades, plays matches. */
-    PLAYER(2),
-    /** Read-only access, granted by a commissioner to someone who isn't playing. */
-    VIEWER(1);
+    /**
+     * Created the league (exactly one per league). Manages the group: invites, placeholders,
+     * removing members, league settings, creating seasons. Always a commissioner of every season.
+     */
+    OWNER(2),
+    /** In the group. Can follow every season of the league, and play in the ones they're added to. */
+    MEMBER(1);
 
     private final int rank;
 
@@ -22,9 +22,5 @@ public enum LeagueRole {
     /** Whether holding this role grants at least {@code required}'s permissions. */
     public boolean includes(LeagueRole required) {
         return rank >= required.rank;
-    }
-
-    public boolean canWrite() {
-        return includes(PLAYER);
     }
 }

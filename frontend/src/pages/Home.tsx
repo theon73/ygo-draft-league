@@ -15,7 +15,7 @@ export default function Home() {
         claim free agents and play out the season.
       </p>
       <p>
-        Head to <Link to="/leagues">your leagues</Link> to create one (you'll be its commissioner). The{" "}
+        Head to <Link to="/leagues">your leagues</Link> to create one (you'll be its owner). The{" "}
         <Link to="/explore">Explorer</Link> shows the card catalog and ban lists.
       </p>
       <p className="status">

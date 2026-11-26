@@ -1,30 +1,33 @@
-import { Link, NavLink, Outlet, useOutletContext, useParams } from "react-router-dom";
+import { createContext, useContext } from "react";
+import { Link, NavLink, Outlet, useParams } from "react-router-dom";
 import type { LeagueDetail } from "../../api/client";
 import { useSession } from "../../auth/session";
 import { useApi } from "../../hooks/useApi";
 import { roleLabel } from "./roles";
 
 // The shell for everything under /leagues/:leagueId. It loads the league once and renders the
-// league's sub-navigation; the child route (overview, standings, ...) renders in <Outlet/> and
-// gets the loaded league, plus a reload() to call after changing it, through React Router's
-// outlet context, so children don't refetch it themselves.
+// league-level tabs; the pages below it get the loaded league, plus a reload() to call after
+// changing it, from useLeague(), so they don't refetch it themselves.
+//
+// This uses a React context rather than React Router's outlet context on purpose: outlet context
+// only reaches the *direct* child route, and season pages sit two levels down (league → season →
+// setup), where they'd get the season layout's context instead.
+//
+// A league is the lasting group (members, settings); a season is one run of play inside it. The
+// league opens on its current season, so most of the time the season layer stays out of the way.
 
 interface LeagueContext {
   league: LeagueDetail;
   reload: () => void;
 }
 
-export function useLeague(): LeagueContext {
-  return useOutletContext<LeagueContext>();
-}
+const LeagueCtx = createContext<LeagueContext | null>(null);
 
-const TABS = [
-  { to: "", label: "Overview", end: true },
-  { to: "standings", label: "Standings" },
-  { to: "rosters", label: "Rosters" },
-  { to: "draft", label: "Draft" },
-  { to: "transactions", label: "Transactions" },
-];
+export function useLeague(): LeagueContext {
+  const ctx = useContext(LeagueCtx);
+  if (!ctx) throw new Error("useLeague must be used inside a league page");
+  return ctx;
+}
 
 export default function LeagueLayout() {
   const { leagueId } = useParams();
@@ -46,6 +49,7 @@ export default function LeagueLayout() {
   if (!league.data) return <p className="muted">Loading…</p>;
 
   const l = league.data;
+  const current = l.seasons.find((s) => s.id === l.currentSeasonId);
   return (
     <section>
       <p className="muted"><Link to="/leagues">My leagues</Link> / {l.name}</p>
@@ -53,11 +57,14 @@ export default function LeagueLayout() {
         {l.name} <span className="badge">{roleLabel[l.myRole]}</span>
       </h2>
       <nav className="tabs">
-        {TABS.map((t) => (
-          <NavLink key={t.label} to={t.to} end={t.end}>{t.label}</NavLink>
-        ))}
+        {current && <NavLink to={`seasons/${current.id}`}>{current.name}</NavLink>}
+        <NavLink to="seasons" end>Seasons</NavLink>
+        <NavLink to="members">Members</NavLink>
+        {l.myRole === "OWNER" && <NavLink to="settings">Settings</NavLink>}
       </nav>
-      <Outlet context={{ league: l, reload: league.reload } satisfies LeagueContext} />
+      <LeagueCtx.Provider value={{ league: l, reload: league.reload }}>
+        <Outlet />
+      </LeagueCtx.Provider>
     </section>
   );
 }

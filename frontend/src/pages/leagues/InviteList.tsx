@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { inviteLink, type InviteView } from "../../api/client";
-import { roleLabel } from "./roles";
 
 export default function InviteList({ invites, onRevoke }: { invites: InviteView[]; onRevoke: (code: string) => void }) {
   const [copied, setCopied] = useState<string | null>(null);
@@ -24,7 +23,7 @@ export default function InviteList({ invites, onRevoke }: { invites: InviteView[
       <tbody>
         {invites.map((i) => (
           <tr key={i.code}>
-            <td>{i.kind === "CLAIM" ? `Claim seat: ${i.seatName}` : roleLabel[i.role!]}</td>
+            <td>{i.kind === "CLAIM" ? `Claim seat: ${i.seatName}` : "Join the league"}</td>
             <td>{i.useCount} / {i.maxUses ?? "∞"}</td>
             <td>{i.expiresAt ? new Date(i.expiresAt).toLocaleDateString() : "Never"}</td>
             <td className="actions">

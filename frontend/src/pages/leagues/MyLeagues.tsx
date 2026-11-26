@@ -32,7 +32,9 @@ export default function MyLeagues() {
     setSaving(true);
     setError(null);
     try {
-      const league = await apiPost<LeagueSummary>("/leagues", { name });
+      // The creator's time zone becomes the league's; it can be changed later in league settings.
+      const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const league = await apiPost<LeagueSummary>("/leagues", { name, timeZone });
       navigate(`/leagues/${league.id}`);
     } catch (err) {
       setError((err as Error).message);
@@ -46,7 +48,7 @@ export default function MyLeagues() {
       {leagues.error && <p className="bad">Couldn't load your leagues ({leagues.error})</p>}
       {leagues.data &&
         (leagues.data.length === 0 ? (
-          <p className="muted">You're not in any leagues yet. Create one below, or ask a commissioner for an invite.</p>
+          <p className="muted">You're not in any leagues yet. Create one below, or ask a league owner for an invite.</p>
         ) : (
           <table>
             <thead>
@@ -65,7 +67,7 @@ export default function MyLeagues() {
         ))}
 
       <h3>Create a league</h3>
-      <p className="muted">You'll be its commissioner. Seasons, rules and invites come next.</p>
+      <p className="muted">You'll be its owner: you invite people, create seasons and commission every season.</p>
       <form onSubmit={create}>
         <input
           value={name}

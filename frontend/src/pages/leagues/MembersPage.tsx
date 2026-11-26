@@ -1,18 +1,20 @@
 import { useState, type FormEvent } from "react";
-import { apiDelete, apiPatch, apiPost, type InviteView, type LeagueMember, type LeagueRole } from "../../api/client";
+import { apiDelete, apiPost, type InviteView, type LeagueMember } from "../../api/client";
 import { useApi } from "../../hooks/useApi";
 import InviteList from "./InviteList";
 import { useLeague } from "./LeagueLayout";
 import { roleLabel } from "./roles";
 
-export default function LeagueOverview() {
+// The league's group of people. The owner invites and removes people; who commissions or plays
+// is chosen per season (on each season's Setup page).
+export default function MembersPage() {
   const { league, reload } = useLeague();
-  const isCommissioner = league.myRole === "COMMISSIONER";
-  // Invites are commissioner-only; skip the request for everyone else.
-  const invites = useApi<InviteView[]>(isCommissioner ? `/leagues/${league.id}/invites` : null);
+  const isOwner = league.myRole === "OWNER";
+  // Invites are owner-only; skip the request for everyone else.
+  const invites = useApi<InviteView[]>(isOwner ? `/leagues/${league.id}/invites` : null);
   const [error, setError] = useState<string | null>(null);
 
-  // Runs a change, then refreshes what it affects. Errors (e.g. "needs at least one commissioner") show inline.
+  // Runs a change, then refreshes what it affects. Errors (e.g. "is part of a season") show inline.
   const act = async (change: () => Promise<unknown>, after: { members?: boolean; invites?: boolean } = {}) => {
     setError(null);
     try {
@@ -23,9 +25,6 @@ export default function LeagueOverview() {
       setError((e as Error).message);
     }
   };
-
-  const setRole = (m: LeagueMember, role: LeagueRole) =>
-    act(() => apiPatch(`/leagues/${league.id}/members/${m.id}`, { role }), { members: true });
 
   const remove = (m: LeagueMember) => {
     if (!window.confirm(`Remove ${m.displayName} from ${league.name}?`)) return;
@@ -38,10 +37,14 @@ export default function LeagueOverview() {
   return (
     <>
       <h3>Members ({league.members.length})</h3>
+      <p className="muted">
+        Everyone in the league. Each season's commissioners and players are picked from here, and any member can follow
+        every season.
+      </p>
       {error && <p className="bad">{error}</p>}
       <table>
         <thead>
-          <tr><th>Name</th><th>Role</th>{isCommissioner && <th />}</tr>
+          <tr><th>Name</th><th />{isOwner && <th />}</tr>
         </thead>
         <tbody>
           {league.members.map((m) => (
@@ -51,22 +54,11 @@ export default function LeagueOverview() {
                 {m.you && <span className="badge">you</span>}
                 {m.placeholder && <span className="muted"> · no account yet</span>}
               </td>
-              <td>
-                {isCommissioner ? (
-                  <select value={m.role} onChange={(e) => void setRole(m, e.target.value as LeagueRole)} aria-label={`Role of ${m.displayName}`}>
-                    {/* Placeholders can't be commissioners until someone claims the seat. */}
-                    {(m.placeholder ? (["PLAYER", "VIEWER"] as const) : (["COMMISSIONER", "PLAYER", "VIEWER"] as const)).map((r) => (
-                      <option key={r} value={r}>{roleLabel[r]}</option>
-                    ))}
-                  </select>
-                ) : (
-                  roleLabel[m.role]
-                )}
-              </td>
-              {isCommissioner && (
+              <td>{m.role === "OWNER" && roleLabel.OWNER}</td>
+              {isOwner && (
                 <td className="actions">
                   {m.placeholder && <button onClick={() => void claimLink(m)}>Create claim link</button>}
-                  <button onClick={() => remove(m)}>Remove</button>
+                  {m.role !== "OWNER" && <button onClick={() => remove(m)}>Remove</button>}
                 </td>
               )}
             </tr>
@@ -74,13 +66,12 @@ export default function LeagueOverview() {
         </tbody>
       </table>
 
-      {isCommissioner && (
+      {isOwner && (
         <>
           <AddPlaceholder leagueId={league.id} onAdded={reload} />
           <h3>Invites</h3>
           <p className="muted">
-            Send a link to anyone you want in the league. Player invites add a player; viewer invites give read-only access
-            (the viewer allowlist). Claim links hand a placeholder seat to whoever opens them.
+            Send a link to anyone you want in the league. Claim links hand a placeholder seat to whoever opens them.
           </p>
           <CreateInvite leagueId={league.id} onCreated={invites.reload} />
           {invites.error && <p className="bad">Couldn't load invites ({invites.error})</p>}
@@ -113,7 +104,7 @@ function AddPlaceholder({ leagueId, onAdded }: { leagueId: string; onAdded: () =
   };
   return (
     <>
-      <h4>Add a placeholder player</h4>
+      <h4>Add a placeholder</h4>
       <p className="muted">A named seat for someone without an account yet, so you can set up seasons now. Send them a claim link later.</p>
       <form onSubmit={submit}>
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" maxLength={40} required />
@@ -125,7 +116,6 @@ function AddPlaceholder({ leagueId, onAdded }: { leagueId: string; onAdded: () =
 }
 
 function CreateInvite({ leagueId, onCreated }: { leagueId: string; onCreated: () => void }) {
-  const [role, setRole] = useState<LeagueRole>("PLAYER");
   const [days, setDays] = useState("7");
   const [maxUses, setMaxUses] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -134,7 +124,6 @@ function CreateInvite({ leagueId, onCreated }: { leagueId: string; onCreated: ()
     setError(null);
     try {
       await apiPost(`/leagues/${leagueId}/invites`, {
-        role,
         expiresInDays: days === "never" ? null : Number(days),
         maxUses: maxUses.trim() === "" ? null : Number(maxUses),
       });
@@ -147,10 +136,6 @@ function CreateInvite({ leagueId, onCreated }: { leagueId: string; onCreated: ()
   return (
     <>
       <form onSubmit={submit}>
-        <select value={role} onChange={(e) => setRole(e.target.value as LeagueRole)} aria-label="Invite role">
-          <option value="PLAYER">Player</option>
-          <option value="VIEWER">Viewer (read-only)</option>
-        </select>
         <select value={days} onChange={(e) => setDays(e.target.value)} aria-label="Expires">
           <option value="1">Expires in 1 day</option>
           <option value="7">Expires in 7 days</option>

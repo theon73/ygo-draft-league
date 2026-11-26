@@ -7,6 +7,8 @@ public interface SeasonPlayerRepository extends JpaRepository<SeasonPlayer, Long
 
     List<SeasonPlayer> findBySeasonIdOrderBySeat(Long seasonId);
 
+    long countBySeasonId(Long seasonId);
+
     /** Whether the member has played in any season (then they can't be removed from the league). */
     boolean existsByMemberId(Long memberId);
 }

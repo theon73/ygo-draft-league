@@ -25,6 +25,10 @@ export async function apiPost<T = void>(path: string, body?: unknown): Promise<T
   return apiSend<T>("POST", path, body);
 }
 
+export async function apiPut<T = void>(path: string, body?: unknown): Promise<T> {
+  return apiSend<T>("PUT", path, body);
+}
+
 export async function apiPatch<T = void>(path: string, body?: unknown): Promise<T> {
   return apiSend<T>("PATCH", path, body);
 }
@@ -160,7 +164,9 @@ export interface BanListDetail {
 
 // Leagues
 
-export type LeagueRole = "COMMISSIONER" | "PLAYER" | "VIEWER";
+// A league is a group of people: one owner (who manages it) and members. Commissioner and
+// player are per-season roles (see SeasonDetail).
+export type LeagueRole = "OWNER" | "MEMBER";
 
 export interface LeagueSummary {
   id: string; // public id, used in URLs
@@ -182,7 +188,66 @@ export interface LeagueDetail {
   name: string;
   myRole: LeagueRole;
   createdAt: string;
+  timeZone: string; // IANA zone; weeks, deadlines and draft times use it
+  weekStartsOn: Weekday; // each league week starts on this day...
+  weekStartsAt: string; // ...at this local time, "HH:mm"
+  currentWeek: { start: string; end: string }; // the week containing now (ISO, with offset)
   members: LeagueMember[];
+  seasons: SeasonLink[]; // newest first
+  currentSeasonId: string | null; // the season the league page opens on
+}
+
+export type Weekday = "MONDAY" | "TUESDAY" | "WEDNESDAY" | "THURSDAY" | "FRIDAY" | "SATURDAY" | "SUNDAY";
+
+// Seasons
+
+export type SeasonStatus = "SETUP" | "DRAFTING" | "ACTIVE" | "COMPLETE";
+
+export interface SeasonLink {
+  id: string;
+  name: string;
+  status: SeasonStatus;
+}
+
+export interface SeasonSummary extends SeasonLink {
+  createdAt: string;
+  playerCount: number;
+}
+
+export interface Participant {
+  memberId: string;
+  displayName: string;
+  seat: number;
+  teamName: string | null;
+  placeholder: boolean;
+  you: boolean;
+}
+
+export interface Candidate {
+  memberId: string;
+  displayName: string;
+  placeholder: boolean; // no account: can play, can't commission
+}
+
+export interface SeasonCommissioner {
+  memberId: string;
+  displayName: string;
+  owner: boolean; // the league owner commissions every season
+  you: boolean;
+}
+
+export interface SeasonDetail {
+  id: string;
+  name: string;
+  status: SeasonStatus;
+  createdAt: string;
+  canManage: boolean; // caller commissions this season
+  youPlay: boolean; // caller is one of its players
+  editable: boolean; // participants and seats can still change (setup)
+  commissioners: SeasonCommissioner[]; // owner first
+  participants: Participant[]; // in seat order
+  candidates: Candidate[]; // commissioners only: every league member
+  lastDraw: { drawnBy: string; drawnAt: string; order: string[] } | null;
 }
 
 // Invites
@@ -193,7 +258,6 @@ export type InviteStatus = "VALID" | "EXPIRED" | "REVOKED" | "USED_UP";
 export interface InviteView {
   code: string;
   kind: InviteKind;
-  role: LeagueRole | null; // open invites
   seatName: string | null; // claim invites: the placeholder being claimed
   maxUses: number | null; // null = unlimited
   useCount: number;
@@ -204,7 +268,6 @@ export interface InviteView {
 export interface InvitePreview {
   leagueName: string;
   kind: InviteKind;
-  role: LeagueRole | null;
   seatName: string | null;
   status: InviteStatus;
   alreadyMember: boolean;

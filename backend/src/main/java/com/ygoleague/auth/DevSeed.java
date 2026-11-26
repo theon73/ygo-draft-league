@@ -36,7 +36,7 @@ class DevSeed implements ApplicationRunner {
 
     static final String LEAGUE_NAME = "Dev League";
 
-    /** subject -> display name. alice is the commissioner and (via application-dev.yml) a site admin. */
+    /** subject -> display name. alice owns the league and (via application-dev.yml) is a site admin. */
     private static final Map<String, String> USERS = new LinkedHashMap<>();
     static {
         USERS.put("alice", "Alice");
@@ -77,11 +77,11 @@ class DevSeed implements ApplicationRunner {
                 .param("n", LEAGUE_NAME).query(Long.class).single() > 0;
         if (!leagueExists) {
             League league = leagues.save(new League(LEAGUE_NAME, bySubject.get("alice")));
-            members.save(LeagueMember.forUser(league, bySubject.get("alice"), "Alice", LeagueRole.COMMISSIONER));
-            members.save(LeagueMember.forUser(league, bySubject.get("bob"), "Bob", LeagueRole.PLAYER));
-            members.save(LeagueMember.forUser(league, bySubject.get("carol"), "Carol", LeagueRole.PLAYER));
-            members.save(LeagueMember.forUser(league, bySubject.get("dave"), "Dave", LeagueRole.VIEWER));
-            members.save(LeagueMember.placeholder(league, "Erin (no account yet)", LeagueRole.PLAYER));
+            members.save(LeagueMember.forUser(league, bySubject.get("alice"), "Alice", LeagueRole.OWNER));
+            members.save(LeagueMember.forUser(league, bySubject.get("bob"), "Bob", LeagueRole.MEMBER));
+            members.save(LeagueMember.forUser(league, bySubject.get("carol"), "Carol", LeagueRole.MEMBER));
+            members.save(LeagueMember.forUser(league, bySubject.get("dave"), "Dave", LeagueRole.MEMBER));
+            members.save(LeagueMember.placeholder(league, "Erin (no account yet)", LeagueRole.MEMBER));
             log.info("Dev seed: created {} with 4 users and a placeholder", LEAGUE_NAME);
         }
     }

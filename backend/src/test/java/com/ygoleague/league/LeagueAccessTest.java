@@ -27,21 +27,21 @@ class LeagueAccessTest {
     @Autowired PublicIds publicIds;
 
     @Test
-    void membersNeedTheRequiredRoleAndOutsidersGetNotFound() {
-        AppUser commish = users.save(new AppUser("Commish"));
-        AppUser player = users.save(new AppUser("Player"));
+    void membersGetInOnlyTheOwnerManagesAndOutsidersGetNotFound() {
+        AppUser owner = users.save(new AppUser("Owner"));
+        AppUser member = users.save(new AppUser("Member"));
         AppUser outsider = users.save(new AppUser("Outsider"));
-        League league = leagues.save(new League("Access League", commish));
-        members.save(LeagueMember.forUser(league, commish, "Commish", LeagueRole.COMMISSIONER));
-        members.save(LeagueMember.forUser(league, player, "Player", LeagueRole.PLAYER));
+        League league = leagues.save(new League("Access League", owner));
+        members.save(LeagueMember.forUser(league, owner, "Owner", LeagueRole.OWNER));
+        members.save(LeagueMember.forUser(league, member, "Member", LeagueRole.MEMBER));
         String id = publicIds.encode(PublicIdType.LEAGUE, league.getId());
 
-        assertEquals(LeagueRole.COMMISSIONER, access.require(id, as(commish), LeagueRole.COMMISSIONER).getRole());
-        assertEquals("Access League", access.require(id, as(player), LeagueRole.VIEWER).getLeague().getName());
+        assertEquals(LeagueRole.OWNER, access.require(id, as(owner), LeagueRole.OWNER).getRole());
+        assertEquals("Access League", access.require(id, as(member), LeagueRole.MEMBER).getLeague().getName());
 
-        var forbidden = assertThrows(ResponseStatusException.class, () -> access.require(id, as(player), LeagueRole.COMMISSIONER));
+        var forbidden = assertThrows(ResponseStatusException.class, () -> access.require(id, as(member), LeagueRole.OWNER));
         assertEquals(HttpStatus.FORBIDDEN, forbidden.getStatusCode());
-        var hidden = assertThrows(ResponseStatusException.class, () -> access.require(id, as(outsider), LeagueRole.VIEWER));
+        var hidden = assertThrows(ResponseStatusException.class, () -> access.require(id, as(outsider), LeagueRole.MEMBER));
         assertEquals(HttpStatus.NOT_FOUND, hidden.getStatusCode());
     }
 

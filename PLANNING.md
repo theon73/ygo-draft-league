@@ -9,8 +9,8 @@ Starting reference for building a web app to run Yu-Gi-Oh draft leagues. The des
 **A general-purpose platform, not a tool for one league.** Think fantasy football site, but for Yu-Gi-Oh draft leagues:
 
 - Anyone can **create an account**.
-- Any user can **create a league** and becomes its **commissioner**.
-- The commissioner **invites players** and **configures everything** for each season: card pool (format date, sets, manual adds/removals), ban list, soft bans, copy limits, draft format (seats, rounds, picks per turn, timer), transaction rules, schedule format, tiebreakers and playoff structure.
+- Any user can **create a league** (a group of people) and becomes its **owner**.
+- The owner **invites people** and creates seasons. Each season has its own **commissioners** (the owner always, plus anyone they add) who **configure everything** for that season: card pool (format date, sets, manual adds/removals), ban list, soft bans, copy limits, draft format (seats, rounds, picks per turn, timer), transaction rules, schedule format, tiebreakers and playoff structure.
 - A user can be in several leagues, holding a different role in each.
 
 Realistically Theo will be one of the few users, and our league is the main real-world case. That's fine, but the flexibility is the point. **Our league's players, rules and format (10 players, 25 rounds, March 2008, 3 trades + 3 FA a week, etc.) are just one configuration.** They belong in dev seed data and examples, never in code or schema assumptions. When a feature is designed around "how our league does it", the question to ask is: *what is the setting, and what is our league's value for it?*
@@ -28,12 +28,13 @@ Realistically Theo will be one of the few users, and our league is the main real
 | Season continuity | **Fresh each season**: new pool, new draft. League history carries over; rosters don't. | ✓ |
 | Drafts per season | One draft, held at the start of the season | ✓ |
 | Competition | **Round-robin + playoffs**, **Swiss**, **weekly H2H schedule** (fantasy-style), **ad hoc / ladder** | Round-robin + playoffs |
-| Players without accounts | **Placeholders allowed**: the commissioner can add named players, and a user claims the spot later through an invite | ✓ (lets a commissioner set up the season and draft order before everyone signs up) |
-| Rule changes | **Versioned.** Mid-season changes (ban list update, new soft ban) take effect from a given week. Past decks and transactions are judged by the rules in effect at that time. | ✓ |
+| Players without accounts | **Placeholders allowed**: the owner can add named members, and a user claims the spot later through an invite | ✓ (lets a commissioner set up the season and draft order before everyone signs up) |
+| Rule changes | **Versioned.** Mid-season changes (ban list update, new soft ban) take effect from a given week. Past transactions and results are judged by the rules in effect at that time. | ✓ |
 | Free agency | **First-come claims** with configurable limits. No waivers or FAAB bidding. | ✓ |
 | Trade assets | Cards, plus **transaction allowances** (e.g. "a card + one of my FA claims this week", so the receiver gets an extra FA move this week and the sender loses one). Legitimizes what our league already does informally. | Nice-to-have |
-| Decks | **Configurable per league:** none / optional / required-and-locked per week or match, and hidden or visible to opponents | Optional |
-| Visibility | **Members only.** The commissioner can also grant registered non-participants read-only **viewer** access (e.g. a friend who follows the standings). No public pages. | ✓ |
+| Decks (decided 2026-11-25) | **Out of scope.** Deck building, deck lists and duels happen on **Dueling Nexus**; this app is the league's organizer (membership, pool, draft, rosters, transactions, schedule, results, standings). Optional, stateless bridges later: export a roster for Dueling Nexus, and paste a deck to check it against the roster and rules. No stored decks or deck names. | None |
+| Visibility | **Members only.** Any league member can follow every season, playing or not (e.g. a friend who follows the standings is just a member who isn't in a season). No public pages. | ✓ |
+| Roles (decided 2026-11-25, YGO-11) | **The league is the group; roles are per season.** League: one **owner** (the creator; manages members, invites, settings, seasons) and **members**. Season: **commissioners** (the owner always, implicitly, plus members chosen per season; need an account) and **players** (its participants; any member, placeholders included). One person can be both. A member who isn't playing a season just follows it. | ✓ |
 
 ### What this means for the schema
 
@@ -42,7 +43,7 @@ Realistically Theo will be one of the few users, and our league is the main real
 - **Ownership is season-scoped.** Nothing carries over between seasons, so all pool, roster and transaction data lives under `season`.
 - **Draft is polymorphic.** `draft` has a `type` and a type-specific config. Draft events share a common shape (who, what, when) with optional type-specific fields (`price` for auction, `pack_id` / `pick_in_pack` for pack drafts). Strategy classes per type implement "who's on the clock / is this action legal".
 - **Competition is polymorphic too.** `match` is generic (stage, round/week number, participants, best-of, result). Schedule generation is a strategy: fixed round-robin, generated each round for Swiss, or none for ladder. Standings are derived from results plus the configured tiebreakers or rating method.
-- **`league_member.user_id` is nullable** (placeholder players). Roles: `COMMISSIONER`, `PLAYER`, `VIEWER`. A viewer is an allowlisted account with read-only access. Season participation goes through `season_player → league_member`.
+- **`league_member.user_id` is nullable** (placeholder members). League roles: `OWNER` (exactly one) and `MEMBER`. Season roles: `season_commissioner` (plus the owner, implicitly) and `season_player`. Season participation goes through `season_player → league_member`.
 - **Rules are versioned rows, not one JSON blob.** Rows look like `season_rules(season_id, effective_from_week, rules jsonb, schema_version, created_by)`. Validation looks up the version in effect for the week. The JSON is parsed into typed Java records, so the jsonb column stays a storage detail.
 - **Transaction lines are typed assets.** Each line has `asset_type` (`CARD`, `FA_ALLOWANCE`, later `TRADE_ALLOWANCE`, …), so allowance trades fit without a new table. The weekly limit is computed as base limit plus allowances received minus allowances given.
 
@@ -56,7 +57,7 @@ The sheet works, but it depends on people following the rules and on manual upke
 |---|---|
 | Draftees edit `Owner` directly in a ~2,700-row pool, and one bad edit breaks Rosters | Draft room enforces turn order and pick legality, and writes the log |
 | Transaction limits (3 trades + 3 FA/week) and the Pool Check run on formulas and the honor system | Transactions are validated server-side and applied atomically |
-| Deck legality is checked by hand | Deck builder is limited to the roster and validated against copy limits, ban list, soft bans and the Polymerization rule |
+| Deck legality is checked by hand | (Optional, later) paste a Dueling Nexus deck to check it against your roster, copy limits, ban list, soft bans and the Polymerization rule; nothing is stored |
 | Per-player planning sheets are copied from `[DUPLICATE ME]` | Private per-player queue/watchlist |
 | Each new season/format means a new sheet, and history is scattered | One data model across seasons, so all-time stats come free |
 | Claude Helper sheet built with IMPORTRANGE as a workaround | A read API (and later maybe an MCP server) gives tools clean access |
@@ -68,7 +69,7 @@ The sheet works, but it depends on people following the rules and on manual upke
 4. **Exports are the escape hatch.** Always support exporting to CSV/Sheets.
 5. **Multi-league from day one.** Every season-scoped row hangs off a `League`, and every permission check is "what is this user's role *in this league*". Don't hardcode 10 players, 25 rounds or March 2008 (see §0).
 
-**Non-goals (for now):** playing duels in-app (Dueling Nexus handles that), real-money anything, native mobile apps, scaling for a large public user base (build for flexibility, not traffic).
+**Non-goals (for now):** playing duels or building and storing decks in-app (Dueling Nexus handles both), real-money anything, native mobile apps, scaling for a large public user base (build for flexibility, not traffic).
 
 ---
 
@@ -79,7 +80,7 @@ The sheet works, but it depends on people following the rules and on manual upke
 | Frontend | React + TypeScript + Vite | React Router; add TanStack Query for server state |
 | Backend | Spring Boot 4 (Java 21), Gradle | Spring MVC, Data JPA, Validation, Actuator |
 | DB | PostgreSQL 17 | Flyway migrations |
-| Auth | Spring Security OAuth2 Login (Google; decided 2026-11-25) | Session cookie for the SPA; per-league roles: `COMMISSIONER`, `PLAYER`, `VIEWER`. Dev-only login for local work (see Phase 1) |
+| Auth | Spring Security OAuth2 Login (Google; decided 2026-11-25) | Session cookie for the SPA; league roles `OWNER`/`MEMBER`, season roles commissioner/player. Dev-only login for local work (see Phase 1) |
 | Realtime | SSE to start (draft room, activity feed) | Upgrade to WebSocket/STOMP only if two-way realtime is needed |
 | Card data | YGOPRODeck API, synced weekly into our DB | See §3 "Card catalog". Images: separate ticket (cache on first view) |
 | Notifications | Discord webhook | Picks on the clock, trades, results |
@@ -107,7 +108,7 @@ Local dev: `docker compose up -d` for Postgres, `./gradlew bootRun` for the back
 ## 3. Domain model (first pass)
 
 ```
-User (account) ──< LeagueMember >── League      (role per league: COMMISSIONER | PLAYER | VIEWER)
+User (account) ──< LeagueMember >── League      (league role: OWNER | MEMBER; season roles via SeasonCommissioner / SeasonPlayer)
                                       │  └──< LeagueInvite
 League ──< Season ──< SeasonPlayer >── LeagueMember   (member.user nullable = placeholder)
               │
@@ -117,7 +118,6 @@ League ──< Season ──< SeasonPlayer >── LeagueMember   (member.user n
               ├── Draft (type: snake | auction | pack) ──< DraftEvent
               ├── Transaction (trade | free_agency) ──< TransactionLine (asset: card | allowance)
               ├── Stage (regular | playoffs; format: round-robin | swiss | h2h | ladder) ──< Match ──< Game
-              ├── Deck ──< DeckCard          (per player, per week or match; policy from rules)
               └── Playoff bracket (derived from standings + format)
 BanList ──< BanListEntry   (official dated TCG lists from repo files, or league-owned custom lists)
 AuditEvent (everything, append-only)
@@ -127,8 +127,8 @@ AuditEvent (everything, append-only)
 - **User**: a login identity (OAuth subject, display name, avatar). Global and not tied to any league.
 - **League**: name, created by a user. Holds seasons. Visible to members only.
 - **Public ids (decided 2026-11-25).** URLs never expose raw database ids and there are no slugs. Each URL-facing entity gets an opaque id encoded from its primary key with [Sqids](https://sqids.org) over `[type tag, id]`, e.g. `/leagues/lIri2her`. The encoding is reversible, so there's no extra column and uniqueness is guaranteed. Decoding rejects non-canonical strings and ids of the wrong type. The alphabet, min length and type tags are **permanent** (changing them breaks every link), and a pinned test guards them. This hides ids and counts but is not security; per-league authorization is. A readable suffix (`/leagues/lIri2her/goat-format`) can be added later, computed from the name and ignored on lookup.
-- **LeagueMember**: a membership and role (`COMMISSIONER` / `PLAYER` / `VIEWER`) in one league. Commissioner is a role, not a special user, and a league can have co-commissioners. `user` is nullable, so a commissioner can add placeholder players who claim the spot later. `VIEWER` is read-only access for an account the commissioner has allowlisted.
-- **LeagueInvite**: an invite link or code the commissioner hands out to join a league.
+- **LeagueMember**: a membership in one league's group: `OWNER` (exactly one, the creator) or `MEMBER`. Commissioning and playing are per season (`season_commissioner`, `season_player`); the owner commissions every season. `user` is nullable, so the owner can add placeholder members who claim the spot later.
+- **LeagueInvite**: an invite link the owner hands out to join the league (or to claim a placeholder seat).
 - **SeasonPlayer**: a league member taking part in one season (seat, team name). Not every member plays every season.
 - **Card**: global catalog (name, type, race, attribute, level/rank/link, ATK/DEF, archetype, current text, TCG/OCG release dates, passcodes). Sourced from YGOPRODeck; see "Card catalog" below.
 - **CardTextVersion**: superseded wording with the date it stopped applying, for formats that play older text (e.g. Goat). Text as of date D = earliest version with `validUntil > D`, else current text. Curated; no source yet.
@@ -139,7 +139,6 @@ AuditEvent (everything, append-only)
 - **Transaction**: `type`, `week`, `initiator`, `counterparty?`, `status` (proposed → accepted/rejected/vetoed → executed), lines of gave/received. Each line is an asset: a pool card (with quantity) or a transaction allowance (e.g. 1 FA claim this week).
 - **Match / Game**: week, players, seeds, games won, winner, replay links; reported by one player and confirmed by the other.
 - **Stage / Match / Game**: a season has one or more stages (regular season, playoffs), each with a format. Matches are generic so that round-robin, Swiss, H2H weeks and ladder all fit.
-- **Deck**: list of (poolCardId, copies) for main/side/extra. Validated on save. The submission policy (none / optional / required-and-locked) and visibility to opponents come from the rules.
 
 **Card catalog (built in YGO-3, 2026-11-25).**
 - **Scope:** TCG only. Cards with no TCG date (OCG-only, ~500) and Speed Duel Skill Cards are skipped. Tokens are kept, and pool building can filter them. YGOPRODeck occasionally omits the TCG date of a real TCG card (found: Change of Heart). If such a card has TCG prints, its date falls back to its earliest dated set, which is approximate but keeps the card.
@@ -169,10 +168,6 @@ ownership:
   mode: exclusive                   # exclusive | copies
   copiesPerPoolCard: 1              # copies mode: default draftable copies per card
   playableCopiesPerOwned: 3         # league rule: own 1, play up to 3 (or the legal max)
-decks:
-  submission: optional              # none | optional | required
-  lockPer: week                     # week | match
-  visibleToOpponents: true
 draft:
   type: snake
   seats: 10
@@ -205,12 +200,14 @@ playoffs:
 |---|---|---|---|
 | Name | text, ≤ 60 chars | League | ✓ YGO-8 |
 | Description / house-rules blurb | markdown | League | later |
-| Visibility | members only, plus a viewer allowlist (no public pages, §0) | League | fixed by design; ✓ viewers YGO-9 |
-| Commissioners | promote/demote members; at least one must remain | League | ✓ YGO-9 |
+| Visibility | members only; any member follows every season (no public pages, §0) | League | fixed by design ✓ |
+| Season commissioners | per season: the league owner (always) plus chosen members with accounts; they run that season | Season | ✓ YGO-11 |
+| League ownership | one owner per league; transferring ownership or adding co-owners | League | owner ✓; transfer/co-owners later |
 | Placeholder members | named seats without accounts, claimed via invite | League | ✓ YGO-9 |
-| Invites | expiry and max uses per invite (✓ YGO-9); who may create them (commissioners only today; players too, later); league-wide defaults | League | ✓ per-invite options; rest later |
+| Invites | open join links and placeholder claim links; expiry and max uses per invite; created by the owner (letting season commissioners invite too, later); league-wide defaults later | League | ✓ YGO-9/11; rest later |
 | Member display names | per-league name, editable by the member themselves (and by commissioners). Matters especially after claiming a placeholder, which keeps the seat's name the commissioner chose (YGO-9); the claimer should be able to rename it. Unique within the league; past seasons show the name as it is now. | League | later |
-| Time zone | IANA zone; defines week boundaries, deadlines and draft times | League | v1, Phase 2 |
+| Time zone | IANA zone; defines week boundaries, deadlines and draft times | League | ✓ YGO-11 |
+| Week start | the day and local time each league week starts (e.g. Monday 00:00, or Tuesday 20:30); weeks follow daylight saving (`calendar.WeekBoundary`). A season takes the league's week start as its own when it begins, so later changes never re-bucket a running season | League (season copy at start) | ✓ YGO-11; season copy in YGO-12 |
 | Notifications | Discord webhook URL; which events (picks, trades, FA, results) | League | later, Phase 3–4 |
 | New-season defaults | clone the last season's rules, or start from a preset ("Goat", "Edison") | League | later, Phase 2 / 6 |
 | Archive / delete / transfer ownership | | League | later |
@@ -220,9 +217,10 @@ playoffs:
 | Setting | Options | Scope | Status / built with |
 |---|---|---|---|
 | Name, status | setup → drafting → active → complete | Season | ✓ schema; Phase 2 |
-| Participants | which members play this season; team names | Season | v1, Phase 2 |
-| Seat order | manual, random, or from last season's standings (e.g. reverse) | Season | v1, Phase 2 |
-| Calendar | start date, number of regular-season weeks, week boundary (day and time) | Season | v1, Phase 2 |
+| Participants | which members play this season; team names | Season | ✓ YGO-11 |
+| Seat order | manual or random (✓ YGO-11, draws recorded); from last season's standings (e.g. reverse) later | Season | ✓ manual/random; standings-based later |
+| Calendar | start date and number of regular-season weeks; week boundary copied from the league when the season starts | Season | v1, YGO-12 |
+| Off weeks | whole-league weeks with no matches (holidays, mass travel), placed anywhere in the schedule. To decide when built: whether an off week takes a week number (week 5 is off, matches resume in week 6) or the numbering skips it; whether weekly trade/FA limits apply during it; how it shifts match deadlines and the playoff start. The schedule, "this week's matchups" and standings must all show it | Season | later, Phase 4 (keep in mind when designing the calendar in YGO-12) |
 
 *Card pool*
 
@@ -232,6 +230,8 @@ playoffs:
 | Release window | TCG release date ≤ cutoff (optionally also ≥ a start date) | Season | v1, Phase 2 |
 | Sets | include/exclude specific sets | Season | v1, Phase 2 |
 | Manual adds/removes | individual cards | Season | v1, Phase 2 |
+| Exception list | hand-picked cards added on top of the dated pool (e.g. just past the cutoff), each with an optional reason; addable mid-season as a dated change effective from week N | Season | v1, YGO-13 |
+| Mid-season additions reach rosters by | free agency, commissioner assignment, or a supplemental draft | Season | open; Phase 4 |
 | Card kinds | exclude tokens etc. (Skill Cards are never imported) | Season | v1, Phase 2 |
 | Card text era | current text, or text as of the cutoff date (`card_text_version`, e.g. Goat errata) | Season | later |
 | Per-card flags | copies (copies mode), max playable, soft-banned, requires ownership | Season | v1 (flags), Phase 2 |
@@ -279,15 +279,13 @@ playoffs:
 | Allowance trading | FA claims / trades can be traded as assets | Season | later (nice-to-have) |
 | Dropped cards | return to free agency immediately or after a delay | Season | later |
 
-*Decks*
+*Dueling Nexus bridge (optional; decks themselves live on Dueling Nexus)*
 
 | Setting | Options | Scope | Status / built with |
 |---|---|---|---|
-| Submission | none, optional, required | Season | v1 optional, Phase 4 |
-| Lock | per week or per match; lock deadline | Season | later |
-| Visibility | visible to opponents, hidden until the match, hidden until the week ends | Season | v1 visible, Phase 4 |
-| Deck size limits | main min/max, extra max, side max (format-dependent, e.g. 40–60 / 15 / 15) | Season | v1, Phase 4 |
-| Copy limit | per card (normally 3; ban list statuses lower it) | Season | v1, Phase 4 |
+| Roster export | download a player's roster in a format Dueling Nexus imports (`.ydk` or its card-list text) | — | later |
+| Deck check | paste a deck to check it against the roster, ban list, soft bans and ownership-required cards; stateless, nothing stored | Season | later |
+| Deck rules for the check | copy limit (normally 3, lowered by ban list status; "own 1, play up to N"), main/extra/side size limits by format | Season | later, with the deck check |
 
 *Matches and standings*
 
@@ -332,7 +330,7 @@ Not league settings: site admins and the catalog sync (platform level, YGO-6), d
 
 ### Rosters & cards
 - ⭐ Roster pages with card images and hover previews
-- Card detail page: owner, ownership history, decks using it
+- Card detail page: owner, ownership history
 - Archetype ownership map
 - Free-agent pool view with filters
 
@@ -344,27 +342,25 @@ Not league settings: site admins and the catalog sync (platform level, YGO-6), d
 - Commissioner veto/approval queue (optional)
 - Waiver priority (optional)
 
-### Decks
-- ⭐ Deck builder limited to own roster; validates copies, ban list, soft bans, ownership-required cards
-- Export to `.ydk` for Dueling Nexus; import `.ydk` with a legality check
-- Weekly deck submission/lock, optionally hidden until the match
-- Deck history per player across weeks/seasons
+### Dueling Nexus bridge (optional)
+- Export a roster for import into Dueling Nexus (`.ydk` or card-list text)
+- Paste a deck to check it against the roster and the season's rules (nothing stored)
 
 ### Matches & season
 - ⭐ Schedule, results entry, auto standings with configured tiebreakers
 - Replay links per game
 - Playoff bracket view that updates from standings
 - Two-sided match reporting (report + confirm)
-- Weekly matchup preview: opponent roster, recent decks, H2H
+- Weekly matchup preview: opponent roster, H2H
 
 ### History & stats
 - ⭐ Season archive: standings, champion, draft board per season
 - All-time records: titles, win %, cross-season H2H
-- Card stats: most drafted, most traded, appearance in winning decks
+- Card stats: most drafted, most traded
 - Draft value analysis: pick position vs usage
 
 ### League setup / commissioner
-- ⭐ Create a league (creator becomes commissioner); invite players by link/code
+- ⭐ Create a league (creator becomes owner); invite people by link
 - ⭐ Rules config UI (see RulesConfig above)
 - ⭐ Card pool builder: format cutoff date, include/exclude sets, manual add/remove, per-card flags
 - Season creation wizard: clone the last season, pick a format date, generate the pool from YGOPRODeck
@@ -373,16 +369,16 @@ Not league settings: site admins and the catalog sync (platform level, YGO-6), d
 - Export to Sheets/CSV
 
 ### Social / fun
-- Team names and deck nicknames on profiles
+- Team names on profiles (a player's name for their season entry, e.g. "Insect Armageddon")
 - Weekly recap page / auto-generated summary
 - Discord bot/webhook for results, trades, picks
 - Trophy case and awards (MVP, best trade, biggest upset)
 
 ### Platform
 - ⭐ Accounts: sign in with Google or Discord
-- ⭐ Multi-league: "My leagues" dashboard, per-league roles, league switcher
+- ⭐ Multi-league: "My leagues" dashboard, per-season roles, league switcher
 - Mobile-friendly
-- Members-only leagues, plus a commissioner-managed allowlist of read-only viewer accounts
+- Members-only leagues; members who aren't playing a season follow it
 - **CI pipeline (needed at some point, at the latest before the first deploy).** GitHub Actions on every PR: backend `./gradlew test` (Testcontainers needs Docker, which GitHub's Ubuntu runners have) and frontend `npm run build`. Later it can also build the backend image and deploy on merge to `main`. Tests need no secrets: they never load `backend/.env` and use a fake Google client.
 
 ### Theo's additions
@@ -400,7 +396,7 @@ Not league settings: site admins and the catalog sync (platform level, YGO-6), d
 
 **Phase 1: Accounts, leagues, card catalog**
 - Migrations for the core tenancy model: `app_user`, `league`, `league_member` (nullable user, role), `league_invite`, `season` scoped to a league, `season_player`, versioned `season_rules`. Delete the V1 player seed in a new migration (done in YGO-2); dev sample data goes in a dev-only seed instead.
-- OAuth2 login, "My leagues", create a league (creator becomes commissioner), invite links, placeholder members, viewer allowlist.
+- OAuth2 login, "My leagues", create a league (creator becomes owner), invite links, placeholder members.
 - **Local auth (decided 2026-11-25).** There are three layers:
   - **Dev login, `dev` profile only.** `POST /api/dev/login` (by user id or name) creates the same session and principal as a real OAuth login, resolving the user through `user_identity` with `provider = 'dev'`. Code after login is identical in dev and prod, and no permission checks are skipped. A dev-only seed creates test users and a sample league. *(Built as a Java runner, `auth.DevSeed`, rather than a dev-only Flyway location: Flyway refuses to start when the DB holds a migration it can't see, which would break switching between dev and non-dev runs on one local DB.)* When the backend reports dev mode, the frontend shows a "log in as…" switcher.
   - **Automated tests** use Spring Security test support (mock principal / `oauth2Login()` in MockMvc), not the dev endpoint.
@@ -416,14 +412,20 @@ Not league settings: site admins and the catalog sync (platform level, YGO-6), d
 - **YGO-7 (done): persistent sessions.** Sessions live in Postgres (Spring Session JDBC, `V6__http_sessions.sql`), so sign-ins survive restarts and deploys and work across instances. 30-day idle timeout (refreshed on use), and a 90-day absolute cap via the cookie's `Max-Age`. The `SESSION` cookie is `HttpOnly` and `SameSite=Lax`. `Secure` comes from `SESSION_COOKIE_SECURE` and **must be `true` in production**. Session data is Java-serialized; a deploy that changes a stored class turns old sessions into "signed out" (not an error), so users just sign in again.
   - **API behaviour:** signed-out calls get 401, never a redirect. CSRF uses Spring Security's SPA mode (`XSRF-TOKEN` cookie echoed as `X-XSRF-TOKEN`). `GET /api/auth/session` returns the user, the configured providers and whether dev login is on. Logout is `POST /api/auth/logout`.
   - **Admins:** `APP_ADMINS` lists `provider:subject` identities (shown to each user by `/api/auth/session`). `/api/admin/**` needs the role. First admin action: `POST /api/admin/catalog/sync` (a button on the Explorer).
-  - **Dev:** `./gradlew bootRun -Pdev` seeds Alice (commissioner, site admin), Bob, Carol (players), Dave (viewer) and a placeholder in "Dev League".
-- **YGO-8 (done):** leagues and per-league access. `GET/POST /api/leagues` ("My leagues", create with a name of up to 60 characters; the creator becomes commissioner) and `GET /api/leagues/{publicId}` (overview with members; user ids never exposed). `league.LeagueAccess.require(publicId, user, minimumRole)` is the single authorization check: **non-members, unknown and malformed ids all get 404** (a league's existence isn't revealed), members below the required role get 403. Roles are ordered commissioner > player > viewer. Frontend: `/leagues` and `/leagues/:id` with league tabs (overview, plus placeholders for standings, rosters, draft and transactions).
-- **YGO-9 (done):** invites, placeholders, viewers and commissioner management. Commissioners create **open invite links** (player or viewer; expiry 1 to 90 days or never; optional max uses) and **claim links** for placeholder seats (single-use; the claimer keeps the seat's name and role). Codes are 128-bit random, base64url. Previewing a link works signed out (`GET /api/invites/{code}`); accepting needs a login, and Google sign-in returns to the invite page. Joining with a name already used in the league gets a number ("Yugi 2"). Commissioners add placeholders, change roles, revoke invites and remove members. Rules: at least one commissioner always remains, placeholders can't be commissioners, and anyone who has played in a season can't be removed (league history). The viewer allowlist is viewer invites plus removal. Every membership change locks the league row first, so concurrent changes can't interleave.
+  - **Dev:** `./gradlew bootRun -Pdev` seeds Dev League: Alice (owner, site admin), Bob, Carol, Dave (members) and a placeholder, Erin.
+- **YGO-8 (done):** leagues and per-league access. `GET/POST /api/leagues` ("My leagues", create with a name of up to 60 characters; the creator becomes commissioner) and `GET /api/leagues/{publicId}` (overview with members; user ids never exposed). `league.LeagueAccess.require(publicId, user, minimumRole)` is the single authorization check: **non-members, unknown and malformed ids all get 404** (a league's existence isn't revealed), members below the required role get 403. Roles are ordered commissioner > player > viewer. Frontend: `/leagues` and `/leagues/:id` with league tabs (overview, plus placeholders for standings, rosters, draft and transactions). *(Roles superseded in YGO-11: league roles are now owner/member, commissioner and player are per season, invites carry no role, and the role-change endpoint is gone.)*
+- **YGO-9 (done):** invites, placeholders, viewers and commissioner management. Commissioners create **open invite links** (player or viewer; expiry 1 to 90 days or never; optional max uses) and **claim links** for placeholder seats (single-use; the claimer keeps the seat's name and role). Codes are 128-bit random, base64url. Previewing a link works signed out (`GET /api/invites/{code}`); accepting needs a login, and Google sign-in returns to the invite page. Joining with a name already used in the league gets a number ("Yugi 2"). Commissioners add placeholders, change roles, revoke invites and remove members. Rules: at least one commissioner always remains, placeholders can't be commissioners, and anyone who has played in a season can't be removed (league history). The viewer allowlist is viewer invites plus removal. Every membership change locks the league row first, so concurrent changes can't interleave. *(Roles superseded in YGO-11: league roles are now owner/member, commissioner and player are per season, invites carry no role, and the role-change endpoint is gone.)*
 - **YGO-10 (done):** cached card images. `GET /api/card-images/{small|full}/{passcode}.jpg` serves from the local store (`backend/data/card-images`, gitignored), fetching from YGOPRODeck on first request: catalog passcodes only, one app-wide throttle (5/s), concurrent requests share one fetch, upstream failures return 503 + `Retry-After` and aren't cached. One-year immutable caching, and a separate cookie-free, session-free security chain so responses stay CDN-cacheable. Admin warm-up: `POST /api/admin/card-images/prefetch?tcgCutoff=YYYY-MM-DD&size=small`. Frontend `CardImage` builds URLs from `VITE_CARD_IMAGE_BASE` and retries while an image is being fetched; the Explorer card page shows the card and its alternate artworks. A startup guard (`image.ImageStoreGuard`) refuses `app.images.store=local` under the `prod` profile, because a container's disk is wiped on every deploy and isn't shared between instances; production can't start until the R2 store exists. R2 storage and pool-finalization prefetch come with deploy / Phase 2.
 
 **Phase 2: Season setup**
-- Season creation: rules config UI (typed, versioned), seat order / randomizer.
-- Card pool builder: cutoff date, include/exclude sets, manual add/remove, per-card flags (soft ban, requires ownership, copies), pool browser with filters.
+- **League vs season (decided 2026-11-25).** A league is the lasting group (members, roles, invites, time zone, history); a season is one run of play inside it (participants, rules, pool, draft, rosters, matches). Kept separate rather than "one league per season" so membership carries over, cross-season history works, and next season can start from last season's rules. The UI keeps the layer out of the way: a league opens on its current season (newest not complete), with season tabs there and past seasons under Seasons.
+- **The pool can change, including mid-season (decided 2026-11-25).** Real use: our league retroactively added cards just past the cutoff, to help people play certain decks or to boost losing rosters. So a season's pool is **the dated pool** (generated from the rules: TCG cutoff, sets, card kinds) **plus an exception list** of hand-picked cards, each with an optional reason. Pool changes are append-only, dated events (who, when, card, effective from week N, reason), so the past is always judged by the pool as it was: a week-3 deck never depends on a card added in week 6. Exception cards are marked as such in the pool browser.
+  - *Open (Phase 4):* how a mid-season addition reaches rosters: it becomes a free agent (first-come claims), the commissioner assigns it to a specific roster, or a small supplemental draft. Possibly configurable.
+  - *Open (YGO-13):* removals. Proposed: a card can only be removed while nobody owns it; to take an owned card out of play, soft-ban it through the rules instead.
+- **YGO-11 (done):** seasons, per-season roles, participants, seat order, league time zone and week start. **Roles moved from the league to the season** (V9 migrates existing data: each league's creator becomes its owner, other commissioners become commissioners of that league's existing seasons, everyone else a member; tested in `V9SeasonRolesMigrationTest`). The owner creates seasons (unique name per league); a season's commissioners (the owner plus anyone chosen, accounts only) choose its commissioners and participants (any member, placeholders included), set seats by hand or draw them at random. Every draw is kept in `season_seat_draw` and shown to the league (who, when, result). Seats are always 1..n; changing participants keeps everyone else's relative order and appends newcomers. Participants and seats are fixed once the season leaves setup; team names stay editable (by a commissioner or the player). League time zone: an IANA region zone, set from the creator's browser on creation (UTC if unknown) and editable in league settings. The Setup page shows one Members table with a per-member season role (—, Player, Commissioner, Commissioner & player): a dropdown for the season's commissioners, set in one step via `PUT /api/leagues/{id}/seasons/{id}/members/{memberId}`, and plain text for everyone else. League week start: a weekday and local time (default Monday 00:00), editable in settings with a preview of the current week. Frontend: league tabs (current season, Seasons, Members, Settings), season tabs (Setup, plus placeholders for Draft, Rosters, Standings, Transactions). League and season pages share their loaded data through React contexts (outlet context only reaches one route level, which blanked the season setup page).
+- **YGO-12:** the season rules document: typed records over `season_rules` with a section per catalog group, but only Phase 2's settings built (calendar: start date, weeks, and the league's week boundary copied in when the season starts; format: TCG cutoff, ban list revision). Model the calendar as a list of weeks, not just a count, so off weeks (Phase 4) fit without a rewrite. Before the season starts, saving overwrites the setup version; after, each change is a new version effective from week N. Rules form on the season page.
+- **YGO-13:** the card pool: `pool_card` (season, card, copies, flags, source: dated or exception) plus an append-only pool change log; generate the dated pool from the rules (TCG cutoff, include/exclude sets, card kinds); the exception list (add cards beyond the cutoff, with a reason, before or during the season, effective from week N); removals (rules above); per-card flags (soft-banned, requires ownership, max playable), with an archetype shortcut; marking the pool ready for the draft triggers the YGO-10 thumbnail prefetch (later additions are fetched as they're added).
+- **YGO-14:** the pool browser: thumbnail grid, filters (type, attribute, archetype, level, ATK/DEF, ban status, flags) and name search; "available only" waits for ownership (Phase 4).
 
 **Phase 3: Draft room**
 - Snake draft with pick legality, draft board, and the draft log written as events.
@@ -434,7 +436,7 @@ Not league settings: site admins and the catalog sync (platform level, YGO-6), d
 - Event-sourced ownership; rosters with card art.
 - FA claims and trade proposals with validation, including allowance trades.
 - Round-robin schedule generation, match reporting with confirmation, replay links, standings with tiebreakers, playoff bracket.
-- Deck builder + `.ydk` export/import, deck submission policy per league.
+- Optional Dueling Nexus bridge: roster export and a stateless deck check.
 
 **Phase 5: Stats, polish, social**
 - Season archive, all-time stats, card stats, recaps, awards.
@@ -458,8 +460,8 @@ POST   /api/seasons/{id}/draft/picks           make a pick (validated)
 GET    /api/seasons/{id}/draft/stream          SSE: picks, on-the-clock
 POST   /api/seasons/{id}/transactions          FA claim or trade proposal
 POST   /api/transactions/{id}/accept|reject
-POST   /api/seasons/{id}/decks                 save/validate a deck
-GET    /api/decks/{id}/ydk                     export
+GET    /api/seasons/{id}/rosters/{player}/ydk  roster export for Dueling Nexus (optional)
+POST   /api/seasons/{id}/deck-check            check a pasted deck, nothing stored (optional)
 POST   /api/matches/{id}/report | /confirm
 GET    /api/seasons/{id}/export.csv
 ```
