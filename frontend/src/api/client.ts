@@ -418,6 +418,7 @@ export interface DraftState {
   rounds: RoundBlock[];
   scheduledStart: string | null; // instant
   forbiddenDraftable: boolean;
+  timer: PickTimer | null; // null = no pick timer
   roundCount: number;
   picksPerPlayer: number;
   totalPicks: number;
@@ -427,12 +428,51 @@ export interface DraftState {
   board: DraftSlot[];
   picksMade: number;
   onTheClock: OnTheClock | null; // while in progress
+  deadline: string | null; // when the pick on the clock runs out (with a timer)
+  paused: boolean; // the timer is in its overnight pause right now
+  owed: OwedPick[]; // skipped picks not yet made up (everyone's)
+  pickable: PickableSlot[]; // slots the viewer may fill now: the one on the clock and/or make-ups
   mySeat: number | null; // the viewer's seat, if they play
-  canPick: boolean; // the viewer may make the pick on the clock (their seat, or a commissioner)
+  away: boolean | null; // the viewer's away mode (null if they don't play)
+  canPick: boolean; // pickable isn't empty
   readiness: { item: string; ok: boolean; detail: string }[]; // only before the start
   startedAt: string | null;
   startedBy: string | null;
   completedAt: string | null;
+  serverTime: string; // the server's clock when this was sent, to correct a countdown for the browser's
+}
+
+export type TimerExpiry = "WAIT" | "SKIP" | "AUTO_PICK";
+
+export interface PickTimer {
+  seconds: number; // per pick
+  onExpiry: TimerExpiry;
+  pauseFrom: string | null; // "23:00:00", in the league's zone; with pauseTo
+  pauseTo: string | null;
+}
+
+export interface OwedPick {
+  overallPick: number;
+  round: number;
+  seat: number;
+  displayName: string;
+}
+
+export interface PickableSlot extends OwedPick {
+  makeup: boolean; // a skipped pick being made up (else the one on the clock)
+}
+
+export interface QueuedCard {
+  cardId: number;
+  name: string;
+  cardType: string;
+  passcode: number;
+  available: boolean; // can still be drafted
+}
+
+export interface DraftQueueState {
+  away: boolean;
+  cards: QueuedCard[];
 }
 
 /** A live draft event: a signal that the draft changed (refetch the draft for the details). */
@@ -447,15 +487,18 @@ export interface DraftSlot {
   round: number;
   pickInRound: number;
   seat: number;
-  pick: DraftPick | null; // null while the slot is open
+  pick: DraftPick | null; // null while the slot is open (or skipped and not made up)
+  skipped: boolean; // the timer ran out on this slot (it may since have been made up)
 }
 
 export interface DraftPick {
   cardId: number;
   name: string;
   passcode: number;
-  madeBy: string;
+  madeBy: string | null; // null for an auto-pick
   onBehalf: boolean; // a commissioner picked for the seat's player
+  auto: boolean; // picked from the player's queue (timer or away mode)
+  madeUp: boolean; // made later, in place of a skipped pick
   madeAt: string;
 }
 

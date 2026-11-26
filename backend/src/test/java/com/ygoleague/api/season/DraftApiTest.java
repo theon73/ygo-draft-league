@@ -13,10 +13,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.jayway.jsonpath.JsonPath;
 import com.ygoleague.auth.CurrentUser;
+import com.ygoleague.draft.DraftService;
 import com.ygoleague.image.CardImageService;
 import com.ygoleague.support.PostgresTestConfig;
 import com.ygoleague.user.AppUser;
 import com.ygoleague.user.AppUserRepository;
+import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -36,7 +38,7 @@ import org.springframework.test.web.servlet.ResultMatcher;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
-@SpringBootTest(properties = {"app.catalog.sync.scheduled=false", "app.banlists.import-on-startup=false"})
+@SpringBootTest(properties = {"app.catalog.sync.scheduled=false", "app.banlists.import-on-startup=false", "app.draft.timer.enabled=false"})
 @AutoConfigureMockMvc
 @Import(PostgresTestConfig.class)
 class DraftApiTest {
@@ -46,6 +48,7 @@ class DraftApiTest {
     @Autowired MockMvc mvc;
     @Autowired AppUserRepository users;
     @Autowired JdbcTemplate jdbc;
+    @Autowired DraftService drafts;
     @MockitoBean CardImageService images;
 
     AppUser yugi, kaiba;
@@ -53,7 +56,7 @@ class DraftApiTest {
 
     @BeforeEach
     void reset() throws Exception {
-        jdbc.execute("truncate draft, pool_change, pool_card, season_seat_draw, season_commissioner, season_rules, season_player, season, "
+        jdbc.execute("truncate draft_queue, draft_pick, draft, pool_change, pool_card, season_seat_draw, season_commissioner, season_rules, season_player, season, "
                 + "league_invite, league_member, ban_list_entry, ban_list_revision, ban_list, card_print, card_text_version, card, "
                 + "league, user_identity, app_user restart identity cascade");
         for (int i = 1; i <= 20; i++) card("Card " + i, "2002-03-08");
@@ -254,6 +257,148 @@ class DraftApiTest {
         Assertions.assertEquals("{\"status\":\"COMPLETE\",\"picksMade\":6,\"onTheClockSeat\":null}", all.getLast());
     }
 
+    // ---- queue, timer, away (YGO-18) ----
+
+    @Test
+    void theQueueIsPrivateHoldsPoolCardsAndLosesDraftedOnes() throws Exception {
+        readyWithKaibaInSeat2();
+        mvc.perform(get(draft("/queue")).with(as(yugi))).andExpect(status().isForbidden());   // not a player
+        queue(kaiba, "Card 3");
+        queue(kaiba, "Card 1");
+        queue(kaiba, "Card 3");   // already there: no change
+        mvc.perform(get(draft("/queue")).with(as(kaiba))).andExpect(listAt("$.cards[*].name", List.of("Card 3", "Card 1")));
+        send(put(draft("/queue")), kaiba, "{\"cardIds\":[" + cardId("Card 1") + "," + cardId("Card 3") + "]}")
+                .andExpect(listAt("$.cards[*].name", List.of("Card 1", "Card 3")))
+                .andExpect(listAt("$.cards[*].available", List.of(true, true)));
+        send(put(draft("/queue")), kaiba, "{\"cardIds\":[999999]}").andExpect(status().isBadRequest());
+
+        send(post(draft("/start")), yugi, null).andExpect(status().isOk());
+        pick(yugi, "Card 1", 1).andExpect(status().isOk());
+        mvc.perform(get(draft("/queue")).with(as(kaiba))).andExpect(listAt("$.cards[*].name", List.of("Card 3")));
+    }
+
+    @Test
+    void timerSettingsAreValidated() throws Exception {
+        players(3);
+        timer(10, "SKIP", null, null).andExpect(status().isBadRequest());
+        timer(60, "SKIP", "23:00", null).andExpect(status().isBadRequest());
+        timer(60, "SKIP", "23:00", "23:00").andExpect(status().isBadRequest());
+        timer(3600, "AUTO_PICK", "23:00", "08:00").andExpect(status().isOk())
+                .andExpect(jsonPath("$.timer.seconds").value(3600))
+                .andExpect(jsonPath("$.timer.onExpiry").value("AUTO_PICK"))
+                .andExpect(jsonPath("$.timer.pauseFrom").value("23:00:00"));
+        timer(0, "SKIP", null, null).andExpect(jsonPath("$.timer").doesNotExist());
+    }
+
+    @Test
+    void anExpiredPickIsSkippedAndMadeUpLater() throws Exception {
+        readyWithKaibaInSeat2();
+        timer(60, "SKIP", null, null);
+        send(post(draft("/start")), yugi, null).andExpect(jsonPath("$.deadline").exists());
+
+        drafts.expireDue(Instant.now());   // not due yet
+        mvc.perform(get(draft("")).with(as(yugi))).andExpect(jsonPath("$.picksMade").value(0));
+        drafts.expireDue(Instant.now().plusSeconds(61));
+        mvc.perform(get(draft("")).with(as(kaiba)))
+                .andExpect(jsonPath("$.picksMade").value(1))
+                .andExpect(jsonPath("$.board[0].skipped").value(true))
+                .andExpect(jsonPath("$.board[0].pick").doesNotExist())
+                .andExpect(jsonPath("$.onTheClock.seat").value(2))
+                .andExpect(listAt("$.owed[*].displayName", List.of("P1")))
+                .andExpect(listAt("$.pickable[*].overallPick", List.of(2)));   // Kaiba's own turn, not P1's make-up
+
+        // P1's make-up: not Kaiba's to make, but a commissioner can, and it doesn't move the clock.
+        pick(kaiba, "Card 1", 1).andExpect(status().isForbidden()).andExpect(jsonPath("$.message").value("That's P1's skipped pick"));
+        pick(yugi, "Card 1", 1).andExpect(status().isOk())
+                .andExpect(jsonPath("$.board[0].pick.name").value("Card 1"))
+                .andExpect(jsonPath("$.board[0].pick.madeUp").value(true))
+                .andExpect(jsonPath("$.owed.length()").value(0))
+                .andExpect(jsonPath("$.picksMade").value(1))
+                .andExpect(jsonPath("$.onTheClock.seat").value(2));
+        pick(yugi, "Card 2", 1).andExpect(status().isConflict());   // made up already
+    }
+
+    @Test
+    void aMakeUpRestartsTheTimerOfThePickOnTheClock() throws Exception {
+        readyWithKaibaInSeat2();
+        timer(60, "SKIP", null, null);
+        send(post(draft("/start")), yugi, null).andExpect(status().isOk());
+        drafts.expireDue(Instant.now().plusSeconds(61));   // pick 1 skipped; Kaiba is up
+        jdbc.update("update draft_pick set made_at = made_at - interval '50 seconds'");   // ...and has been for 50 s
+
+        pick(yugi, "Card 1", 1).andExpect(status().isOk());   // P1's make-up: Kaiba's 60 s start again
+        drafts.expireDue(Instant.now().plusSeconds(20));      // past the old deadline, not the new one
+        mvc.perform(get(draft("")).with(as(yugi))).andExpect(jsonPath("$.onTheClock.seat").value(2));
+        drafts.expireDue(Instant.now().plusSeconds(61));
+        mvc.perform(get(draft("")).with(as(yugi)))
+                .andExpect(jsonPath("$.board[1].skipped").value(true))
+                .andExpect(jsonPath("$.onTheClock.seat").value(3));
+    }
+
+    @Test
+    void autoPickTakesTheFirstAvailableQueuedCardOrSkips() throws Exception {
+        readyWithKaibaInSeat2();
+        timer(60, "AUTO_PICK", null, null);
+        queue(kaiba, "Card 2");
+        queue(kaiba, "Card 5");
+        send(post(draft("/start")), yugi, null).andExpect(status().isOk());
+        pick(yugi, "Card 2", 1).andExpect(status().isOk());   // takes Kaiba's first choice
+
+        drafts.expireDue(Instant.now().plusSeconds(61));
+        mvc.perform(get(draft("")).with(as(yugi)))
+                .andExpect(jsonPath("$.board[1].pick.name").value("Card 5"))
+                .andExpect(jsonPath("$.board[1].pick.auto").value(true))
+                .andExpect(jsonPath("$.board[1].pick.madeBy").doesNotExist())
+                .andExpect(jsonPath("$.onTheClock.seat").value(3));
+        drafts.expireDue(Instant.now().plusSeconds(61));   // P3 has no queue: skipped
+        mvc.perform(get(draft("")).with(as(yugi)))
+                .andExpect(jsonPath("$.board[2].skipped").value(true))
+                .andExpect(jsonPath("$.onTheClock.overallPick").value(4));
+        Assertions.assertEquals(List.of("PICK", "AUTO", "SKIP"),
+                jdbc.queryForList("select kind from draft_pick order by sequence", String.class));
+    }
+
+    @Test
+    void awayModePicksAtOnceAndTurnsOffWhenTheQueueRunsDry() throws Exception {
+        readyWithKaibaInSeat2();   // no timer: away mode works without one
+        queue(kaiba, "Card 5");
+        send(put(draft("/away")), kaiba, "{\"away\":true}").andExpect(jsonPath("$.away").value(true));
+        send(put(draft("/away")), yugi, "{\"away\":true}").andExpect(status().isForbidden());   // not a player
+        send(post(draft("/start")), yugi, null).andExpect(status().isOk());
+
+        pick(yugi, "Card 1", 1).andExpect(status().isOk())
+                .andExpect(jsonPath("$.board[1].pick.name").value("Card 5"))   // Kaiba's pick, at once
+                .andExpect(jsonPath("$.onTheClock.seat").value(3));
+        pick(yugi, "Card 2", 3).andExpect(status().isOk());
+        pick(yugi, "Card 3", 4).andExpect(status().isOk())
+                .andExpect(jsonPath("$.onTheClock.seat").value(2));   // queue empty: Kaiba is back on the clock
+        mvc.perform(get(draft("/queue")).with(as(kaiba))).andExpect(jsonPath("$.away").value(false));
+
+        // Turning away on while on the clock picks straight away.
+        queue(kaiba, "Card 7");
+        send(put(draft("/away")), kaiba, "{\"away\":true}").andExpect(status().isOk());
+        mvc.perform(get(draft("")).with(as(kaiba)))
+                .andExpect(jsonPath("$.board[4].pick.name").value("Card 7"))
+                .andExpect(jsonPath("$.onTheClock.seat").value(1));
+    }
+
+    @Test
+    void theDraftEndsWithTheLastSlotAndForfeitsWhatsStillOwed() throws Exception {
+        ready(3);   // 6 picks
+        timer(60, "SKIP", null, null);
+        send(post(draft("/start")), yugi, null).andExpect(status().isOk());
+        drafts.expireDue(Instant.now().plusSeconds(61));   // pick 1 skipped
+        for (int i = 2; i <= 6; i++) pick(yugi, "Card " + i, i).andExpect(status().isOk());
+        mvc.perform(get(draft("")).with(as(yugi)))
+                .andExpect(jsonPath("$.status").value("COMPLETE"))
+                .andExpect(jsonPath("$.owed.length()").value(0))
+                .andExpect(jsonPath("$.board[0].skipped").value(true));
+        pick(yugi, "Card 1", 1).andExpect(status().isConflict());
+        Assertions.assertEquals(Boolean.TRUE, jdbc.queryForObject(
+                "select (e->>'skipped')::boolean and e->>'cardId' is null from draft, jsonb_array_elements(result->'board') e "
+                        + "where (e->>'overallPick')::int = 1", Boolean.class));
+    }
+
     // ---- helpers ----
 
     /** n players, rounds for 3 picks each... and everything else the checklist needs (20 cards, enough for 3 x 2). */
@@ -276,6 +421,17 @@ class DraftApiTest {
         settings("SNAKE", "[{\"fromRound\":1,\"toRound\":2,\"picksPerTurn\":1}]");
         rules("{\"startDate\":\"2030-01-07\",\"competitionFormat\":\"ROUND_ROBIN\",\"roundRobinCycles\":1,\"tcgCutoff\":\"2008-03-01\"}");
         send(post(pool("/generate")), yugi, null).andExpect(status().isOk());
+    }
+
+    private void queue(AppUser user, String card) throws Exception {
+        send(post(draft("/queue")), user, "{\"cardId\":" + cardId(card) + "}").andExpect(status().isOk());
+    }
+
+    /** Draft settings of 2 rounds x 1 pick, with a timer. */
+    private ResultActions timer(int seconds, String onExpiry, String pauseFrom, String pauseTo) throws Exception {
+        String pause = pauseFrom == null ? "" : ",\"pauseFrom\":\"" + pauseFrom + "\"" + (pauseTo == null ? "" : ",\"pauseTo\":\"" + pauseTo + "\"");
+        return send(put(draft("/settings")), yugi, "{\"order\":\"SNAKE\",\"rounds\":[{\"fromRound\":1,\"toRound\":2,\"picksPerTurn\":1}],"
+                + "\"timerSeconds\":" + seconds + ",\"timerExpiry\":\"" + onExpiry + "\"" + pause + "}");
     }
 
     /** The data lines of the draft events a stream has received so far. */
