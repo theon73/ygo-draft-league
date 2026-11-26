@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { PoolCard } from "../../api/client";
 import CardImage from "../../components/CardImage";
 import CardPreview from "../../components/CardPreview";
@@ -5,8 +6,9 @@ import { cardStats } from "../../components/cardStats";
 import { statusLabel } from "../explore/banStatus";
 
 // The browsing view: a grid of card tiles, for planning picks. Hover (or tap) a tile for the
-// full card. Curation controls stay in the table view.
-export default function PoolGrid({ cards }: { cards: PoolCard[] }) {
+// full card. Curation controls stay in the table view. `action` adds a control under each tile
+// (the draft room's "Draft" button); it's a render prop, a function that returns the element.
+export default function PoolGrid({ cards, action }: { cards: PoolCard[]; action?: (c: PoolCard) => ReactNode }) {
   return (
     <ul className="pool-grid">
       {cards.map((c) => (
@@ -22,7 +24,9 @@ export default function PoolGrid({ cards }: { cards: PoolCard[] }) {
             {c.softBanned && <span className="badge ban-forbidden">soft-banned</span>}
             {c.requiresOwnership && <span className="badge">must own</span>}
             {c.source === "EXCEPTION" && <span className="badge" title={c.reason ?? undefined}>exception</span>}
+            {c.ownedBy && <span className="badge owned" title="Drafted by">{c.ownedBy}</span>}
           </div>
+          {action && <div className="tile-action">{action(c)}</div>}
         </li>
       ))}
     </ul>

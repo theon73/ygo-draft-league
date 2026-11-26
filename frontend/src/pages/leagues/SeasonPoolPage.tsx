@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link } from "react-router-dom";
 import {
   apiDelete, apiGet, apiPatch, apiPost,
   type PoolCandidate, type PoolCard, type PoolCardPage, type PoolChange, type PoolFacets, type PoolSummary,
@@ -13,7 +13,8 @@ import { useLeague } from "./LeagueLayout";
 import { useSeason } from "./SeasonLayout";
 import PoolFilters from "./PoolFilters";
 import PoolGrid from "./PoolGrid";
-import { activeFilterCount, MONSTER_ONLY, poolQueryString, type MultiParam } from "./poolQuery";
+import { activeFilterCount, poolQueryString } from "./poolQuery";
+import { usePoolParams } from "./usePoolParams";
 
 type Show = "ALL" | "EXCEPTIONS" | "FLAGGED" | "BAN_LIST" | "REMOVED";
 const SHOWS: { value: Show; label: string }[] = [
@@ -59,7 +60,7 @@ export default function SeasonPoolPage() {
   const base = `/leagues/${league.id}/seasons/${season.id}/pool`;
   const summary = useApi<PoolSummary>(base);
   const facets = useApi<PoolFacets>(`${base}/facets`, summary.data ? `${summary.data.total}-${summary.data.generatedAt}` : undefined);
-  const [params, setParams] = useSearchParams();
+  const { params, setParam, setParams, setList, clearFilters } = usePoolParams();
   const [view, setView] = useState<View | null>(savedView);
   const page = Number(params.get("page") ?? 0);
   const show = (params.get("show") ?? "ALL") as Show;
@@ -81,33 +82,6 @@ export default function SeasonPoolPage() {
   const manage = s.canManage;
   const effective: { effectiveFromWeek?: number } = s.started ? { effectiveFromWeek: Number(week || s.minEffectiveWeek) } : {};
 
-  // Updaters build on the latest URL (functional form), so two changes in one event both stick.
-  const setParam = (name: string, value: string) => {
-    setParams((prev) => {
-      const next = new URLSearchParams(prev);
-      if (value) next.set(name, value); else next.delete(name);
-      if (name !== "page") next.delete("page");   // a new filter starts from the first page
-      return next;
-    }, { replace: name !== "page" && name !== "show" });
-  };
-  const setList = (name: MultiParam, values: string[]) => setParams((prev) => {
-    const next = new URLSearchParams(prev);
-    next.delete(name);
-    for (const v of values) next.append(name, v);
-    next.delete("page");
-    if (name === "kind" && values.length > 0) {
-      // Filters for kinds no longer shown would only empty the list, so drop them.
-      if (!values.includes("MONSTER")) for (const p of MONSTER_ONLY) next.delete(p);
-      if (!values.includes("SPELL")) next.delete("spellType");
-      if (!values.includes("TRAP")) next.delete("trapType");
-    }
-    return next;
-  }, { replace: true });
-  const clearFilters = () => {
-    const next = new URLSearchParams();
-    if (params.get("show")) next.set("show", params.get("show")!);
-    setParams(next);
-  };
   const choosePageSize = (n: number) => {
     setPageSizes((sizes) => ({ ...sizes, [shownView]: n }));
     try { localStorage.setItem(pageSizeKey(shownView), String(n)); } catch { /* fine: not remembered */ }
@@ -212,8 +186,8 @@ export default function SeasonPoolPage() {
               <button className={shownView === "table" ? "active" : ""} onClick={() => chooseView("table")}>Table</button>
             </nav>
           </div>
-          <PoolFilters key={`${params.get("q") ?? ""}|${params.get("cardText") ?? ""}`} params={params} setOne={setParam} setList={setList} clear={clearFilters}
-                       facets={facets.data} hasBanList={!!s.banList} />
+          <PoolFilters key={`${params.get("q") ?? ""}|${params.get("cardText") ?? ""}`} params={params} setOne={setParam} setSome={setParams} setList={setList} clear={clearFilters}
+                       facets={facets.data} hasBanList={!!s.banList} showAvailable={s.started} />
           {cards.error && <p className="bad">Couldn't load cards ({cards.error})</p>}
           {cards.data && (
             <>
@@ -245,6 +219,7 @@ export default function SeasonPoolPage() {
                         <CardPreview cardId={c.cardId}><Link to={`/explore/cards/${c.cardId}`}>{c.name}</Link></CardPreview>
                         {c.source === "EXCEPTION" && <span className="badge">exception</span>}
                         {c.banStatus && <span className={`badge ban-${c.banStatus.toLowerCase()}`}>{statusLabel[c.banStatus]}</span>}
+                        {c.ownedBy && <span className="badge owned">{c.ownedBy}</span>}
                         <br />
                         <span className="muted">
                           {cardStats(c)}

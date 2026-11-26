@@ -21,13 +21,16 @@ const RANGES: { name: RangeParam; label: string }[] = [
 ];
 const plain = (values: string[]) => values.map((v) => ({ value: v, label: v }));
 
-export default function PoolFilters({ params, setOne, setList, clear, facets, hasBanList }: {
+// showAvailable: offer "Available only" (once the draft has started and cards have owners).
+export default function PoolFilters({ params, setOne, setSome, setList, clear, facets, hasBanList, showAvailable = false }: {
   params: URLSearchParams;
   setOne: (name: string, value: string) => void;
+  setSome: (values: Record<string, string>) => void; // several at once (one URL update)
   setList: (name: MultiParam, values: string[]) => void;
   clear: () => void;
   facets: PoolFacets | null;
   hasBanList: boolean;
+  showAvailable?: boolean;
 }) {
   const [q, setQ] = useState(params.get("q") ?? "");
   const [cardText, setCardText] = useState(params.get("cardText") ?? "");
@@ -38,7 +41,7 @@ export default function PoolFilters({ params, setOne, setList, clear, facets, ha
 
   return (
     <div className="pool-filters">
-      <form onSubmit={(e) => { e.preventDefault(); setOne("q", q.trim()); setOne("cardText", cardText.trim()); }}>
+      <form onSubmit={(e) => { e.preventDefault(); setSome({ q: q.trim(), cardText: cardText.trim() }); }}>
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Name contains" aria-label="Name contains" />
         <input value={cardText} onChange={(e) => setCardText(e.target.value)} placeholder="Card text contains (e.g. banish)"
                aria-label="Card text contains" maxLength={100} />
@@ -48,6 +51,12 @@ export default function PoolFilters({ params, setOne, setList, clear, facets, ha
         </select>
       </form>
       <ChipGroup label="Show" options={KINDS} selected={kinds} onChange={(v) => setList("kind", v)} />
+      {showAvailable && (
+        <label className="check">
+          <input type="checkbox" checked={params.get("available") === "true"} onChange={(e) => setOne("available", e.target.checked ? "true" : "")} />{" "}
+          Available only <span className="muted">(not drafted yet, and draftable)</span>
+        </label>
+      )}
       <details>
         <summary>More filters{active > 0 && ` (${active} on)`}</summary>
         <div className="filter-sections">

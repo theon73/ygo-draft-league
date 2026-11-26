@@ -365,6 +365,7 @@ export interface PoolCard {
   linkRating: number | null;
   atk: number | null;
   def: number | null;
+  ownedBy: string | null; // who holds it (display names), once the draft has made owners
 }
 
 export interface PoolCardPage {
@@ -421,9 +422,41 @@ export interface DraftState {
   picksPerPlayer: number;
   totalPicks: number;
   draftableCards: number;
+  availableCards: number; // draftable cards nobody has picked yet
   seats: { seat: number; displayName: string; teamName: string | null }[];
-  board: { overallPick: number; round: number; pickInRound: number; seat: number }[];
+  board: DraftSlot[];
+  picksMade: number;
+  onTheClock: OnTheClock | null; // while in progress
+  mySeat: number | null; // the viewer's seat, if they play
+  canPick: boolean; // the viewer may make the pick on the clock (their seat, or a commissioner)
   readiness: { item: string; ok: boolean; detail: string }[]; // only before the start
   startedAt: string | null;
   startedBy: string | null;
+  completedAt: string | null;
+}
+
+export interface DraftSlot {
+  overallPick: number;
+  round: number;
+  pickInRound: number;
+  seat: number;
+  pick: DraftPick | null; // null while the slot is open
+}
+
+export interface DraftPick {
+  cardId: number;
+  name: string;
+  passcode: number;
+  madeBy: string;
+  onBehalf: boolean; // a commissioner picked for the seat's player
+  madeAt: string;
+}
+
+export interface OnTheClock {
+  overallPick: number;
+  round: number;
+  seat: number;
+  displayName: string;
+  pickInTurn: number; // e.g. pick 1 of 2 in this turn
+  picksInTurn: number;
 }
