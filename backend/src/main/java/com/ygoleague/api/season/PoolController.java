@@ -7,7 +7,7 @@ import com.ygoleague.season.pool.PoolService.ArchetypeCount;
 import com.ygoleague.season.pool.PoolService.Candidate;
 import com.ygoleague.season.pool.PoolService.CardPage;
 import com.ygoleague.season.pool.PoolService.ChangeView;
-import com.ygoleague.season.pool.PoolService.Filter;
+import com.ygoleague.season.pool.PoolService.PoolQuery;
 import com.ygoleague.season.pool.PoolService.FlagsUpdate;
 import com.ygoleague.season.pool.PoolService.PoolCardView;
 import com.ygoleague.season.pool.PoolService.PoolSummary;
@@ -42,11 +42,20 @@ public class PoolController {
         return pool.summary(leagueId, seasonId, user);
     }
 
+    /**
+     * The pool, filtered and sorted. Every parameter is optional; see {@link PoolQuery}. Spring binds
+     * the query string onto the record by name (e.g. {@code ?kind=SPELL&race=Quick-Play&sort=RELEASE}).
+     */
     @GetMapping("/cards")
-    public CardPage cards(@PathVariable String leagueId, @PathVariable String seasonId, @RequestParam(defaultValue = "") String q,
-                          @RequestParam(defaultValue = "ALL") Filter filter, @RequestParam(defaultValue = "0") int page,
+    public CardPage cards(@PathVariable String leagueId, @PathVariable String seasonId, PoolQuery query,
                           @AuthenticationPrincipal CurrentUser user) {
-        return pool.cards(leagueId, seasonId, q, filter, page, user);
+        return pool.cards(leagueId, seasonId, query, user);
+    }
+
+    /** The attributes, types and archetypes present in the pool, for the filter dropdowns. */
+    @GetMapping("/facets")
+    public PoolService.Facets facets(@PathVariable String leagueId, @PathVariable String seasonId, @AuthenticationPrincipal CurrentUser user) {
+        return pool.facets(leagueId, seasonId, user);
     }
 
     /** Catalog cards matching a name, for adding to the pool by hand. */

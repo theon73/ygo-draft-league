@@ -77,3 +77,30 @@ details.panel summary { cursor: pointer; font-weight: 600; }
 .popover-name { font-weight: 600; margin: 0.5rem 0 0.1rem; }
 .popover-stats { margin: 0 0 0.4rem; font-size: 0.85rem; }
 .popover-text { white-space: pre-line; font-size: 0.85rem; margin: 0; }
+.pool-toolbar { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-top: 1rem; }
+.pool-filters form { flex-wrap: wrap; }
+.pool-filters details { margin: 0.25rem 0 0.75rem; }
+.filter-grid { display: flex; flex-wrap: wrap; gap: 0.5rem 0.75rem; align-items: center; margin-top: 0.5rem; }
+.filter-grid .range { white-space: nowrap; font-size: 0.9rem; }
+.check-inline { font-size: 0.9rem; white-space: nowrap; }
+ul.pool-grid { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 0.9rem 0.75rem; }
+ul.pool-grid li { font-size: 0.8rem; min-width: 0; }
+ul.pool-grid li.unusable .tile-art img { filter: grayscale(0.85); opacity: 0.6; }
+ul.pool-grid .card-preview-anchor { display: block; }
+ul.pool-grid .tile-art.card-image-small { width: 100%; }
+.tile-name { font-weight: 600; margin-top: 0.3rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tile-stats { color: #666; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tile-badges .badge { margin: 0.2rem 0.2rem 0 0; display: inline-block; }
+@media (max-width: 480px) { ul.pool-grid { grid-template-columns: repeat(3, 1fr); gap: 0.6rem 0.5rem; } }
+.chip-group { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; margin: 0.35rem 0; }
+.chip-label { font-size: 0.8rem; color: #666; min-width: 4.5rem; }
+.chip { border: 1px solid #d0ccc2; background: #fff; border-radius: 999px; padding: 0.15rem 0.65rem; font-size: 0.85rem; cursor: pointer; }
+.chip.on { background: #3b4fb8; border-color: #3b4fb8; color: #fff; }
+.filter-sections section { border-top: 1px solid #e4e2dc; padding: 0.4rem 0; }
+.filter-sections h5 { margin: 0.2rem 0; font-size: 0.85rem; }
+.ranges { display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; margin-top: 0.35rem; }
+details.multi-select { margin: 0.35rem 0; }
+details.multi-select summary { cursor: pointer; font-size: 0.9rem; }
+.multi-select-panel { border: 1px solid #e4e2dc; background: #fff; padding: 0.5rem; margin-top: 0.3rem; max-width: 26rem; }
+.multi-select-options { max-height: 14rem; overflow-y: auto; columns: 2 10rem; margin: 0.4rem 0; }
+.multi-select-options .check { font-size: 0.85rem; break-inside: avoid; }

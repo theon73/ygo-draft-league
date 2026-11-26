@@ -392,3 +392,11 @@ export interface PoolChange {
   by: string | null;
   at: string;
 }
+
+export interface PoolFacets {
+  attributes: string[];
+  monsterTypes: string[];
+  spellTypes: string[];
+  trapTypes: string[];
+  archetypes: string[];
+}
