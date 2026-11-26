@@ -34,7 +34,11 @@ class YgoProDeckCardParserTest {
     static void parseFixture() {
         List<CardRecord> out = new ArrayList<>();
         try (InputStream in = resource("cardinfo.json")) {
-            ignored = PARSER.parseCards(in, out::add);
+            List<SetRecord> sets;
+            try (InputStream setsIn = resource("cardsets.json")) {
+                sets = PARSER.parseSets(setsIn);
+            }
+            ignored = PARSER.parseCards(in, YgoProDeckCardParser.setDates(sets), out::add);
         } catch (java.io.IOException e) {
             throw new RuntimeException(e);
         }
@@ -44,9 +48,16 @@ class YgoProDeckCardParserTest {
     @Test
     void skipsOcgOnlyCardsAndSkillCards() {
         assertEquals(2, ignored);
-        assertEquals(7, cards.size());
+        assertEquals(8, cards.size());
         assertFalse(cards.containsKey("Ancient Fusion"));            // Skill Card
         assertFalse(cards.containsKey("30,000-Year White Turtle"));  // no TCG release
+    }
+
+    @Test
+    void missingTcgDateFallsBackToEarliestPrintWhenTheCardHasTcgPrints() {
+        // Real source bug: Change of Heart has no tcg_date, though it's a 2002 TCG card.
+        CardRecord coh = cards.get("Change of Heart");
+        assertEquals(LocalDate.of(2023, 11, 2), coh.tcgDate());   // fixture keeps only its RA01 prints
     }
 
     @Test
@@ -160,7 +171,7 @@ class YgoProDeckCardParserTest {
     void parsesSetsAndVersion() throws Exception {
         try (InputStream in = resource("cardsets.json")) {
             List<SetRecord> sets = PARSER.parseSets(in);
-            assertEquals(12, sets.size());
+            assertEquals(13, sets.size());
             assertTrue(sets.stream().allMatch(s -> s.name() != null && s.code() != null));
         }
         try (InputStream in = resource("checkDBVer.json")) {

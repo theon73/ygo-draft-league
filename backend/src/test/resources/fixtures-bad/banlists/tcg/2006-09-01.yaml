@@ -1,0 +1,4 @@
+name: "List With A Typo"
+effective: 2006-09-01
+forbidden:
+  - "Pot of Greeed"

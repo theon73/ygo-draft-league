@@ -37,7 +37,7 @@ class CatalogSyncServiceTest {
     @BeforeEach
     void cleanCatalog() {
         source.reset();
-        jdbc.execute("truncate card_print, card_text_version, card, card_set, catalog_sync restart identity");
+        jdbc.execute("truncate card_print, card_text_version, card, card_set, catalog_sync restart identity cascade");
     }
 
     @Test
@@ -46,15 +46,15 @@ class CatalogSyncServiceTest {
 
         assertEquals(SyncStatus.SUCCEEDED, run.getStatus(), run::toString);
         assertEquals("148.08", run.getSourceVersion());
-        assertEquals(7, run.getCardsAdded());
+        assertEquals(8, run.getCardsAdded());
         assertEquals(0, run.getCardsUpdated());
         assertEquals(2, run.getCardsIgnored());
-        assertEquals(12, run.getSetsUpserted());
+        assertEquals(13, run.getSetsUpserted());
 
-        assertEquals(7L, count("card"));
-        assertEquals(14L, count("card_print"));
+        assertEquals(8L, count("card"));
+        assertEquals(16L, count("card_print"));
         // The fixture's set list omits Dark Legends, which a Sangan print refers to; it's created on the fly.
-        assertEquals(13L, count("card_set"));
+        assertEquals(14L, count("card_set"));
         assertEquals(1L, jdbc.queryForObject("select count(*) from card_set where tcg_date is null", Long.class));
     }
 
@@ -135,7 +135,7 @@ class CatalogSyncServiceTest {
         CatalogSync run = service.sync(SyncTrigger.SCHEDULED, false);
         assertEquals(0, run.getCardsAdded(), run::toString);
         assertEquals(0, run.getCardsUpdated(), run::toString);
-        assertEquals(7L, count("card"));
+        assertEquals(8L, count("card"));
     }
 
     @Test

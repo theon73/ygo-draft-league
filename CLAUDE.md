@@ -12,6 +12,7 @@ General-purpose web app for running Yu-Gi-Oh draft leagues, fantasy-football sty
 - Backend: `cd backend && ./gradlew bootRun`
 - Backend tests: `cd backend && ./gradlew test` (repository tests use Testcontainers, so Docker must be running)
 - Card catalog: `cd backend && ./gradlew syncCatalog` (one-shot YGOPRODeck sync into the local DB; `-Pforce` re-imports an unchanged version)
+- Ban lists: `cd backend && ./gradlew importBanLists` (imports `src/main/resources/banlists/**.yaml`; exits 1 on any card name it can't match, so run it after adding or editing a list)
 - Frontend: `cd frontend && npm install && npm run dev`
 - Frontend typecheck/build: `npm run build`
 

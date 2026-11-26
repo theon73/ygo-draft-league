@@ -9,8 +9,10 @@ import java.security.NoSuchAlgorithmException;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
@@ -32,7 +34,11 @@ import tools.jackson.databind.node.ObjectNode;
  * <ul>
  *   <li>Xyz rank arrives in {@code level}; Link monsters send {@code level: 0} and no DEF.
  *   <li>"?" ATK/DEF arrive as -1 with a {@code question_atk}/{@code question_def} flag; stored as null.
- *   <li>Cards with no {@code tcg_date} are OCG-only and Skill Cards are Speed Duel only: both skipped.
+ *   <li>Cards with no {@code tcg_date} are normally OCG-only and are skipped, as are Speed Duel Skill
+ *       Cards. But the source occasionally omits the date for a real TCG card (Change of Heart): if
+ *       the card has TCG prints, its date falls back to the earliest dated set it was printed in.
+ *       That's approximate (earliest set date != tcg_date for ~1,900 dated cards), so it's only
+ *       used when the source gives nothing.
  *   <li>The top-level {@code id} is just the first listed artwork, and artwork order differs between
  *       responses, so it's not used as identity. Every artwork id (= passcode) is kept, sorted, and
  *       the raw copy is normalized the same way so reordering doesn't look like a change.
@@ -61,13 +67,13 @@ public final class YgoProDeckCardParser {
      *
      * @return number of cards skipped as not importable
      */
-    public int parseCards(InputStream in, Consumer<CardRecord> sink) {
+    public int parseCards(InputStream in, Map<String, LocalDate> setDates, Consumer<CardRecord> sink) {
         int ignored = 0;
         try (JsonParser parser = mapper.createParser(in)) {
             if (!seekToArray(parser, "data")) throw new IllegalArgumentException("No \"data\" array in response");
             while (parser.nextToken() == JsonToken.START_OBJECT) {
                 JsonNode card = elementReader.readValue(parser);
-                Optional<CardRecord> record = toRecord(card);
+                Optional<CardRecord> record = toRecord(card, setDates);
                 if (record.isPresent()) sink.accept(record.get());
                 else ignored++;
             }
@@ -94,12 +100,26 @@ public final class YgoProDeckCardParser {
         return version;
     }
 
-    /** Empty when the card is not importable (OCG-only or a Skill Card). */
+    /** Release date by set name, for {@link #parseCards}. */
+    public static Map<String, LocalDate> setDates(List<SetRecord> sets) {
+        Map<String, LocalDate> dates = new HashMap<>();
+        for (SetRecord s : sets) if (s.tcgDate() != null) dates.put(s.name(), s.tcgDate());
+        return dates;
+    }
+
+    /** Same as {@link #toRecord(JsonNode, Map)} with no set dates to fall back on. */
     public Optional<CardRecord> toRecord(JsonNode card) {
+        return toRecord(card, Map.of());
+    }
+
+    /** Empty when the card is not importable (OCG-only or a Skill Card). */
+    public Optional<CardRecord> toRecord(JsonNode card, Map<String, LocalDate> setDates) {
         JsonNode misc = card.path("misc_info").path(0);
-        LocalDate tcgDate = date(misc.path("tcg_date"));
         String cardType = card.path("type").asString();
-        if (tcgDate == null || SKIPPED_TYPES.contains(cardType)) return Optional.empty();
+        if (SKIPPED_TYPES.contains(cardType)) return Optional.empty();
+        LocalDate tcgDate = date(misc.path("tcg_date"));
+        if (tcgDate == null) tcgDate = earliestPrintDate(card, setDates);
+        if (tcgDate == null) return Optional.empty();
 
         String frameType = card.path("frameType").asString();
         boolean xyz = frameType.contains("xyz");
@@ -170,6 +190,15 @@ public final class YgoProDeckCardParser {
         for (JsonNode p : copy.path("card_sets").values()) ((ObjectNode) p).remove("set_price");
         for (JsonNode m : copy.path("misc_info").values()) ((ObjectNode) m).remove(VOLATILE_MISC_FIELDS);
         return copy;
+    }
+
+    private static LocalDate earliestPrintDate(JsonNode card, Map<String, LocalDate> setDates) {
+        LocalDate earliest = null;
+        for (JsonNode p : card.path("card_sets").values()) {
+            LocalDate d = setDates.get(p.path("set_name").asString());
+            if (d != null && (earliest == null || d.isBefore(earliest))) earliest = d;
+        }
+        return earliest;
     }
 
     private static boolean seekToArray(JsonParser parser, String field) {

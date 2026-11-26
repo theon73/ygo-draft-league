@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -25,6 +26,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  *       downloaded unless {@code force} is set.
  * </ul>
  * Every attempt is recorded in {@code catalog_sync}, committed separately so failures are logged.
+ * A successful sync publishes {@link CatalogSyncedEvent} after its transaction commits.
  */
 @Service
 public class CatalogSyncService {
@@ -38,14 +40,16 @@ public class CatalogSyncService {
     private final CatalogSyncRepository syncs;
     private final JdbcTemplate jdbc;
     private final TransactionTemplate tx;
+    private final ApplicationEventPublisher events;
 
     public CatalogSyncService(CatalogSource source, CatalogWriter writer, CatalogSyncRepository syncs,
-                              JdbcTemplate jdbc, TransactionTemplate tx) {
+                              JdbcTemplate jdbc, TransactionTemplate tx, ApplicationEventPublisher events) {
         this.source = source;
         this.writer = writer;
         this.syncs = syncs;
         this.jdbc = jdbc;
         this.tx = tx;
+        this.events = events;
     }
 
     /** Runs a sync and returns its audit row. Never throws for sync failures; check the status. */
@@ -68,7 +72,9 @@ public class CatalogSyncService {
             run.failed(version, e.toString());
             log.error("Catalog sync failed", e);
         }
-        return syncs.save(run);
+        CatalogSync saved = syncs.save(run);
+        if (saved.getStatus() == SyncStatus.SUCCEEDED) events.publishEvent(new CatalogSyncedEvent(saved));
+        return saved;
     }
 
     private void apply(CatalogSync run, String version) {
@@ -83,7 +89,7 @@ public class CatalogSyncService {
         List<CatalogWriter.CardUpdate> updates = new ArrayList<>(BATCH_SIZE);
         int[] added = {0};
         int[] updated = {0};
-        int ignored = source.forEachCard(card -> {
+        int ignored = source.forEachCard(sets, card -> {
             var stored = matcher.match(card);
             if (stored.isEmpty()) {
                 inserts.add(card);
