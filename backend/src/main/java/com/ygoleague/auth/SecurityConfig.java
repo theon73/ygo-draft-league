@@ -4,13 +4,16 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.authentication.logout.HttpStatusReturningLogoutSuccessHandler;
+import org.springframework.security.web.context.RequestAttributeSecurityContextRepository;
 
 /**
  * Session-cookie auth for the SPA.
@@ -32,7 +35,29 @@ import org.springframework.security.web.authentication.logout.HttpStatusReturnin
 @ConditionalOnWebApplication
 public class SecurityConfig {
 
+    /**
+     * Card images: public catalog art, served to anyone, cacheable for a year. A separate chain so
+     * these responses never touch the session or set the CSRF cookie: a {@code Set-Cookie} would
+     * stop a CDN from caching them, and a page of thumbnails shouldn't mean a session lookup each.
+     */
     @Bean
+    @Order(1)
+    SecurityFilterChain cardImages(HttpSecurity http) throws Exception {
+        http
+                .securityMatcher("/api/card-images/**")
+                .authorizeHttpRequests(auth -> auth
+                        .requestMatchers(HttpMethod.GET, "/api/card-images/**").permitAll()
+                        .anyRequest().denyAll())
+                .csrf(csrf -> csrf.disable())            // read-only: nothing to forge
+                .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .securityContext(c -> c.securityContextRepository(new RequestAttributeSecurityContextRepository()))
+                .requestCache(c -> c.disable())
+                .headers(h -> h.cacheControl(c -> c.disable()));   // keep the controller's one-year Cache-Control
+        return http.build();
+    }
+
+    @Bean
+    @Order(2)
     SecurityFilterChain securityFilterChain(HttpSecurity http,
                                             ObjectProvider<ClientRegistrationRepository> clientRegistrations,
                                             ObjectProvider<GoogleLogin.GoogleUserService> googleUsers) throws Exception {
