@@ -198,11 +198,11 @@ playoffs:
 |---|---|---|---|
 | Name | text, ≤ 60 chars | League | ✓ YGO-8 |
 | Description / house-rules blurb | markdown | League | later |
-| Visibility | members only, plus a viewer allowlist (no public pages, §0) | League | fixed by design; viewers in YGO-9 |
-| Commissioners | promote/demote members; at least one must remain | League | v1, YGO-9 |
-| Placeholder members | named seats without accounts, claimed via invite | League | v1, YGO-9 |
-| Invites | who may create them (commissioners only, or players too); default expiry, max uses | League | v1, YGO-9 |
-| Member display names | per-league name, editable | League | later |
+| Visibility | members only, plus a viewer allowlist (no public pages, §0) | League | fixed by design; ✓ viewers YGO-9 |
+| Commissioners | promote/demote members; at least one must remain | League | ✓ YGO-9 |
+| Placeholder members | named seats without accounts, claimed via invite | League | ✓ YGO-9 |
+| Invites | expiry and max uses per invite (✓ YGO-9); who may create them (commissioners only today; players too, later); league-wide defaults | League | ✓ per-invite options; rest later |
+| Member display names | per-league name, editable by the member themselves (and by commissioners). Matters especially after claiming a placeholder, which keeps the seat's name the commissioner chose (YGO-9); the claimer should be able to rename it. Unique within the league; past seasons show the name as it is now. | League | later |
 | Time zone | IANA zone; defines week boundaries, deadlines and draft times | League | v1, Phase 2 |
 | Notifications | Discord webhook URL; which events (picks, trades, FA, results) | League | later, Phase 3–4 |
 | New-season defaults | clone the last season's rules, or start from a preset ("Goat", "Edison") | League | later, Phase 2 / 6 |
@@ -411,7 +411,7 @@ Not league settings: site admins and the catalog sync (platform level, YGO-6), d
   - **Admins:** `APP_ADMINS` lists `provider:subject` identities (shown to each user by `/api/auth/session`). `/api/admin/**` needs the role. First admin action: `POST /api/admin/catalog/sync` (a button on the Explorer).
   - **Dev:** `./gradlew bootRun -Pdev` seeds Alice (commissioner, site admin), Bob, Carol (players), Dave (viewer) and a placeholder in "Dev League".
 - **YGO-8 (done):** leagues and per-league access. `GET/POST /api/leagues` ("My leagues", create with a name of up to 60 characters; the creator becomes commissioner) and `GET /api/leagues/{publicId}` (overview with members; user ids never exposed). `league.LeagueAccess.require(publicId, user, minimumRole)` is the single authorization check: **non-members, unknown and malformed ids all get 404** (a league's existence isn't revealed), members below the required role get 403. Roles are ordered commissioner > player > viewer. Frontend: `/leagues` and `/leagues/:id` with league tabs (overview, plus placeholders for standings, rosters, draft and transactions).
-- **YGO-9:** invites (open and placeholder-claim), placeholder members, viewer allowlist.
+- **YGO-9 (done):** invites, placeholders, viewers and commissioner management. Commissioners create **open invite links** (player or viewer; expiry 1 to 90 days or never; optional max uses) and **claim links** for placeholder seats (single-use; the claimer keeps the seat's name and role). Codes are 128-bit random, base64url. Previewing a link works signed out (`GET /api/invites/{code}`); accepting needs a login, and Google sign-in returns to the invite page. Joining with a name already used in the league gets a number ("Yugi 2"). Commissioners add placeholders, change roles, revoke invites and remove members. Rules: at least one commissioner always remains, placeholders can't be commissioners, and anyone who has played in a season can't be removed (league history). The viewer allowlist is viewer invites plus removal. Every membership change locks the league row first, so concurrent changes can't interleave.
 - **YGO-10:** cached card image endpoint.
 
 **Phase 2: Season setup**

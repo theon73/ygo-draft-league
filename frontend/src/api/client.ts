@@ -22,9 +22,21 @@ function csrfToken(): string | undefined {
 }
 
 export async function apiPost<T = void>(path: string, body?: unknown): Promise<T> {
+  return apiSend<T>("POST", path, body);
+}
+
+export async function apiPatch<T = void>(path: string, body?: unknown): Promise<T> {
+  return apiSend<T>("PATCH", path, body);
+}
+
+export async function apiDelete(path: string): Promise<void> {
+  return apiSend<void>("DELETE", path);
+}
+
+async function apiSend<T>(method: string, path: string, body?: unknown): Promise<T> {
   const token = csrfToken();
   const res = await fetch(`/api${path}`, {
-    method: "POST",
+    method,
     credentials: "include",
     headers: {
       ...(body !== undefined && { "Content-Type": "application/json" }),
@@ -158,6 +170,7 @@ export interface LeagueSummary {
 }
 
 export interface LeagueMember {
+  id: string; // public id, for commissioner actions
   displayName: string;
   role: LeagueRole;
   placeholder: boolean; // a seat for someone without an account yet
@@ -170,4 +183,33 @@ export interface LeagueDetail {
   myRole: LeagueRole;
   createdAt: string;
   members: LeagueMember[];
+}
+
+// Invites
+
+export type InviteKind = "OPEN" | "CLAIM";
+export type InviteStatus = "VALID" | "EXPIRED" | "REVOKED" | "USED_UP";
+
+export interface InviteView {
+  code: string;
+  kind: InviteKind;
+  role: LeagueRole | null; // open invites
+  seatName: string | null; // claim invites: the placeholder being claimed
+  maxUses: number | null; // null = unlimited
+  useCount: number;
+  expiresAt: string | null; // null = never
+  createdAt: string;
+}
+
+export interface InvitePreview {
+  leagueName: string;
+  kind: InviteKind;
+  role: LeagueRole | null;
+  seatName: string | null;
+  status: InviteStatus;
+  alreadyMember: boolean;
+}
+
+export function inviteLink(code: string): string {
+  return `${window.location.origin}/invite/${code}`;
 }

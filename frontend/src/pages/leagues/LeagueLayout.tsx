@@ -6,10 +6,16 @@ import { roleLabel } from "./roles";
 
 // The shell for everything under /leagues/:leagueId. It loads the league once and renders the
 // league's sub-navigation; the child route (overview, standings, ...) renders in <Outlet/> and
-// gets the loaded league through React Router's outlet context, so children don't refetch it.
+// gets the loaded league, plus a reload() to call after changing it, through React Router's
+// outlet context, so children don't refetch it themselves.
 
-export function useLeague(): LeagueDetail {
-  return useOutletContext<LeagueDetail>();
+interface LeagueContext {
+  league: LeagueDetail;
+  reload: () => void;
+}
+
+export function useLeague(): LeagueContext {
+  return useOutletContext<LeagueContext>();
 }
 
 const TABS = [
@@ -51,7 +57,7 @@ export default function LeagueLayout() {
           <NavLink key={t.label} to={t.to} end={t.end}>{t.label}</NavLink>
         ))}
       </nav>
-      <Outlet context={l} />
+      <Outlet context={{ league: l, reload: league.reload } satisfies LeagueContext} />
     </section>
   );
 }

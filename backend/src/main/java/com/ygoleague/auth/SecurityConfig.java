@@ -4,6 +4,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
@@ -38,6 +39,8 @@ public class SecurityConfig {
         http
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                        // Invite previews work signed out (the code itself is the secret); accepting needs a login.
+                        .requestMatchers(HttpMethod.GET, "/api/invites/*").permitAll()
                         .requestMatchers("/api/health", "/api/auth/session", "/api/explore/**", "/api/dev/**",
                                 "/actuator/health", "/error").permitAll()
                         .anyRequest().authenticated())

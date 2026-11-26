@@ -21,6 +21,10 @@ public interface LeagueMemberRepository extends JpaRepository<LeagueMember, Long
     @Query("select m from LeagueMember m join fetch m.league where m.user.id = :userId order by lower(m.league.name), m.league.id")
     List<LeagueMember> findMembershipsOfUser(Long userId);
 
+    long countByLeagueIdAndRole(Long leagueId, LeagueRole role);
+
+    boolean existsByLeagueIdAndDisplayNameIgnoreCase(Long leagueId, String displayName);
+
     /** [league id, member count] rows, placeholders included. */
     @Query("select m.league.id, count(m) from LeagueMember m where m.league.id in :leagueIds group by m.league.id")
     List<Object[]> countByLeague(Collection<Long> leagueIds);
