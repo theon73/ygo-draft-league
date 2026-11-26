@@ -56,7 +56,7 @@ class DraftApiTest {
 
     @BeforeEach
     void reset() throws Exception {
-        jdbc.execute("truncate draft_pause, draft_queue, draft_pick, draft, pool_change, pool_card, season_seat_draw, season_commissioner, season_rules, season_player, season, "
+        jdbc.execute("truncate draft_timer_change, draft_pause, draft_queue, draft_pick, draft, pool_change, pool_card, season_seat_draw, season_commissioner, season_rules, season_player, season, "
                 + "league_invite, league_member, ban_list_entry, ban_list_revision, ban_list, card_print, card_text_version, card, "
                 + "league, user_identity, app_user restart identity cascade");
         for (int i = 1; i <= 20; i++) card("Card " + i, "2002-03-08");
@@ -545,6 +545,47 @@ class DraftApiTest {
         send(post(draft("/start")), yugi, null).andExpect(status().isOk())
                 .andExpect(jsonPath("$.picksMade").value(0))
                 .andExpect(jsonPath("$.held").value(false));
+    }
+
+    // ---- changing the timer mid-draft (YGO-20) ----
+
+    @Test
+    void aCommissionerCanChangeTheTimerMidDraftAndThePickOnTheClockStartsAfresh() throws Exception {
+        readyWithKaibaInSeat2();
+        send(put(draft("/timer")), yugi, "{\"timerSeconds\":60,\"timerExpiry\":\"SKIP\"}").andExpect(status().isConflict());   // not started
+        send(post(draft("/start")), yugi, null).andExpect(jsonPath("$.timer").doesNotExist());
+        drafts.expireDue(Instant.now().plusSeconds(1000));   // no timer: nothing happens
+        pick(yugi, "Card 1", 1).andExpect(status().isOk());
+        jdbc.update("update draft_pick set made_at = made_at - interval '50 seconds'");   // Kaiba has been up for 50 s
+
+        send(put(draft("/timer")), kaiba, "{\"timerSeconds\":60,\"timerExpiry\":\"SKIP\"}").andExpect(status().isForbidden());
+        send(put(draft("/timer")), yugi, "{\"timerSeconds\":10,\"timerExpiry\":\"SKIP\"}").andExpect(status().isBadRequest());
+        send(put(draft("/timer")), yugi, "{\"timerSeconds\":60,\"timerExpiry\":\"SKIP\"}").andExpect(status().isOk())
+                .andExpect(jsonPath("$.timer.seconds").value(60))
+                .andExpect(jsonPath("$.timerChangedBy").value("Yugi"))
+                .andExpect(jsonPath("$.deadline").exists());
+        drafts.expireDue(Instant.now().plusSeconds(30));   // a full 60 s from the change, not from when Kaiba came up
+        mvc.perform(get(draft("")).with(as(yugi))).andExpect(jsonPath("$.onTheClock.seat").value(2));
+        drafts.expireDue(Instant.now().plusSeconds(61));
+        mvc.perform(get(draft("")).with(as(yugi))).andExpect(jsonPath("$.board[1].skipped").value(true));
+
+        // Off again: the draft waits.
+        send(put(draft("/timer")), yugi, "{\"timerSeconds\":0}").andExpect(jsonPath("$.timer").doesNotExist())
+                .andExpect(jsonPath("$.deadline").doesNotExist());
+        drafts.expireDue(Instant.now().plusSeconds(1000));
+        mvc.perform(get(draft("")).with(as(yugi))).andExpect(jsonPath("$.onTheClock.seat").value(3));
+        // The settings recorded at the start are untouched; the changes are history.
+        Assertions.assertEquals("null", jdbc.queryForObject("select coalesce(config->'draft'->>'pickTimer', 'null') from draft", String.class));
+        Assertions.assertEquals(2, jdbc.queryForObject("select count(*) from draft_timer_change", Integer.class));
+    }
+
+    @Test
+    void goingBackToSetupDropsTimerChanges() throws Exception {
+        ready(3);
+        send(post(draft("/start")), yugi, null).andExpect(status().isOk());
+        send(put(draft("/timer")), yugi, "{\"timerSeconds\":60,\"timerExpiry\":\"WAIT\"}").andExpect(status().isOk());
+        send(post(draft("/unstart")), yugi, null).andExpect(status().isOk()).andExpect(jsonPath("$.timer").doesNotExist());
+        Assertions.assertEquals(0, jdbc.queryForObject("select count(*) from draft_timer_change", Integer.class));
     }
 
     // ---- helpers ----

@@ -106,6 +106,13 @@ public class DraftController {
         return drafts.resume(leagueId, seasonId, user);
     }
 
+    /** Changes (or turns on or off) the pick timer of a running draft. */
+    @PutMapping("/timer")
+    public DraftView timer(@PathVariable String leagueId, @PathVariable String seasonId, @RequestBody DraftService.TimerUpdate body,
+                           @AuthenticationPrincipal CurrentUser user) {
+        return drafts.changeTimer(leagueId, seasonId, body, user);
+    }
+
     /** Undoes the latest pick still in effect (repeatable). */
     @PostMapping("/undo")
     public DraftView undo(@PathVariable String leagueId, @PathVariable String seasonId, @AuthenticationPrincipal CurrentUser user) {

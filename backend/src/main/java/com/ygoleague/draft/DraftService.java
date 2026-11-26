@@ -73,6 +73,7 @@ import tools.jackson.databind.ObjectMapper;
  *       take a draft with no picks in effect back to setup (YGO-19). Once the draft is complete
  *       nothing changes: picks, make-ups, undos, pauses and going back are all refused. See {@link #undo} for how undo and the
  *       timer interact.
+ *   <li>Commissioners can also change the pick timer mid-draft (YGO-20; see {@link #changeTimer}).
  *   <li>Any member can see the draft and follow it live ({@link DraftEvents}); the season's
  *       commissioners change and start it. Starting and every pick are announced to open streams.
  * </ul>
@@ -104,6 +105,9 @@ public class DraftService {
     public record PickRequest(Long cardId, Integer overallPick) {}
 
     public record AwayRequest(Boolean away) {}
+
+    /** A new pick timer for a running draft (YGO-20); timerSeconds null or 0 turns it off. */
+    public record TimerUpdate(Integer timerSeconds, TimerExpiry timerExpiry, String pauseFrom, String pauseTo) {}
 
     /**
      * What {@code draft.config} holds: the settings and seat order as they were at the start, and the
@@ -168,6 +172,7 @@ public class DraftService {
      * @param held             a commissioner has paused the draft (heldSince, heldBy: when and who)
      * @param undoable         what "undo last pick" would reverse (commissioners, while it runs), or null
      * @param canUnstart       a commissioner can still take the draft back to setup (no pick in effect)
+     * @param timerChangedBy   who last changed the timer during the draft (timerChangedAt: when), or null
      * @param owed             skipped picks not yet made up, everyone's
      * @param pickable         slots the caller may fill now
      * @param mySeat           the caller's seat, if they play this season
@@ -179,7 +184,8 @@ public class DraftService {
                             Instant scheduledStart, boolean forbiddenDraftable, PickTimer timer, int roundCount, int picksPerPlayer,
                             int totalPicks, long draftableCards, long availableCards, List<SeatView> seats, List<SlotView> board,
                             int picksMade, ClockView onTheClock, Instant deadline, boolean paused, boolean held,
-                            Instant heldSince, String heldBy, UndoView undoable, boolean canUnstart, List<OwedPick> owed,
+                            Instant heldSince, String heldBy, UndoView undoable, boolean canUnstart, String timerChangedBy,
+                            Instant timerChangedAt, List<OwedPick> owed,
                             List<PickableSlot> pickable, Integer mySeat, Boolean away, boolean canPick,
                             List<Check> readiness, Instant startedAt, String startedBy, Instant completedAt, Instant serverTime) {}
 
@@ -347,6 +353,26 @@ public class DraftService {
     }
 
     /**
+     * Changes the pick timer of a running draft (YGO-20), or turns it on or off. The settings recorded
+     * at the start stay as they were; the change is its own row, kept as history. The pick on the
+     * clock gets a full timer under the new setting from now (keeping the time it had used could
+     * make a shortened timer expire at once). Allowed while paused: the fresh timer then starts at
+     * the resume.
+     */
+    @Transactional
+    public DraftView changeTimer(String leagueId, String seasonId, TimerUpdate update, CurrentUser caller) {
+        Season season = access.commissioner(leagueId, seasonId, caller).season();
+        if (update == null) throw bad("Send the new timer");
+        PickTimer timer = validTimer(update.timerSeconds(), update.timerExpiry(), update.pauseFrom(), update.pauseTo());
+        lockOpen(season);
+        jdbc.sql("insert into draft_timer_change (season_id, pick_timer, changed_by) values (:s, cast(:t as jsonb), :u)")
+                .param("s", season.getId()).param("t", timer == null ? null : json.writeValueAsString(timer), java.sql.Types.VARCHAR)
+                .param("u", caller.userId()).update();
+        events.publish(season.getId(), changeOf(season));
+        return view(season, true, caller);
+    }
+
+    /**
      * Undoes the latest row still in effect (a pick, auto-pick, skip or make-up) by appending an UNDO
      * row; repeat to go further back. Allowed while paused, not once the draft is complete.
      *
@@ -388,6 +414,7 @@ public class DraftService {
         if (!d.effective().isEmpty()) throw conflict("Picks have been made; undo them all first to go back to setup");
         jdbc.sql("delete from draft_pick where season_id = :s").param("s", season.getId()).update();
         jdbc.sql("delete from draft_pause where season_id = :s").param("s", season.getId()).update();
+        jdbc.sql("delete from draft_timer_change where season_id = :s").param("s", season.getId()).update();
         jdbc.sql("delete from draft where season_id = :s").param("s", season.getId()).update();
         rules.unlockCalendarAfterUnstart(season, d.config().calendarBeforeStart(), d.startedAt(), caller);
         season.setStatus(SeasonStatus.SETUP);
@@ -403,7 +430,7 @@ public class DraftService {
     public void expireDue(Instant now) {
         List<Long> running = jdbc.sql("""
                         select season_id from draft
-                        where completed_at is null and jsonb_typeof(config->'draft'->'pickTimer') = 'object'""")
+                        where completed_at is null""")
                 .query(Long.class).list();
         for (long seasonId : running) {
             try {
@@ -420,7 +447,7 @@ public class DraftService {
         if (season == null) return;
         Loaded d = load(season, true).orElse(null);
         if (d == null || d.completed()) return;
-        PickTimer timer = d.config().draft().pickTimer();
+        PickTimer timer = d.timer();
         OnTheClock clock = d.clock();
         if (timer == null || clock == null || timer.onExpiry() == TimerExpiry.WAIT) return;
         Instant deadline = deadline(d, timer, zone(season));
@@ -548,9 +575,15 @@ public class DraftService {
      * A started draft: its frozen config, its slots, the whole pick log and its pauses. Rows an UNDO
      * points at (and the UNDO rows themselves) are kept in {@code log} but out of {@link #effective()}.
      */
-    private record Loaded(DraftConfig config, List<Slot> slots, List<LogRow> log, List<Pause> pauses, Instant startedAt,
-                          String startedBy, Instant completedAt) {
+    /** The latest change to the pick timer during the draft (timer null = turned off). */
+    private record TimerChange(PickTimer timer, Instant at, String by) {}
+
+    private record Loaded(DraftConfig config, List<Slot> slots, List<LogRow> log, List<Pause> pauses, TimerChange timerChange,
+                          Instant startedAt, String startedBy, Instant completedAt) {
         boolean completed() { return completedAt != null; }
+
+        /** The timer in force: the latest change during the draft, else the one recorded at the start. */
+        PickTimer timer() { return timerChange != null ? timerChange.timer() : config.draft().pickTimer(); }
 
         /** The rows still in effect: not undos, and not undone. */
         List<LogRow> effective() {
@@ -565,11 +598,13 @@ public class DraftService {
 
         /**
          * Where the timer of the pick on the clock counts from: the last row of the log (undos
-         * included), or the start. A make-up doesn't move the clock but restarts the timer, like any
-         * pick; after an undo, whoever is on the clock gets a fresh timer.
+         * included), or the start, or a later timer change. A make-up doesn't move the clock but
+         * restarts the timer, like any pick; after an undo or a timer change, whoever is on the clock
+         * gets a fresh timer.
          */
         Instant onClockSince() {
-            return log.isEmpty() ? startedAt : log.getLast().madeAt();
+            Instant lastRow = log.isEmpty() ? startedAt : log.getLast().madeAt();
+            return timerChange != null && timerChange.at().isAfter(lastRow) ? timerChange.at() : lastRow;
         }
 
         /** The commissioner pause that's on, if any. */
@@ -635,8 +670,16 @@ public class DraftService {
                 .query((rs, n) -> new Pause(rs.getTimestamp(1).toInstant(),
                         rs.getTimestamp(2) == null ? null : rs.getTimestamp(2).toInstant(), rs.getString(3)))
                 .list();
+        TimerChange timerChange = jdbc.sql("""
+                        select t.pick_timer::text, t.changed_at, u.display_name from draft_timer_change t
+                        join app_user u on u.id = t.changed_by
+                        where t.season_id = :s order by t.changed_at desc, t.id desc limit 1""")
+                .param("s", season.getId())
+                .query((rs, n) -> new TimerChange(rs.getString(1) == null ? null : json.readValue(rs.getString(1), PickTimer.class),
+                        rs.getTimestamp(2).toInstant(), rs.getString(3)))
+                .optional().orElse(null);
         Object[] r = row.get();
-        return Optional.of(new Loaded(config, slots(config), log, pauses, (Instant) r[1], (String) r[2], (Instant) r[3]));
+        return Optional.of(new Loaded(config, slots(config), log, pauses, timerChange, (Instant) r[1], (String) r[2], (Instant) r[3]));
     }
 
     /** Takes the per-season lock on a draft that's running: every change to the log goes through here first. */
@@ -689,7 +732,7 @@ public class DraftService {
                     draft.scheduledStart(), draft.forbiddenDraftable(), draft.pickTimer(), draft.roundCount(), draft.picksPerPlayer(),
                     draft.picksPerPlayer() * seated.size(), draftable, draftable,
                     seated.stream().map(p -> new SeatView(p.getSeat(), p.getMember().getDisplayName(), p.getTeamName())).toList(),
-                    board, 0, null, null, false, false, null, null, null, false, List.of(), List.of(), mySeat, away, false,
+                    board, 0, null, null, false, false, null, null, null, false, null, null, List.of(), List.of(), mySeat, away, false,
                     readiness(season), null, null, null, now);
         }
 
@@ -719,7 +762,7 @@ public class DraftService {
         if (clock != null) {
             Slot s = clock.slot();
             clockView = new ClockView(s.overallPick(), s.round(), s.seat(), nameAt.apply(s.seat()), clock.pickInTurn(), clock.picksInTurn());
-            PickTimer timer = draft.pickTimer();
+            PickTimer timer = d.timer();
             if (timer != null) {
                 deadline = deadline(d, timer, zone(season));
                 paused = PickClock.paused(now, zone(season), timer.pauseFrom(), timer.pauseTo());
@@ -739,10 +782,11 @@ public class DraftService {
         }
         return new DraftView(d.completed() ? DraftStatus.COMPLETE : DraftStatus.IN_PROGRESS, canManage,
                 season.getLeague().getTimeZone(), draft.order(), draft.rounds(), draft.scheduledStart(), draft.forbiddenDraftable(),
-                draft.pickTimer(), draft.roundCount(), draft.picksPerPlayer(), d.slots().size(), draftableCards(season, draft, false),
+                d.timer(), draft.roundCount(), draft.picksPerPlayer(), d.slots().size(), draftableCards(season, draft, false),
                 draftableCards(season, draft, true), seats, board, d.filled(), clockView, deadline, paused, pause.isPresent(),
                 pause.map(Pause::from).orElse(null), pause.map(Pause::by).orElse(null), undoable,
-                canManage && running && d.effective().isEmpty(), owed, pickable,
+                canManage && running && d.effective().isEmpty(), d.timerChange() == null ? null : d.timerChange().by(),
+                d.timerChange() == null ? null : d.timerChange().at(), owed, pickable,
                 mySeat, away, !pickable.isEmpty(), List.of(), d.startedAt(), d.startedBy(), d.completedAt(), now);
     }
 

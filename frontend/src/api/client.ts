@@ -434,7 +434,9 @@ export interface DraftState {
   heldSince: string | null;
   heldBy: string | null;
   undoable: UndoTarget | null; // what "undo last pick" would reverse (commissioners, while it runs)
-  canUnstart: boolean; // a commissioner can take it back to setup (nothing in the log yet)
+  canUnstart: boolean; // a commissioner can take it back to setup (no pick in effect: none made, or all undone)
+  timerChangedBy: string | null; // who last changed the timer during the draft
+  timerChangedAt: string | null;
   owed: OwedPick[]; // skipped picks not yet made up (everyone's)
   pickable: PickableSlot[]; // slots the viewer may fill now: the one on the clock and/or make-ups
   mySeat: number | null; // the viewer's seat, if they play
