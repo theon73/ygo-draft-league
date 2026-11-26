@@ -8,6 +8,7 @@ import BanListView from "./pages/explore/BanListView";
 import MyLeagues from "./pages/leagues/MyLeagues";
 import LeagueLayout from "./pages/leagues/LeagueLayout";
 import LeagueOverview from "./pages/leagues/LeagueOverview";
+import InvitePage, { PendingInviteRedirect } from "./pages/InvitePage";
 
 const NAV = [
   { to: "/", label: "Home" },
@@ -30,6 +31,7 @@ export default function App() {
         <AccountMenu />
       </header>
       <main>
+        <PendingInviteRedirect />
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/leagues" element={<MyLeagues />} />
@@ -44,6 +46,7 @@ export default function App() {
           <Route path="/explore" element={<Explore />} />
           <Route path="/explore/cards/:id" element={<CardView />} />
           <Route path="/explore/banlists/:id" element={<BanListView />} />
+          <Route path="/invite/:code" element={<InvitePage />} />
           <Route path="*" element={<Placeholder title="Not found" />} />
         </Routes>
       </main>

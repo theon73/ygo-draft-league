@@ -28,3 +28,7 @@ input { padding: 0.35rem 0.5rem; min-width: 16rem; }
 a.button { padding: 0.3rem 0.6rem; border: 1px solid #bbb; border-radius: 4px; background: #fff; color: inherit; text-decoration: none; }
 nav.tabs { margin: 0.5rem 0 1rem; border-bottom: 1px solid #ddd; padding-bottom: 0.4rem; }
 h2 .badge { vertical-align: middle; }
+td.actions { white-space: nowrap; text-align: right; }
+td.actions button + button { margin-left: 0.35rem; }
+input.narrow { min-width: 12rem; }
+h4 { margin: 1.25rem 0 0.25rem; }

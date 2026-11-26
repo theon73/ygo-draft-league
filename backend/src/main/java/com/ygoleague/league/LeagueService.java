@@ -25,10 +25,11 @@ public class LeagueService {
     public record LeagueDetail(String id, String name, LeagueRole myRole, Instant createdAt, List<MemberView> members) {}
 
     /**
+     * @param id          the member's public id (for commissioner actions on them)
      * @param placeholder a seat the commissioner added for someone without an account yet
      * @param you         this member is the caller
      */
-    public record MemberView(String displayName, LeagueRole role, boolean placeholder, boolean you) {}
+    public record MemberView(String id, String displayName, LeagueRole role, boolean placeholder, boolean you) {}
 
     private final LeagueRepository leagues;
     private final LeagueMemberRepository members;
@@ -75,9 +76,14 @@ public class LeagueService {
         LeagueMember me = access.require(publicLeagueId, caller, LeagueRole.VIEWER);
         League league = me.getLeague();
         List<MemberView> roster = members.findByLeagueIdOrderByDisplayName(league.getId()).stream()
-                .map(m -> new MemberView(m.getDisplayName(), m.getRole(), m.isPlaceholder(), m.getId().equals(me.getId())))
+                .map(m -> memberView(m, m.getId().equals(me.getId())))
                 .toList();
         return new LeagueDetail(publicId(league), league.getName(), me.getRole(), league.getCreatedAt(), roster);
+    }
+
+    public MemberView memberView(LeagueMember m, boolean you) {
+        return new MemberView(publicIds.encode(PublicIdType.LEAGUE_MEMBER, m.getId()), m.getDisplayName(), m.getRole(),
+                m.isPlaceholder(), you);
     }
 
     /** Trims and collapses whitespace; rejects blank, over-long and control-character names. */
