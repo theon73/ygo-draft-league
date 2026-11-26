@@ -45,7 +45,7 @@ export default function SeasonLayout() {
   const season = useApi<SeasonDetail>(`/leagues/${league.id}/seasons/${encodeURIComponent(seasonId)}`);
   const onDraftTab = useMatch("/leagues/:leagueId/seasons/:seasonId/draft") !== null;
   const { draftVersion, draftLive } = useLiveDraft(league.id, season.data, onDraftTab, season.reload, reloadLeague);
-  const myTurn = !!draftLive && draftLive.status === "IN_PROGRESS" && draftLive.onTheClockSeat !== null
+  const myTurn = !!draftLive && draftLive.status === "IN_PROGRESS" && !draftLive.paused && draftLive.onTheClockSeat !== null
     && season.data?.participants.find((p) => p.you)?.seat === draftLive.onTheClockSeat;
   useTitlePrefix(myTurn ? "Your pick · " : "");
 

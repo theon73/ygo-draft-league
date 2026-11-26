@@ -93,4 +93,28 @@ public class DraftController {
                           @AuthenticationPrincipal CurrentUser user) {
         return drafts.setAway(leagueId, seasonId, body, user);
     }
+
+    // Commissioner controls (YGO-19)
+
+    @PostMapping("/pause")
+    public DraftView pause(@PathVariable String leagueId, @PathVariable String seasonId, @AuthenticationPrincipal CurrentUser user) {
+        return drafts.pause(leagueId, seasonId, user);
+    }
+
+    @PostMapping("/resume")
+    public DraftView resume(@PathVariable String leagueId, @PathVariable String seasonId, @AuthenticationPrincipal CurrentUser user) {
+        return drafts.resume(leagueId, seasonId, user);
+    }
+
+    /** Undoes the latest pick still in effect (repeatable). */
+    @PostMapping("/undo")
+    public DraftView undo(@PathVariable String leagueId, @PathVariable String seasonId, @AuthenticationPrincipal CurrentUser user) {
+        return drafts.undo(leagueId, seasonId, user);
+    }
+
+    /** Takes a draft with no picks back to setup. */
+    @PostMapping("/unstart")
+    public DraftView unstart(@PathVariable String leagueId, @PathVariable String seasonId, @AuthenticationPrincipal CurrentUser user) {
+        return drafts.unstart(leagueId, seasonId, user);
+    }
 }

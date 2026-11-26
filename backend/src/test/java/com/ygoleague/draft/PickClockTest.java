@@ -2,6 +2,7 @@ package com.ygoleague.draft;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -10,6 +11,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class PickClockTest {
@@ -62,6 +64,39 @@ class PickClockTest {
         assertTrue(PickClock.paused(at("2030-01-07T23:00"), CHICAGO, NIGHT, MORNING));
         assertFalse(PickClock.paused(at("2030-01-08T08:00"), CHICAGO, NIGHT, MORNING));
         assertFalse(PickClock.paused(at("2030-01-08T03:00"), CHICAGO, null, null));
+    }
+
+    @Test
+    void aHoldStopsTheClockAndGivesBackWhatWasLeft() {
+        // 10 minutes from 20:00; 4 used, held 20:04-20:30, 6 left after: 20:36.
+        var hold = new PickClock.Hold(at("2030-01-07T20:04"), at("2030-01-07T20:30"));
+        assertEquals(at("2030-01-07T20:36"), PickClock.deadline(at("2030-01-07T20:00"), Duration.ofMinutes(10), CHICAGO, null, null, List.of(hold)));
+        // While it's on there's no deadline.
+        var open = new PickClock.Hold(at("2030-01-07T20:04"), null);
+        assertNull(PickClock.deadline(at("2030-01-07T20:00"), Duration.ofMinutes(10), CHICAGO, null, null, List.of(open)));
+    }
+
+    @Test
+    void holdsBeforeThePickOrAfterTheDeadlineDontCount() {
+        var before = new PickClock.Hold(at("2030-01-07T19:00"), at("2030-01-07T19:30"));
+        var after = new PickClock.Hold(at("2030-01-07T21:00"), null);
+        assertEquals(at("2030-01-07T20:10"),
+                PickClock.deadline(at("2030-01-07T20:00"), Duration.ofMinutes(10), CHICAGO, null, null, List.of(before, after)));
+    }
+
+    @Test
+    void aPickThatComesUpDuringAHoldStartsWhenItEnds() {
+        // An undo made while paused: its fresh timer starts at the resume.
+        var hold = new PickClock.Hold(at("2030-01-07T20:00"), at("2030-01-07T20:20"));
+        assertEquals(at("2030-01-07T20:25"), PickClock.deadline(at("2030-01-07T20:05"), Duration.ofMinutes(5), CHICAGO, null, null, List.of(hold)));
+    }
+
+    @Test
+    void holdsAndTheOvernightPauseTogether() {
+        // 2 hours from 21:00: 1 used by the 22:00 hold, which ends at 23:30 (inside the overnight pause),
+        // so the second hour runs from 08:00.
+        var hold = new PickClock.Hold(at("2030-01-07T22:00"), at("2030-01-07T23:30"));
+        assertEquals(at("2030-01-08T09:00"), PickClock.deadline(at("2030-01-07T21:00"), Duration.ofHours(2), CHICAGO, NIGHT, MORNING, List.of(hold)));
     }
 
     @Test

@@ -30,6 +30,7 @@ Realistically Theo will be one of the few users, and our league is the main real
 | Competition | **Round-robin + playoffs**, **Swiss**, **weekly H2H schedule** (fantasy-style), **ad hoc / ladder** | Round-robin + playoffs |
 | Players without accounts | **Placeholders allowed**: the owner can add named members, and a user claims the spot later through an invite | ✓ (lets a commissioner set up the season and draft order before everyone signs up) |
 | Rule changes | **Versioned.** Mid-season changes (ban list update, new soft ban) take effect from a given week. Past transactions and results are judged by the rules in effect at that time. | ✓ |
+| Playoffs (noted 2026-11-26) | **Configurable per season, including none.** Top N qualify; **single- or double-elimination** bracket; optional **byes** for top seeds and an **NBA-style play-in** for the last spots; **best-of can differ** between the regular season and the playoffs (and per playoff round). See the settings catalog. | Our league's: byes for seeds 1 to 2 plus a play-in for seeds 5 to 8, single elimination |
 | Free agency | **First-come claims** with configurable limits. No waivers or FAAB bidding. | ✓ |
 | Trade assets | Cards, plus **transaction allowances** (e.g. "a card + one of my FA claims this week", so the receiver gets an extra FA move this week and the sender loses one). Legitimizes what our league already does informally. | Nice-to-have |
 | Decks (decided 2026-11-25) | **Out of scope.** Deck building, deck lists and duels happen on **Dueling Nexus**; this app is the league's organizer (membership, pool, draft, rosters, transactions, schedule, results, standings). Optional, stateless bridges later: export a roster for Dueling Nexus, and paste a deck to check it against the roster and rules. No stored decks or deck names. | None |
@@ -139,7 +140,7 @@ AuditEvent (everything, append-only)
 - **DraftEvent**: common fields `sequence`, `seasonPlayerId`, `poolCardId`, `at`, `actedBy` (for commissioner overrides). Type-specific fields: snake → `round`, `pickInRound`, `seat`; auction → `nominatedBy`, `price`; pack → `packId`, `pickInPack`.
 - **Transaction**: `type`, `week`, `initiator`, `counterparty?`, `status` (proposed → accepted/rejected/vetoed → executed), lines of gave/received. Each line is an asset: a pool card (with quantity) or a transaction allowance (e.g. 1 FA claim this week). A counteroffer is a new trade proposal with `counterOf` pointing at the one it answers (status *countered*). **TradeComment**: (trade, author, text, at). **TradeListing** (trading block): (season player, cards offered, what they'd like, note, status open/closed); offers on it are trade proposals with `listingId` set. **Visibility (decided 2026-11-25, following fantasy-site convention):** trade proposals, counteroffers and their comments are private to the players involved and the season's commissioners; trading block listings and the offers and comments on them are public to the league. Completed trades show up in the league's transaction feed.
 - **Match / Game**: week, players, seeds, games won, winner, replay links; reported by one player and confirmed by the other.
-- **Stage / Match / Game**: a season has one or more stages (regular season, playoffs), each with a format. Matches are generic so that round-robin, Swiss, H2H weeks and ladder all fit.
+- **Stage / Match / Game**: a season has one or more stages (regular season, play-in, playoffs), each with a format and its own best-of. Matches are generic so that round-robin, Swiss, H2H weeks, ladder and bracket rounds all fit; a bracket match can name its participants by rule ("winner of match 3", "loser of the 7 v 8 game") until they're known, which single and double elimination and play-ins all need.
 
 **Card catalog (built in YGO-3, 2026-11-25).**
 - **Scope:** TCG only. Cards with no TCG date (OCG-only, ~500) and Speed Duel Skill Cards are skipped. Tokens are kept, and pool building can filter them. YGOPRODeck occasionally omits the TCG date of a real TCG card (found: Change of Heart). If such a card has TCG prints, its date falls back to its earliest dated set, which is approximate but keeps the card.
@@ -265,7 +266,7 @@ playoffs:
 | Start time | planned start (in the league time zone), shown to the league; a commissioner starts the draft (automatic start later, if wanted) | Season | ✓ YGO-15 |
 | Forbidden cards draftable | whether cards Forbidden on the season's ban list can be drafted (off by default in exclusive ownership) | Season | ✓ YGO-15 |
 | Pick timer | none, or 15 s to 7 days per pick; on expiry: wait, skip (made up later), or auto-pick from the player's queue (skip if none); optional overnight pause window in the league's zone | Season | ✓ YGO-18 |
-| Commissioner controls | pause, undo, pick on someone's behalf | Season | pick on someone's behalf ✓ YGO-16; pause and undo v1, YGO-19 |
+| Commissioner controls | pause, undo, pick on someone's behalf, undo the start | Season | ✓ YGO-16 (on someone's behalf), YGO-19 (the rest) |
 | Auction settings | budget, minimum bid, nomination order, bid timer | Season | later |
 | Pack settings | source (sets / cube), packs per player, cards per pack, pass direction, rarity odds | Season | later |
 | Mock drafts | allowed or not | League | later |
@@ -299,7 +300,7 @@ playoffs:
 |---|---|---|---|
 | Competition format | round-robin (each pair meets N times; weeks derived), Swiss (N rounds), weekly H2H, ladder | Season | ✓ round-robin (YGO-12); others later |
 | Rounds per week | how many round-robin rounds are played each week (fixed at 1 for now) | Season | later |
-| Best-of | per match (e.g. Bo3); can differ for playoffs | Season | v1, Phase 4 |
+| Best-of | per regular-season match (e.g. Bo3); the playoffs set their own (see *Playoffs*) | Season | v1, Phase 4 |
 | Draws | allowed or not; points per win / draw / loss | Season | later |
 | Reporting | one player reports and the other confirms; auto-confirm after N hours; commissioner-only | Season | v1 report + confirm, Phase 4 |
 | Replay links | required or optional | Season | later |
@@ -312,10 +313,13 @@ playoffs:
 
 | Setting | Options | Scope | Status / built with |
 |---|---|---|---|
-| Enabled, qualifiers | on/off; number of seeds | Season | v1, Phase 4 |
-| Bracket | byes, play-ins, round pairings (see the RulesConfig example) | Season | v1, Phase 4 |
-| Best-of per round | e.g. Bo3, finals Bo5 | Season | later |
-| Third-place match | on/off | Season | later |
+| Enabled, qualifiers | none (the regular season decides it), or the top N in the standings | Season | v1, Phase 4 |
+| Bracket type | single elimination or double elimination (winners' and losers' brackets; whether the grand final has a bracket reset) | Season | single elimination v1, Phase 4; double later |
+| Seeding | by final standings (with the season's tiebreakers); fixed bracket or reseed after each round | Season | fixed v1; reseeding later |
+| Byes | top seeds skip the first round | Season | v1, Phase 4 |
+| Play-in | NBA-style: a mini-bracket for the last qualifying spots (e.g. 7 v 8, winner is the 7 seed; loser plays the 9 v 10 winner for the 8 seed). Our league's version is in the RulesConfig example | Season | v1, Phase 4 |
+| Best-of | for the playoffs as a whole (e.g. Bo3 when the regular season is Bo1), overridable per round (e.g. finals Bo5) and for the play-in | Season | playoffs-wide v1, Phase 4; per round later |
+| Third-place match | on/off (single elimination) | Season | later |
 
 Not league settings: site admins and the catalog sync (platform level, YGO-6), draft queues (always private), and the card game (TCG only).
 
@@ -474,7 +478,13 @@ Casual modes that run on their own, without a league, or inside one without coun
   - **Pick log (V14):** new row kinds `AUTO` (from the queue; no `made_by`) and `SKIP` (no card); `makeup` marks a row filling an earlier skip (at most one per slot); a check constraint keeps each kind's shape. `card_holding` counts `PICK` and `AUTO`. `draft_queue` (player, card, position) and `season_player.draft_away` hold the queue and away mode: preferences, edited in place rather than logged.
   - **Timer:** a `pickTimer` (seconds, on expiry, optional pause from/to) in the draft rules, frozen into the config at the start. The deadline is counted from the last row of the pick log (a pick, auto-pick, skip or make-up) or the start, skipping the daily pause (`PickClock`, Spring-free; wraps midnight, follows the wall clock across daylight saving). `DraftTimer` ticks every 5 s (`app.draft.timer.*`) and applies expiry per draft in its own transaction under the per-season lock, so a pick can run over by up to one tick; with several backend instances each would tick, and the lock and deadline check keep that safe.
   - API: `GET/PUT/POST …/draft/queue` (the caller's own; PUT replaces the order), `PUT …/draft/away`; the draft view gains the timer, deadline, pause state, skipped picks owed and the slots the caller may fill. Frontend: timer settings, a countdown (corrected by the server's clock), "skipped" / "auto" / "made up" on the board, a "Picking for" choice when there's a make-up, Queue buttons on the cards (before the draft too) and a queue panel with reordering and the away switch.
-- **YGO-19:** commissioner controls: pause and resume, undo the last pick (as its own event), undo starting while no picks are made. (Picking on someone's behalf came with YGO-16.)
+- **YGO-19 (done):** commissioner controls.
+  - **Undo** appends an `UNDO` row pointing at the latest row still in effect (pick, auto-pick, skip or make-up); repeat to walk further back. Nothing is deleted: everything that reads the log (the board, the clock, `card_holding`, owed picks) skips undone rows. The card is available again; an undone make-up is owed again. Allowed while paused; not once the draft is complete (the season is active by then).
+  - **Undo and the timer (decided 2026-11-26):** whoever is on the clock after an undo gets a **fresh full timer** from the undo, because the timer counts from the last row of the log, undos included. Giving back the time they had left can't work after a timer skip or auto-pick (they had none, so it would expire again at once). **Undoing an auto-pick turns that player's away mode off**, or it would pick the same card again. An undo never triggers auto-picks itself. An undo made while paused starts its fresh timer at the resume.
+  - **Pause** (`draft_pause`, V15, kept as history: who, when, how long): no picks, no timer expiry, no away auto-picks. On resume the player gets exactly the time they had left: the pauses are holds that `PickClock` leaves out, on top of the overnight pause. Resuming re-runs away mode for whoever is up.
+  - **Back to setup** while no pick is in effect (none made, or all undone): the draft is discarded with its log and pauses (the one case where pick-log rows are deleted: a draft taken back to setup never happened), the season returns to setup, and the calendar goes back to how it was before the start (recorded in the draft config from now on).
+  - **A completed draft is locked (decided 2026-11-26):** once the last pick is made, the picks are final and frozen for the record (and become rosters in Phase 4). Picks, make-ups, undo, pause and back to setup are all refused.
+  - `POST …/draft/pause`, `/resume`, `/undo`, `/unstart`. The live event gains `paused`, and the "you're on the clock" alert is quiet while paused. Frontend: a commissioner bar (pause/resume, undo showing what it will reverse, back to setup) and a paused banner for everyone.
 - **YGO-20:** Discord webhook notifications (on the clock, picks).
 - Later: mock draft mode; auction and pack drafts (Phase 6); the casual game modes.
 

@@ -69,6 +69,10 @@ import tools.jackson.databind.ObjectMapper;
  *       Make-ups don't move the clock, but they restart the timer of the pick on it.
  *   <li>The last slot completes the draft (skipped picks still owed are forfeited): the final board is frozen into {@code draft.result}
  *       and the season becomes active.
+ *   <li>Commissioners can pause and resume, undo the latest pick (as its own row; repeatable), and
+ *       take a draft with no picks in effect back to setup (YGO-19). Once the draft is complete
+ *       nothing changes: picks, make-ups, undos, pauses and going back are all refused. See {@link #undo} for how undo and the
+ *       timer interact.
  *   <li>Any member can see the draft and follow it live ({@link DraftEvents}); the season's
  *       commissioners change and start it. Starting and every pick are announced to open streams.
  * </ul>
@@ -101,8 +105,12 @@ public class DraftService {
 
     public record AwayRequest(Boolean away) {}
 
-    /** What {@code draft.config} holds: the settings and seat order as they were at the start. */
-    record DraftConfig(DraftRules draft, List<ConfigSeat> seats) {}
+    /**
+     * What {@code draft.config} holds: the settings and seat order as they were at the start, and the
+     * calendar just before the start locked it (to restore if the start is undone; null in drafts
+     * started before YGO-19).
+     */
+    record DraftConfig(DraftRules draft, List<ConfigSeat> seats, SeasonRulesDocument.CalendarRules calendarBeforeStart) {}
 
     record ConfigSeat(int seat, long memberId, String displayName) {}
 
@@ -133,6 +141,14 @@ public class DraftService {
     /** A slot the caller may fill now: the one on the clock, or a skipped one to make up. */
     public record PickableSlot(int overallPick, int round, int seat, String displayName, boolean makeup) {}
 
+    /**
+     * What "undo last pick" would reverse.
+     *
+     * @param card   the card picked, or null for a skip
+     * @param kind   PICK, AUTO or SKIP
+     */
+    public record UndoView(int overallPick, int seat, String displayName, String card, String kind, boolean makeup) {}
+
     /** A skipped pick not yet made up. */
     public record OwedPick(int overallPick, int round, int seat, String displayName) {}
 
@@ -149,6 +165,9 @@ public class DraftService {
      * @param onTheClock       the slot up next, while the draft is in progress
      * @param deadline         when the pick on the clock runs out (with a timer)
      * @param paused           the timer is in its overnight pause right now
+     * @param held             a commissioner has paused the draft (heldSince, heldBy: when and who)
+     * @param undoable         what "undo last pick" would reverse (commissioners, while it runs), or null
+     * @param canUnstart       a commissioner can still take the draft back to setup (no pick in effect)
      * @param owed             skipped picks not yet made up, everyone's
      * @param pickable         slots the caller may fill now
      * @param mySeat           the caller's seat, if they play this season
@@ -159,7 +178,8 @@ public class DraftService {
     public record DraftView(DraftStatus status, boolean canManage, String timeZone, DraftOrder order, List<RoundBlock> rounds,
                             Instant scheduledStart, boolean forbiddenDraftable, PickTimer timer, int roundCount, int picksPerPlayer,
                             int totalPicks, long draftableCards, long availableCards, List<SeatView> seats, List<SlotView> board,
-                            int picksMade, ClockView onTheClock, Instant deadline, boolean paused, List<OwedPick> owed,
+                            int picksMade, ClockView onTheClock, Instant deadline, boolean paused, boolean held,
+                            Instant heldSince, String heldBy, UndoView undoable, boolean canUnstart, List<OwedPick> owed,
                             List<PickableSlot> pickable, Integer mySeat, Boolean away, boolean canPick,
                             List<Check> readiness, Instant startedAt, String startedBy, Instant completedAt, Instant serverTime) {}
 
@@ -226,10 +246,11 @@ public class DraftService {
         List<ConfigSeat> seats = seated(season).stream()
                 .map(p -> new ConfigSeat(p.getSeat(), p.getMember().getId(), p.getMember().getDisplayName()))
                 .toList();
+        var calendarBefore = rules.latest(season).calendar();
         rules.lockCalendarForStart(season, caller);
         jdbc.sql("insert into draft (season_id, type, config, started_by) values (:s, :t, cast(:c as jsonb), :u)")
                 .param("s", season.getId()).param("t", draft.type().name())
-                .param("c", json.writeValueAsString(new DraftConfig(draft, seats))).param("u", caller.userId()).update();
+                .param("c", json.writeValueAsString(new DraftConfig(draft, seats, calendarBefore))).param("u", caller.userId()).update();
         season.setStatus(SeasonStatus.DRAFTING);
         // Whoever is up first may be away already.
         advance(season);
@@ -249,6 +270,7 @@ public class DraftService {
         Season season = ref.season();
         if (req == null || req.cardId() == null) throw bad("Choose a card to draft");
         Loaded d = lockOpen(season);
+        if (d.pausedNow().isPresent()) throw conflict("The draft is paused");
 
         OnTheClock clock = d.clock();
         Slot target;
@@ -298,6 +320,81 @@ public class DraftService {
         return queue.get(leagueId, seasonId, caller);
     }
 
+    // ---- Commissioner controls (YGO-19) --------------------------------------------------------
+
+    /** Pauses the draft: no picks, no timer, no away auto-picks until it resumes. */
+    @Transactional
+    public DraftView pause(String leagueId, String seasonId, CurrentUser caller) {
+        Season season = access.commissioner(leagueId, seasonId, caller).season();
+        Loaded d = lockOpen(season);
+        if (d.pausedNow().isPresent()) throw conflict("The draft is already paused");
+        jdbc.sql("insert into draft_pause (season_id, paused_by) values (:s, :u)").param("s", season.getId()).param("u", caller.userId()).update();
+        events.publish(season.getId(), changeOf(season));
+        return view(season, true, caller);
+    }
+
+    /** Resumes the draft. Whoever is on the clock gets the time they had left (or a fresh timer after an undo). */
+    @Transactional
+    public DraftView resume(String leagueId, String seasonId, CurrentUser caller) {
+        Season season = access.commissioner(leagueId, seasonId, caller).season();
+        Loaded d = lockOpen(season);
+        if (d.pausedNow().isEmpty()) throw conflict("The draft isn't paused");
+        jdbc.sql("update draft_pause set resumed_at = now(), resumed_by = :u where season_id = :s and resumed_at is null")
+                .param("s", season.getId()).param("u", caller.userId()).update();
+        advance(season);   // whoever is up may be away
+        events.publish(season.getId(), changeOf(season));
+        return view(season, true, caller);
+    }
+
+    /**
+     * Undoes the latest row still in effect (a pick, auto-pick, skip or make-up) by appending an UNDO
+     * row; repeat to go further back. Allowed while paused, not once the draft is complete.
+     *
+     * <ul>
+     *   <li>The undone card is available again; an undone make-up is owed again.
+     *   <li>Whoever is then on the clock gets a fresh full timer from the undo (from the resume, if
+     *       paused). Giving back the time they had left wouldn't work after a timer skip or auto-pick:
+     *       they had none, and it would expire again at once.
+     *   <li>Undoing an auto-pick turns that player's away mode off, or it would pick the same card again.
+     *   <li>An undo never triggers auto-picks itself; away mode picks up again when the clock next moves.
+     * </ul>
+     */
+    @Transactional
+    public DraftView undo(String leagueId, String seasonId, CurrentUser caller) {
+        Season season = access.commissioner(leagueId, seasonId, caller).season();
+        Loaded d = lockOpen(season);
+        LogRow last = d.lastEffective().orElseThrow(() -> conflict("There's no pick to undo"));
+        jdbc.sql("""
+                        insert into draft_pick (season_id, sequence, kind, overall_pick, season_player_id, made_by, undoes)
+                        values (:s, (select coalesce(max(sequence), 0) + 1 from draft_pick where season_id = :s),
+                                'UNDO', :pick, :player, :by, :undoes)""")
+                .param("s", season.getId()).param("pick", last.overallPick()).param("player", last.seasonPlayerId())
+                .param("by", caller.userId()).param("undoes", last.sequence()).update();
+        if (last.kind().equals("AUTO")) setAwayFlag(last.seasonPlayerId(), false);
+        events.publish(season.getId(), changeOf(season));
+        return view(season, true, caller);
+    }
+
+    /**
+     * Takes a started draft back to setup while no pick is in effect (none made, or all undone). The
+     * draft is discarded with its log and pauses: the one time pick-log rows are deleted, since a
+     * draft that goes back to setup never happened. The calendar is unlocked (as it was before the
+     * start) and players, seats and the pool can change again. Queues and away settings are kept.
+     */
+    @Transactional
+    public DraftView unstart(String leagueId, String seasonId, CurrentUser caller) {
+        Season season = access.commissioner(leagueId, seasonId, caller).season();
+        Loaded d = lockOpen(season);
+        if (!d.effective().isEmpty()) throw conflict("Picks have been made; undo them all first to go back to setup");
+        jdbc.sql("delete from draft_pick where season_id = :s").param("s", season.getId()).update();
+        jdbc.sql("delete from draft_pause where season_id = :s").param("s", season.getId()).update();
+        jdbc.sql("delete from draft where season_id = :s").param("s", season.getId()).update();
+        rules.unlockCalendarAfterUnstart(season, d.config().calendarBeforeStart(), d.startedAt(), caller);
+        season.setStatus(SeasonStatus.SETUP);
+        events.publish(season.getId(), changeOf(season));
+        return view(season, true, caller);
+    }
+
     /**
      * Applies the timer to every draft whose pick on the clock has run out (called by
      * {@link DraftTimer}). Each draft is handled in its own transaction, so one failing doesn't stop
@@ -326,7 +423,8 @@ public class DraftService {
         PickTimer timer = d.config().draft().pickTimer();
         OnTheClock clock = d.clock();
         if (timer == null || clock == null || timer.onExpiry() == TimerExpiry.WAIT) return;
-        if (now.isBefore(deadline(d, timer, zone(season)))) return;
+        Instant deadline = deadline(d, timer, zone(season));
+        if (deadline == null || now.isBefore(deadline)) return;   // paused, or not due
 
         SeasonPlayer player = playerAt(season, d.config(), clock.slot().seat());
         Optional<Long> card = timer.onExpiry() == TimerExpiry.AUTO_PICK
@@ -338,8 +436,8 @@ public class DraftService {
     }
 
     /**
-     * After the clock moves: completes the draft if every slot is filled, else auto-picks for
-     * whoever is up while they're away (and their queue has something; if not, away turns off and
+     * After the clock moves (or the draft resumes): completes the draft if every slot is filled, else
+     * (unless paused) auto-picks for whoever is up while they're away (and their queue has something; if not, away turns off and
      * they're on the clock as usual). Returns whether it picked anything.
      */
     private boolean advance(Season season) {
@@ -350,6 +448,7 @@ public class DraftService {
                 complete(season, d);
                 return picked;
             }
+            if (d.pausedNow().isPresent()) return picked;   // away mode waits for the resume
             Slot slot = d.clock().slot();
             SeasonPlayer player = playerAt(season, d.config(), slot.seat());
             boolean away = jdbc.sql("select draft_away from season_player where id = :p").param("p", player.getId())
@@ -439,35 +538,59 @@ public class DraftService {
     // ---- The draft as loaded ------------------------------------------------------------------
 
     /** One row of the pick log, in order, with its card (if any) and who made it (if anyone). */
-    private record LogRow(String kind, int overallPick, boolean makeup, long seasonPlayerId, Long cardId, String cardName,
-                          long passcode, Long madeById, String madeBy, Long seatUserId, Instant madeAt) {}
+    private record LogRow(int sequence, String kind, int overallPick, boolean makeup, Integer undoes, long seasonPlayerId,
+                          Long cardId, String cardName, long passcode, Long madeById, String madeBy, Long seatUserId, Instant madeAt) {}
 
-    /** A started draft: its frozen config, its slots and the whole pick log. */
-    private record Loaded(DraftConfig config, List<Slot> slots, List<LogRow> log, Instant startedAt, String startedBy,
-                          Instant completedAt) {
+    /** A commissioner pause, with who started it. */
+    private record Pause(Instant from, Instant to, String by) {}
+
+    /**
+     * A started draft: its frozen config, its slots, the whole pick log and its pauses. Rows an UNDO
+     * points at (and the UNDO rows themselves) are kept in {@code log} but out of {@link #effective()}.
+     */
+    private record Loaded(DraftConfig config, List<Slot> slots, List<LogRow> log, List<Pause> pauses, Instant startedAt,
+                          String startedBy, Instant completedAt) {
         boolean completed() { return completedAt != null; }
 
-        /** Slots the clock has moved past: every row except make-ups. */
-        int filled() { return (int) log.stream().filter(r -> !r.makeup()).count(); }
+        /** The rows still in effect: not undos, and not undone. */
+        List<LogRow> effective() {
+            java.util.Set<Integer> undone = log.stream().map(LogRow::undoes).filter(Objects::nonNull).collect(Collectors.toSet());
+            return log.stream().filter(r -> !r.kind().equals("UNDO") && !undone.contains(r.sequence())).toList();
+        }
+
+        /** Slots the clock has moved past: every effective row except make-ups. */
+        int filled() { return (int) effective().stream().filter(r -> !r.makeup()).count(); }
 
         OnTheClock clock() { return completed() ? null : DraftProgress.onTheClock(slots, filled()); }
 
         /**
-         * Where the timer of the pick on the clock counts from: the last row of the log, or the start.
-         * A make-up doesn't move the clock, but it restarts the timer like any other pick.
+         * Where the timer of the pick on the clock counts from: the last row of the log (undos
+         * included), or the start. A make-up doesn't move the clock but restarts the timer, like any
+         * pick; after an undo, whoever is on the clock gets a fresh timer.
          */
         Instant onClockSince() {
             return log.isEmpty() ? startedAt : log.getLast().madeAt();
         }
 
+        /** The commissioner pause that's on, if any. */
+        Optional<Pause> pausedNow() { return pauses.stream().filter(p -> p.to() == null).findFirst(); }
+
+        List<PickClock.Hold> holds() { return pauses.stream().map(p -> new PickClock.Hold(p.from(), p.to())).toList(); }
+
         java.util.Set<Integer> skippedSlots() {
-            return log.stream().filter(r -> r.kind().equals("SKIP")).map(LogRow::overallPick).collect(Collectors.toSet());
+            return effective().stream().filter(r -> r.kind().equals("SKIP")).map(LogRow::overallPick).collect(Collectors.toSet());
         }
 
         /** The card picked for each slot (on the clock or as a make-up). */
         Map<Integer, LogRow> pickedBySlot() {
-            return log.stream().filter(r -> r.cardId() != null)
+            return effective().stream().filter(r -> r.cardId() != null)
                     .collect(Collectors.toMap(LogRow::overallPick, Function.identity(), (a, b) -> b));
+        }
+
+        /** The row an undo would reverse: the latest still in effect. */
+        Optional<LogRow> lastEffective() {
+            List<LogRow> e = effective();
+            return e.isEmpty() ? Optional.empty() : Optional.of(e.getLast());
         }
 
         /** Skipped slots not yet made up, in order. Nothing is owed once the draft is over. */
@@ -491,8 +614,8 @@ public class DraftService {
         if (row.isEmpty()) return Optional.empty();
         DraftConfig config = json.readValue((String) row.get()[0], DraftConfig.class);
         List<LogRow> log = jdbc.sql("""
-                        select dp.kind, dp.overall_pick, dp.makeup, dp.season_player_id, c.id, c.name, c.passcodes[1],
-                               dp.made_by, u.display_name, m.user_id, dp.made_at
+                        select dp.sequence, dp.kind, dp.overall_pick, dp.makeup, dp.undoes, dp.season_player_id, c.id, c.name,
+                               c.passcodes[1], dp.made_by, u.display_name, m.user_id, dp.made_at
                         from draft_pick dp
                         left join card c on c.id = dp.card_id
                         left join app_user u on u.id = dp.made_by
@@ -501,12 +624,19 @@ public class DraftService {
                         where dp.season_id = :s
                         order by dp.sequence""")
                 .param("s", season.getId())
-                .query((rs, n) -> new LogRow(rs.getString(1), rs.getInt(2), rs.getBoolean(3), rs.getLong(4), (Long) rs.getObject(5),
-                        rs.getString(6), rs.getLong(7), (Long) rs.getObject(8), rs.getString(9), (Long) rs.getObject(10),
-                        rs.getTimestamp(11).toInstant()))
+                .query((rs, n) -> new LogRow(rs.getInt(1), rs.getString(2), rs.getInt(3), rs.getBoolean(4), (Integer) rs.getObject(5),
+                        rs.getLong(6), (Long) rs.getObject(7), rs.getString(8), rs.getLong(9), (Long) rs.getObject(10), rs.getString(11),
+                        (Long) rs.getObject(12), rs.getTimestamp(13).toInstant()))
+                .list();
+        List<Pause> pauses = jdbc.sql("""
+                        select p.paused_at, p.resumed_at, u.display_name from draft_pause p join app_user u on u.id = p.paused_by
+                        where p.season_id = :s order by p.paused_at""")
+                .param("s", season.getId())
+                .query((rs, n) -> new Pause(rs.getTimestamp(1).toInstant(),
+                        rs.getTimestamp(2) == null ? null : rs.getTimestamp(2).toInstant(), rs.getString(3)))
                 .list();
         Object[] r = row.get();
-        return Optional.of(new Loaded(config, slots(config), log, (Instant) r[1], (String) r[2], (Instant) r[3]));
+        return Optional.of(new Loaded(config, slots(config), log, pauses, (Instant) r[1], (String) r[2], (Instant) r[3]));
     }
 
     /** Takes the per-season lock on a draft that's running: every change to the log goes through here first. */
@@ -523,8 +653,10 @@ public class DraftService {
                 .orElseThrow(() -> new IllegalStateException("Seat " + seat + " has no season player"));
     }
 
+    /** When the pick on the clock runs out; null while the draft is paused. */
     private static Instant deadline(Loaded d, PickTimer timer, ZoneId zone) {
-        return PickClock.deadline(d.onClockSince(), Duration.ofSeconds(timer.seconds()), zone, timer.pauseFrom(), timer.pauseTo());
+        return PickClock.deadline(d.onClockSince(), Duration.ofSeconds(timer.seconds()), zone, timer.pauseFrom(), timer.pauseTo(),
+                d.holds());
     }
 
     private static ZoneId zone(Season season) {
@@ -557,7 +689,8 @@ public class DraftService {
                     draft.scheduledStart(), draft.forbiddenDraftable(), draft.pickTimer(), draft.roundCount(), draft.picksPerPlayer(),
                     draft.picksPerPlayer() * seated.size(), draftable, draftable,
                     seated.stream().map(p -> new SeatView(p.getSeat(), p.getMember().getDisplayName(), p.getTeamName())).toList(),
-                    board, 0, null, null, false, List.of(), List.of(), mySeat, away, false, readiness(season), null, null, null, now);
+                    board, 0, null, null, false, false, null, null, null, false, List.of(), List.of(), mySeat, away, false,
+                    readiness(season), null, null, null, now);
         }
 
         // Started: the draft runs from the config recorded at the start, filled in from the pick log.
@@ -594,23 +727,36 @@ public class DraftService {
             if (canManage || Objects.equals(mySeat, s.seat())) pickable.add(new PickableSlot(s.overallPick(), s.round(), s.seat(), nameAt.apply(s.seat()), false));
         }
         List<OwedPick> owed = d.owed().stream().map(s -> new OwedPick(s.overallPick(), s.round(), s.seat(), nameAt.apply(s.seat()))).toList();
+        Optional<Pause> pause = d.pausedNow();
+        boolean running = !d.completed();
+        if (pause.isPresent()) pickable.clear();   // nobody picks while paused
+        UndoView undoable = !canManage || !running ? null : d.lastEffective().map(r -> new UndoView(r.overallPick(),
+                seatFor(d, r.overallPick()), nameAt.apply(seatFor(d, r.overallPick())), r.cardName(), r.kind(), r.makeup())).orElse(null);
         for (OwedPick o : owed) {
-            if (canManage || Objects.equals(mySeat, o.seat())) pickable.add(new PickableSlot(o.overallPick(), o.round(), o.seat(), o.displayName(), true));
+            if (pause.isEmpty() && (canManage || Objects.equals(mySeat, o.seat()))) {
+                pickable.add(new PickableSlot(o.overallPick(), o.round(), o.seat(), o.displayName(), true));
+            }
         }
         return new DraftView(d.completed() ? DraftStatus.COMPLETE : DraftStatus.IN_PROGRESS, canManage,
                 season.getLeague().getTimeZone(), draft.order(), draft.rounds(), draft.scheduledStart(), draft.forbiddenDraftable(),
                 draft.pickTimer(), draft.roundCount(), draft.picksPerPlayer(), d.slots().size(), draftableCards(season, draft, false),
-                draftableCards(season, draft, true), seats, board, d.filled(), clockView, deadline, paused, owed, pickable,
+                draftableCards(season, draft, true), seats, board, d.filled(), clockView, deadline, paused, pause.isPresent(),
+                pause.map(Pause::from).orElse(null), pause.map(Pause::by).orElse(null), undoable,
+                canManage && running && d.effective().isEmpty(), owed, pickable,
                 mySeat, away, !pickable.isEmpty(), List.of(), d.startedAt(), d.startedBy(), d.completedAt(), now);
     }
 
     /** The draft's state as the live stream announces it. */
     private DraftEvents.DraftChanged changeOf(Season season) {
         Optional<Loaded> loaded = load(season, false);
-        if (loaded.isEmpty()) return new DraftEvents.DraftChanged(DraftStatus.NOT_STARTED, 0, null);
+        if (loaded.isEmpty()) return new DraftEvents.DraftChanged(DraftStatus.NOT_STARTED, 0, null, false);
         Loaded d = loaded.get();
-        if (d.completed()) return new DraftEvents.DraftChanged(DraftStatus.COMPLETE, d.filled(), null);
-        return new DraftEvents.DraftChanged(DraftStatus.IN_PROGRESS, d.filled(), d.clock().slot().seat());
+        if (d.completed()) return new DraftEvents.DraftChanged(DraftStatus.COMPLETE, d.filled(), null, false);
+        return new DraftEvents.DraftChanged(DraftStatus.IN_PROGRESS, d.filled(), d.clock().slot().seat(), d.pausedNow().isPresent());
+    }
+
+    private static int seatFor(Loaded d, int overallPick) {
+        return d.slots().get(overallPick - 1).seat();
     }
 
     private static List<Slot> slots(DraftConfig config) {
