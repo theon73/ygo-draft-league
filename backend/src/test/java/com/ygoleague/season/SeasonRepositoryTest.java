@@ -32,7 +32,7 @@ class SeasonRepositoryTest {
     void setUp() {
         theo = em.persist(new AppUser("Theo"));
         league = em.persist(new League("Classic League", theo));
-        member = em.persist(LeagueMember.forUser(league, theo, "Theo", LeagueRole.COMMISSIONER));
+        member = em.persist(LeagueMember.forUser(league, theo, "Theo", LeagueRole.OWNER));
         season = em.persist(new Season(league, "Season 1"));
         em.flush();
     }
@@ -47,7 +47,7 @@ class SeasonRepositoryTest {
         SeasonPlayer a = new SeasonPlayer(season, member);
         a.setSeat(1);
         em.persist(a);
-        SeasonPlayer b = new SeasonPlayer(season, em.persist(LeagueMember.placeholder(league, "Oli", LeagueRole.PLAYER)));
+        SeasonPlayer b = new SeasonPlayer(season, em.persist(LeagueMember.placeholder(league, "Oli", LeagueRole.MEMBER)));
         b.setSeat(1);
         assertThrows(DataIntegrityViolationException.class, () -> seasonPlayers.saveAndFlush(b));
     }
@@ -110,7 +110,7 @@ class SeasonRepositoryTest {
 
     private LeagueMember outsider() {
         League other = em.persist(new League("Other", theo));
-        return em.persistAndFlush(LeagueMember.placeholder(other, "Outsider", LeagueRole.PLAYER));
+        return em.persistAndFlush(LeagueMember.placeholder(other, "Outsider", LeagueRole.MEMBER));
     }
 
     private int inEffect(int week) {

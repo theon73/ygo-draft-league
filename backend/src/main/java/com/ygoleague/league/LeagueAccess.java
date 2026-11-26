@@ -41,8 +41,7 @@ public class LeagueAccess {
                 .flatMap(leagueId -> members.findWithLeague(leagueId, user.userId()))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No such league"));
         if (!membership.getRole().includes(atLeast)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                    "Needs the " + atLeast.name().toLowerCase() + " role in this league");
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only the league owner can do this");
         }
         return membership;
     }

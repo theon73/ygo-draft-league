@@ -60,7 +60,7 @@ class LeagueApiTest {
                         .contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"  Goat   Format \"}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.name").value("Goat Format"))
-                .andExpect(jsonPath("$.myRole").value("COMMISSIONER"))
+                .andExpect(jsonPath("$.myRole").value("OWNER"))
                 .andReturn().getResponse().getContentAsString();
         String id = JsonPath.read(body, "$.id");
 
@@ -70,7 +70,7 @@ class LeagueApiTest {
                 .andExpect(jsonPath("$[0].memberCount").value(1));
         mvc.perform(get("/api/leagues/" + id).with(as(yugi)))
                 .andExpect(jsonPath("$.members[0].displayName").value("Yugi"))
-                .andExpect(jsonPath("$.members[0].role").value("COMMISSIONER"))
+                .andExpect(jsonPath("$.members[0].role").value("OWNER"))
                 .andExpect(jsonPath("$.members[0].you").value(true));
         // Someone else's "My leagues" doesn't include it.
         mvc.perform(get("/api/leagues").with(as(kaiba))).andExpect(jsonPath("$.length()").value(0));
@@ -102,12 +102,12 @@ class LeagueApiTest {
     void membersOfAnyRoleSeeTheOverviewWithPlaceholdersMarked() throws Exception {
         String id = league("Dev League", yugi);
         League league = leagues.findById(publicIds.decode(PublicIdType.LEAGUE, id).orElseThrow()).orElseThrow();
-        members.save(LeagueMember.forUser(league, kaiba, "Kaiba", LeagueRole.VIEWER));
-        members.save(LeagueMember.placeholder(league, "Joey (no account yet)", LeagueRole.PLAYER));
+        members.save(LeagueMember.forUser(league, kaiba, "Kaiba", LeagueRole.MEMBER));
+        members.save(LeagueMember.placeholder(league, "Joey (no account yet)", LeagueRole.MEMBER));
 
         mvc.perform(get("/api/leagues/" + id).with(as(kaiba)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.myRole").value("VIEWER"))
+                .andExpect(jsonPath("$.myRole").value("MEMBER"))
                 .andExpect(jsonPath("$.members.length()").value(3))
                 .andExpect(jsonPath("$.members[?(@.displayName == 'Joey (no account yet)')].placeholder").value(true))
                 .andExpect(jsonPath("$.members[?(@.displayName == 'Kaiba')].you").value(true))

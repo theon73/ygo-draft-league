@@ -18,7 +18,7 @@ class LeagueInviteTest {
 
     @Test
     void openInviteRespectsMaxUses() {
-        LeagueInvite invite = LeagueInvite.open(league, "abc", LeagueRole.PLAYER, 2, null, commish);
+        LeagueInvite invite = LeagueInvite.open(league, "abc", LeagueRole.MEMBER, 2, null, commish);
         invite.markUsed(now);
         invite.markUsed(now);
         assertFalse(invite.isRedeemable(now));
@@ -27,14 +27,14 @@ class LeagueInviteTest {
 
     @Test
     void unlimitedInviteStaysRedeemable() {
-        LeagueInvite invite = LeagueInvite.open(league, "abc", LeagueRole.VIEWER, null, null, commish);
+        LeagueInvite invite = LeagueInvite.open(league, "abc", LeagueRole.MEMBER, null, null, commish);
         for (int i = 0; i < 50; i++) invite.markUsed(now);
         assertTrue(invite.isRedeemable(now));
     }
 
     @Test
     void expiryAndRevocation() {
-        LeagueInvite invite = LeagueInvite.open(league, "abc", LeagueRole.PLAYER, null,
+        LeagueInvite invite = LeagueInvite.open(league, "abc", LeagueRole.MEMBER, null,
                 now.plus(Duration.ofDays(1)), commish);
         assertTrue(invite.isRedeemable(now));
         assertFalse(invite.isRedeemable(now.plus(Duration.ofDays(1))));
@@ -45,19 +45,19 @@ class LeagueInviteTest {
 
     @Test
     void claimInviteIsSingleUseAndRequiresPlaceholder() {
-        LeagueMember placeholder = LeagueMember.placeholder(league, "Kyle", LeagueRole.PLAYER);
+        LeagueMember placeholder = LeagueMember.placeholder(league, "Kyle", LeagueRole.MEMBER);
         LeagueInvite invite = LeagueInvite.claim(placeholder, "xyz", null, commish);
         assertTrue(invite.isClaimInvite());
         invite.markUsed(now);
         assertFalse(invite.isRedeemable(now));
 
-        LeagueMember linked = LeagueMember.forUser(league, commish, "Commish", LeagueRole.COMMISSIONER);
+        LeagueMember linked = LeagueMember.forUser(league, commish, "Commish", LeagueRole.OWNER);
         assertThrows(IllegalArgumentException.class, () -> LeagueInvite.claim(linked, "q", null, commish));
     }
 
     @Test
     void placeholderCanBeClaimedOnce() {
-        LeagueMember placeholder = LeagueMember.placeholder(league, "Kyle", LeagueRole.PLAYER);
+        LeagueMember placeholder = LeagueMember.placeholder(league, "Kyle", LeagueRole.MEMBER);
         placeholder.claim(new AppUser("Kyle"));
         assertFalse(placeholder.isPlaceholder());
         assertThrows(IllegalStateException.class, () -> placeholder.claim(new AppUser("Someone else")));
