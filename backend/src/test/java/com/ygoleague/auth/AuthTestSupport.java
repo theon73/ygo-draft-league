@@ -11,7 +11,7 @@ final class AuthTestSupport {
     private AuthTestSupport() {}
 
     static RequestPostProcessor signedIn(boolean admin) {
-        CurrentUser user = new CurrentUser(1L, "Tester", null, "google", "sub-1", admin, null);
+        CurrentUser user = new CurrentUser(1L, "Tester", null, "google", "sub-1", admin);
         return authentication(new OAuth2AuthenticationToken(user, user.getAuthorities(), "google"));
     }
 }

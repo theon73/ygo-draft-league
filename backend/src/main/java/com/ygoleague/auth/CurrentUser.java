@@ -16,16 +16,20 @@ import org.springframework.security.oauth2.core.oidc.user.OidcUser;
  * and the dev login, so code after login can't tell them apart. Controllers take it with
  * {@code @AuthenticationPrincipal CurrentUser user}.
  *
- * <p>It implements {@link OidcUser} only because Spring's OAuth2 login requires the principal
- * to be one. For a dev login the OIDC parts (id token, claims) are empty.
+ * <p>It holds only our own data: nothing issued by Google (no ID token, access token or claims)
+ * is kept after login. It implements {@link OidcUser} only because Spring's OAuth2 login requires
+ * the principal to be one, so the OIDC accessors return empty values.
+ *
+ * <p>Sessions are stored Java-serialized in Postgres. Changing this record's fields makes existing
+ * sessions unreadable; {@link SessionConfig} turns that into "signed out" rather than an error.
  *
  * @param provider the identity used for this login, e.g. {@code google} or {@code dev}
  * @param subject  that provider's stable id for the user
  */
 public record CurrentUser(long userId, String displayName, String avatarUrl, String provider, String subject,
-                          boolean admin, OidcUser oidc) implements OidcUser, Serializable {
+                          boolean admin) implements OidcUser, Serializable {
 
-    @Serial private static final long serialVersionUID = 1L;
+    @Serial private static final long serialVersionUID = 2L;
 
     static final String ROLE_USER = "ROLE_USER";
     static final String ROLE_ADMIN = "ROLE_ADMIN";
@@ -45,27 +49,21 @@ public record CurrentUser(long userId, String displayName, String avatarUrl, Str
 
     @Override
     public Map<String, Object> getAttributes() {
-        return oidc == null ? Map.of("sub", subject) : oidc.getAttributes();
+        return Map.of("sub", subject);
     }
 
     @Override
     public Map<String, Object> getClaims() {
-        return oidc == null ? Map.of("sub", subject) : oidc.getClaims();
+        return Map.of("sub", subject);
     }
 
     @Override
     public OidcUserInfo getUserInfo() {
-        return oidc == null ? null : oidc.getUserInfo();
+        return null;
     }
 
     @Override
     public OidcIdToken getIdToken() {
-        return oidc == null ? null : oidc.getIdToken();
-    }
-
-    /** Leaves the OIDC tokens and claims out of logs. */
-    @Override
-    public String toString() {
-        return "CurrentUser[" + userId + " " + provider + ":" + subject + (admin ? " admin" : "") + "]";
+        return null;
     }
 }
