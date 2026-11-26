@@ -14,7 +14,7 @@ import java.util.List;
  * so far; the others are added as their features are built, under a new {@link #SCHEMA_VERSION}
  * if the shape of existing sections changes.
  */
-public record SeasonRulesDocument(CalendarRules calendar, FormatRules format, CompetitionRules competition) {
+public record SeasonRulesDocument(CalendarRules calendar, FormatRules format, CompetitionRules competition, DraftRules draft) {
 
     /** Shape of the JSON. Bump when an existing section changes shape (new sections don't need it). */
     public static final int SCHEMA_VERSION = 1;
@@ -23,9 +23,14 @@ public record SeasonRulesDocument(CalendarRules calendar, FormatRules format, Co
         calendar = calendar == null ? CalendarRules.EMPTY : calendar;
         format = format == null ? FormatRules.EMPTY : format;
         competition = competition == null ? CompetitionRules.EMPTY : competition;
+        draft = draft == null ? DraftRules.EMPTY : draft;
     }
 
-    public static final SeasonRulesDocument EMPTY = new SeasonRulesDocument(null, null, null);
+    public static final SeasonRulesDocument EMPTY = new SeasonRulesDocument(null, null, null, null);
+
+    public SeasonRulesDocument withCalendar(CalendarRules c) { return new SeasonRulesDocument(c, format, competition, draft); }
+
+    public SeasonRulesDocument withDraft(DraftRules d) { return new SeasonRulesDocument(calendar, format, competition, d); }
 
     /**
      * When the season's weeks fall.
@@ -99,4 +104,40 @@ public record SeasonRulesDocument(CalendarRules calendar, FormatRules format, Co
      * decisions); they'll use an explicit week count in the calendar.
      */
     public enum CompetitionFormat { ROUND_ROBIN }
+
+    /**
+     * How the draft runs. Only snake drafts so far (auction and pack drafts later, §0).
+     *
+     * @param order              snake (direction alternates each round) or linear (seat order every round)
+     * @param rounds             contiguous blocks of rounds from round 1, each with its picks per turn
+     *                           (e.g. rounds 1-10 one pick, 11-25 two picks)
+     * @param scheduledStart     when the draft is planned to start; informational (a commissioner starts it)
+     * @param forbiddenDraftable whether cards Forbidden on the season's ban list can be drafted; off by
+     *                           default, since in exclusive ownership they'd be a wasted pick
+     */
+    public record DraftRules(DraftType type, DraftOrder order, List<RoundBlock> rounds, java.time.Instant scheduledStart,
+                             boolean forbiddenDraftable) {
+        public static final DraftRules EMPTY = new DraftRules(DraftType.SNAKE, DraftOrder.SNAKE, List.of(), null, false);
+
+        public DraftRules {
+            type = type == null ? DraftType.SNAKE : type;
+            order = order == null ? DraftOrder.SNAKE : order;
+            rounds = rounds == null ? List.of() : List.copyOf(rounds);
+        }
+
+        public int roundCount() {
+            return rounds.isEmpty() ? 0 : rounds.getLast().toRound();
+        }
+
+        /** Picks each player makes over the whole draft. */
+        public int picksPerPlayer() {
+            return rounds.stream().mapToInt(r -> (r.toRound() - r.fromRound() + 1) * r.picksPerTurn()).sum();
+        }
+    }
+
+    public enum DraftType { SNAKE }
+
+    public enum DraftOrder { SNAKE, LINEAR }
+
+    public record RoundBlock(int fromRound, int toRound, int picksPerTurn) {}
 }

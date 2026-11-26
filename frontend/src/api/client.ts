@@ -400,3 +400,30 @@ export interface PoolFacets {
   trapTypes: string[];
   archetypes: string[];
 }
+
+// Draft
+
+export interface RoundBlock {
+  fromRound: number;
+  toRound: number;
+  picksPerTurn: number;
+}
+
+export interface DraftState {
+  status: "NOT_STARTED" | "IN_PROGRESS" | "COMPLETE";
+  canManage: boolean;
+  timeZone: string; // the league's; scheduledStart is shown in it
+  order: "SNAKE" | "LINEAR";
+  rounds: RoundBlock[];
+  scheduledStart: string | null; // instant
+  forbiddenDraftable: boolean;
+  roundCount: number;
+  picksPerPlayer: number;
+  totalPicks: number;
+  draftableCards: number;
+  seats: { seat: number; displayName: string; teamName: string | null }[];
+  board: { overallPick: number; round: number; pickInRound: number; seat: number }[];
+  readiness: { item: string; ok: boolean; detail: string }[]; // only before the start
+  startedAt: string | null;
+  startedBy: string | null;
+}

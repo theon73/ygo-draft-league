@@ -137,7 +137,7 @@ public class SeasonRulesService {
         SeasonRulesDocument proposed = new SeasonRulesDocument(
                 calendar(update, competition, current.calendar().weekStart()),
                 new SeasonRulesDocument.FormatRules(validCutoff(update.tcgCutoff()), validBanList(update.banListRevisionId(), league)),
-                competition);
+                competition, current.draft());   // the draft section is edited on the Draft tab
 
         int effectiveFrom = 0;
         if (season.getStatus() != SeasonStatus.SETUP) {
@@ -160,6 +160,47 @@ public class SeasonRulesService {
                 SeasonRulesDocument.SCHEMA_VERSION, json.writeValueAsString(proposed), by));
         rules.flush();
         return view(season, true);
+    }
+
+    /**
+     * Saves the draft section as a new rules version (setup only; the rest of the rules are kept).
+     * The caller has checked the commissioner and locked the league.
+     */
+    @Transactional
+    public void saveDraft(Season season, SeasonRulesDocument.DraftRules draft, CurrentUser caller) {
+        if (season.getStatus() != SeasonStatus.SETUP) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "The draft has started; its settings are fixed");
+        }
+        append(season, latest(season).withDraft(draft), 0, caller.userId());
+    }
+
+    /**
+     * When the draft starts the season: copies the league's week start into the calendar (so later
+     * league changes don't move this season's weeks) and writes out derived weeks (a round-robin's)
+     * as an explicit list, now that the player count is fixed.
+     */
+    @Transactional
+    public void lockCalendarForStart(Season season, CurrentUser caller) {
+        SeasonRulesDocument doc = latest(season);
+        var league = season.getLeague();
+        int weeks = weekCount(season, doc);
+        var snapshot = new SeasonRulesDocument.WeekStartSnapshot(league.getTimeZone(), league.getWeekStartsOn(), league.getWeekStartsAt());
+        var calendar = SeasonRulesDocument.CalendarRules.of(doc.calendar().startDate(), weeks, snapshot);
+        append(season, doc.withCalendar(calendar), 0, caller.userId());
+    }
+
+    /** Writes a new version unless it would be identical to the latest. */
+    private void append(Season season, SeasonRulesDocument doc, int effectiveFrom, long userId) {
+        SeasonRules latestRow = rules.findFirstBySeasonIdOrderByVersionDesc(season.getId()).orElse(null);
+        if (latestRow != null && parse(latestRow).equals(doc)) return;
+        rules.save(new SeasonRules(season, latestRow == null ? 1 : latestRow.getVersion() + 1, effectiveFrom,
+                SeasonRulesDocument.SCHEMA_VERSION, json.writeValueAsString(doc), users.getReferenceById(userId)));
+        rules.flush();
+    }
+
+    /** The regular season's week count (explicit, or derived from the competition format); 0 if unknown. */
+    public int weekCount(Season season) {
+        return weekCount(season, latest(season));
     }
 
     /** The latest rules (what applies during setup), or the empty document if none were saved. */

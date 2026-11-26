@@ -6,8 +6,9 @@ import java.util.List;
 /**
  * Pure domain logic: expands a snake-draft config into the full ordered pick list.
  *
- * <p>Round direction alternates (odd rounds 1→N, even rounds N→1). In rounds with
- * picksPerTurn > 1, a seat makes its picks consecutively before the next seat goes.
+ * <p>Snake order alternates round direction (odd rounds 1→N, even rounds N→1); linear order runs
+ * every round 1→N. In rounds with picksPerTurn > 1, a seat makes its picks consecutively before
+ * the next seat goes.
  *
  * <p>Our league: 10 seats, rounds 1–10 × 1 pick, rounds 11–25 × 2 picks = 400 picks.
  */
@@ -28,7 +29,13 @@ public final class SnakeOrder {
     private SnakeOrder() {}
 
     public static List<Slot> build(int seats, List<RoundBlock> blocks) {
+        return build(seats, blocks, true);
+    }
+
+    /** @param snake true for snake order, false for linear (every round in seat order) */
+    public static List<Slot> build(int seats, List<RoundBlock> blocks, boolean snake) {
         if (seats < 2) throw new IllegalArgumentException("Need at least 2 seats");
+        if (blocks.isEmpty()) throw new IllegalArgumentException("Need at least one round");
         List<Slot> slots = new ArrayList<>();
         int overall = 0;
         int expectedRound = 1;
@@ -37,7 +44,7 @@ public final class SnakeOrder {
                 throw new IllegalArgumentException("Round blocks must be contiguous starting at 1");
             }
             for (int round = block.fromRound(); round <= block.toRound(); round++) {
-                boolean forward = round % 2 == 1;
+                boolean forward = !snake || round % 2 == 1;
                 int pickInRound = 0;
                 for (int i = 0; i < seats; i++) {
                     int seat = forward ? i + 1 : seats - i;

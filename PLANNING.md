@@ -260,9 +260,10 @@ playoffs:
 | Setting | Options | Scope | Status / built with |
 |---|---|---|---|
 | Draft type | snake, auction / salary cap, pack (real sets or cube) | Season | v1 snake; others later |
-| Rounds | segments of rounds with picks per turn (e.g. 10 × 1, then 15 × 2) | Season | v1, Phase 3 |
-| Order | snake or linear; first-round order from seat order | Season | v1, Phase 3 |
-| Start time | scheduled start (in the league time zone) | Season | v1, Phase 3 |
+| Rounds | segments of rounds with picks per turn (e.g. 10 × 1, then 15 × 2) | Season | ✓ YGO-15 |
+| Order | snake or linear; first-round order from seat order | Season | ✓ YGO-15 |
+| Start time | planned start (in the league time zone), shown to the league; a commissioner starts the draft (automatic start later, if wanted) | Season | ✓ YGO-15 |
+| Forbidden cards draftable | whether cards Forbidden on the season's ban list can be drafted (off by default in exclusive ownership) | Season | ✓ YGO-15 |
 | Pick timer | none or N seconds; on expiry: wait, skip, or auto-pick from the player's queue; optional overnight pause window | Season | later, Phase 3 |
 | Commissioner controls | pause, undo, pick on someone's behalf | Season | v1, Phase 3 |
 | Auction settings | budget, minimum bid, nomination order, bid timer | Season | later |
@@ -458,9 +459,20 @@ Casual modes that run on their own, without a league, or inside one without coun
 - **Phase 2 is complete** with YGO-14.
 
 **Phase 3: Draft room**
-- Snake draft with pick legality, draft board, and the draft log written as events.
-- Live updates over SSE, queue/watchlist, timer, pause/undo/commissioner override, Discord notifications.
-- Mock draft mode.
+- **Decisions (2026-11-26):**
+  - **Pace: support both fast (live, everyone online; our league's current draft) and slow (picks over days, more flexible for other leagues).** The pick timer is a setting in minutes or hours; live updates are essential, not optional.
+  - **Forbidden cards are left out of the draft by default** in exclusive ownership (they're unplayable, so picking one wastes a pick); a setting allows drafting them.
+  - **The season becomes active automatically when the last pick is made.** Week 1 still starts on the calendar's date.
+  - **The draft log is authoritative and permanent.** Picks are append-only events that nothing edits (trades and free agency are separate events), and when the draft completes a frozen **draft result** (the final board: who picked what, when, and who made each pick) is stored with the season for the archive.
+  - **The draft room is the season's Draft tab:** before the start, settings, a board preview, a readiness checklist and Start draft; during, the live board and picking; after, the final board.
+- **YGO-15 (done):** draft setup. A **draft section in the season rules** (versioned like the rest; edited on the Draft tab during setup): snake or linear order (`SnakeOrder` gained linear), contiguous round blocks with 1 to 5 picks per turn (at most 100 rounds), a planned start time entered in the league's zone (informational; a commissioner starts the draft), and whether Forbidden cards can be drafted (off by default). The Draft tab is now the draft room: settings, a **board preview** (rounds × seats with pick numbers), a **readiness checklist** (at least two seated players, rounds set, a pool, enough draftable cards for every pick, the calendar's start date and weeks), and **Start draft**. Starting moves the season to drafting (players, seats and pool generation fixed), **locks the calendar** (the league's week start and a round-robin's derived weeks written into the season as a new rules version) and records the settings and seat order as they were at the start in the new `draft` table (V12), which also has room for the frozen result written at completion (YGO-16). `GET …/draft`, `PUT …/draft/settings`, `POST …/draft/start`.
+  - *YGO-19:* a way to undo starting (back to setup) while no picks have been made; until then starting is final.
+- **YGO-16:** making picks: append-only pick log, on-the-clock from it, pick legality, a per-season lock, ownership derived from picks (replacing the "nobody owns anything" stub), the draft room page, "available only" in pool lists, completion (frozen draft result, season becomes active).
+- **YGO-17:** live updates over SSE; an in-app "you're on the clock" alert.
+- **YGO-18:** private pick queue; optional pick timer (minutes or hours; on expiry wait, skip or auto-pick from the queue; optional overnight pause in the league's zone).
+- **YGO-19:** commissioner controls: pause and resume, undo the last pick (as its own event), pick on someone's behalf.
+- **YGO-20:** Discord webhook notifications (on the clock, picks).
+- Later: mock draft mode; auction and pack drafts (Phase 6); the casual game modes.
 
 **Phase 4: Season play**
 - Event-sourced ownership; rosters with card art.
