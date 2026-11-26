@@ -186,7 +186,7 @@ export default function SeasonSetup() {
           {season.lastDraw.order.map((name, i) => `${i + 1}. ${name}`).join(", ")}
         </p>
       )}
-      <p className="muted">Rules, the card pool and the ban list come next (they're part of setting up a season).</p>
+      <p className="muted">The calendar, format and ban list are on the Rules tab. The card pool comes next.</p>
     </>
   );
 }

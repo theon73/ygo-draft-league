@@ -276,3 +276,46 @@ export interface InvitePreview {
 export function inviteLink(code: string): string {
   return `${window.location.origin}/invite/${code}`;
 }
+
+// Season rules (versioned; each save is a new version)
+
+export interface BanListOption {
+  listId: number;
+  name: string;
+  official: boolean;
+  effectiveDate: string | null;
+  latestRevision: number;
+  latestRevisionId: number; // what picking this list pins the season to
+}
+
+export interface SeasonRules {
+  version: number | null; // null until first saved
+  effectiveFromWeek: number;
+  canManage: boolean;
+  started: boolean; // season left setup: changes need effectiveFromWeek
+  calendar: {
+    startDate: string | null;
+    regularWeeks: number | null; // set explicitly, or derived from the competition format
+    weeksDerived: boolean; // true for a round-robin: follows its cycles and the player count
+    timeZone: string;
+    weekStartsOn: Weekday;
+    weekStartsAt: string;
+    weekStartLocked: boolean; // copied in when the season began; else follows the league
+  };
+  format: {
+    tcgCutoff: string | null;
+    banList: { revisionId: number; listId: number; name: string; revision: number; official: boolean; latestRevision: number; latestRevisionId: number } | null;
+  };
+  competition: {
+    format: "ROUND_ROBIN" | null; // other formats (Swiss, weekly H2H, ladder) later
+    roundRobinCycles: number | null; // how many times each pair meets
+    players: number;
+    rounds: number | null;
+    matchesPerPlayer: number | null;
+    byes: boolean; // odd player count: one player sits out each round
+  };
+  weeks: { number: number; start: string; end: string }[];
+  currentWeek: number | null; // 0 = pre-season
+  minEffectiveWeek: number;
+  history: { version: number; effectiveFromWeek: number; by: string | null; at: string }[];
+}

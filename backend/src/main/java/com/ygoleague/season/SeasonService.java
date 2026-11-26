@@ -82,9 +82,11 @@ public class SeasonService {
     private final SeasonPlayerRepository players;
     private final PublicIds publicIds;
     private final JdbcClient jdbc;
+    private final SeasonAccess seasonAccess;
 
     public SeasonService(LeagueAccess access, LeagueRepository leagues, LeagueMemberRepository members,
-                         SeasonRepository seasons, SeasonPlayerRepository players, PublicIds publicIds, JdbcClient jdbc) {
+                         SeasonRepository seasons, SeasonPlayerRepository players, PublicIds publicIds, JdbcClient jdbc,
+                         SeasonAccess seasonAccess) {
         this.access = access;
         this.leagues = leagues;
         this.members = members;
@@ -92,6 +94,7 @@ public class SeasonService {
         this.players = players;
         this.publicIds = publicIds;
         this.jdbc = jdbc;
+        this.seasonAccess = seasonAccess;
     }
 
     // ---- Reading ------------------------------------------------------------------------------
@@ -291,14 +294,12 @@ public class SeasonService {
                 participants, candidates, lastDraw(season));
     }
 
-    /** Whether the member commissions the season: the league owner always does. */
     private boolean commissions(Season season, LeagueMember member) {
-        return member.getRole() == LeagueRole.OWNER || commissionerIds(season).contains(member.getId());
+        return seasonAccess.commissions(season, member);
     }
 
     private Set<Long> commissionerIds(Season season) {
-        return Set.copyOf(jdbc.sql("select league_member_id from season_commissioner where season_id = :s")
-                .param("s", season.getId()).query(Long.class).list());
+        return seasonAccess.commissionerIds(season);
     }
 
     private SeatDraw lastDraw(Season season) {
@@ -337,22 +338,13 @@ public class SeasonService {
     /** The caller's membership and the season they're managing. */
     private record Managing(LeagueMember me, Season season) {}
 
-    /** Members who don't commission the season get 403 (they're in the league, so it isn't hidden). */
     private Managing lockAsCommissioner(String publicLeagueId, String publicSeasonId, CurrentUser caller) {
-        LeagueMember me = access.require(publicLeagueId, caller, LeagueRole.MEMBER);
-        leagues.lockById(me.getLeague().getId());
-        Season season = seasonOf(me.getLeague(), publicSeasonId);
-        if (!commissions(season, me)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only this season's commissioners can do this");
-        }
-        return new Managing(me, season);
+        SeasonAccess.SeasonRef ref = seasonAccess.commissioner(publicLeagueId, publicSeasonId, caller);
+        return new Managing(ref.me(), ref.season());
     }
 
     private Season seasonOf(League league, String publicSeasonId) {
-        return publicIds.decode(PublicIdType.SEASON, publicSeasonId)
-                .flatMap(seasons::findById)
-                .filter(s -> s.getLeague().getId().equals(league.getId()))
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No such season"));
+        return seasonAccess.seasonOf(league, publicSeasonId);
     }
 
     private static Season requireEditable(Season season) {

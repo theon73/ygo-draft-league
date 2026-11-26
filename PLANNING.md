@@ -219,7 +219,7 @@ playoffs:
 | Name, status | setup → drafting → active → complete | Season | ✓ schema; Phase 2 |
 | Participants | which members play this season; team names | Season | ✓ YGO-11 |
 | Seat order | manual or random (✓ YGO-11, draws recorded); from last season's standings (e.g. reverse) later | Season | ✓ manual/random; standings-based later |
-| Calendar | start date and number of regular-season weeks; week boundary copied from the league when the season starts | Season | v1, YGO-12 |
+| Calendar | start date and number of regular-season weeks (stored as a list of weeks); week boundary copied from the league when the season starts | Season | ✓ YGO-12; the copy at season start comes with Phase 3 |
 | Off weeks | whole-league weeks with no matches (holidays, mass travel), placed anywhere in the schedule. To decide when built: whether an off week takes a week number (week 5 is off, matches resume in week 6) or the numbering skips it; whether weekly trade/FA limits apply during it; how it shifts match deadlines and the playoff start. The schedule, "this week's matchups" and standings must all show it | Season | later, Phase 4 (keep in mind when designing the calendar in YGO-12) |
 
 *Card pool*
@@ -227,7 +227,7 @@ playoffs:
 | Setting | Options | Scope | Status / built with |
 |---|---|---|---|
 | Card game | TCG only | — | fixed (§0) |
-| Release window | TCG release date ≤ cutoff (optionally also ≥ a start date) | Season | v1, Phase 2 |
+| Release window | TCG release date ≤ cutoff (optionally also ≥ a start date) | Season | ✓ cutoff in the rules (YGO-12); applied when the pool is generated (YGO-13); start date later |
 | Sets | include/exclude specific sets | Season | v1, Phase 2 |
 | Manual adds/removes | individual cards | Season | v1, Phase 2 |
 | Exception list | hand-picked cards added on top of the dated pool (e.g. just past the cutoff), each with an optional reason; addable mid-season as a dated change effective from week N | Season | v1, YGO-13 |
@@ -240,7 +240,7 @@ playoffs:
 
 | Setting | Options | Scope | Status / built with |
 |---|---|---|---|
-| Ban list | a specific revision of an official or league-owned list | Season | ✓ lists (YGO-4); selection Phase 2 |
+| Ban list | a specific revision of an official or league-owned list | Season | ✓ lists (YGO-4); ✓ selection (YGO-12) |
 | Soft bans | cards or archetypes that can't be drafted or played | Season | v1, Phase 2 |
 | Ownership-required cards | e.g. Polymerization must be on your roster to be played | Season | v1, Phase 2 |
 
@@ -291,7 +291,8 @@ playoffs:
 
 | Setting | Options | Scope | Status / built with |
 |---|---|---|---|
-| Competition format | round-robin (single or double), Swiss (N rounds), weekly H2H, ladder | Season | v1 round-robin; others later |
+| Competition format | round-robin (each pair meets N times; weeks derived), Swiss (N rounds), weekly H2H, ladder | Season | ✓ round-robin (YGO-12); others later |
+| Rounds per week | how many round-robin rounds are played each week (fixed at 1 for now) | Season | later |
 | Best-of | per match (e.g. Bo3); can differ for playoffs | Season | v1, Phase 4 |
 | Draws | allowed or not; points per win / draw / loss | Season | later |
 | Reporting | one player reports and the other confirms; auto-confirm after N hours; commissioner-only | Season | v1 report + confirm, Phase 4 |
@@ -423,7 +424,9 @@ Not league settings: site admins and the catalog sync (platform level, YGO-6), d
   - *Open (Phase 4):* how a mid-season addition reaches rosters: it becomes a free agent (first-come claims), the commissioner assigns it to a specific roster, or a small supplemental draft. Possibly configurable.
   - *Open (YGO-13):* removals. Proposed: a card can only be removed while nobody owns it; to take an owned card out of play, soft-ban it through the rules instead.
 - **YGO-11 (done):** seasons, per-season roles, participants, seat order, league time zone and week start. **Roles moved from the league to the season** (V9 migrates existing data: each league's creator becomes its owner, other commissioners become commissioners of that league's existing seasons, everyone else a member; tested in `V9SeasonRolesMigrationTest`). The owner creates seasons (unique name per league); a season's commissioners (the owner plus anyone chosen, accounts only) choose its commissioners and participants (any member, placeholders included), set seats by hand or draw them at random. Every draw is kept in `season_seat_draw` and shown to the league (who, when, result). Seats are always 1..n; changing participants keeps everyone else's relative order and appends newcomers. Participants and seats are fixed once the season leaves setup; team names stay editable (by a commissioner or the player). League time zone: an IANA region zone, set from the creator's browser on creation (UTC if unknown) and editable in league settings. The Setup page shows one Members table with a per-member season role (—, Player, Commissioner, Commissioner & player): a dropdown for the season's commissioners, set in one step via `PUT /api/leagues/{id}/seasons/{id}/members/{memberId}`, and plain text for everyone else. League week start: a weekday and local time (default Monday 00:00), editable in settings with a preview of the current week. Frontend: league tabs (current season, Seasons, Members, Settings), season tabs (Setup, plus placeholders for Draft, Rosters, Standings, Transactions). League and season pages share their loaded data through React contexts (outlet context only reaches one route level, which blanked the season setup page).
-- **YGO-12:** the season rules document: typed records over `season_rules` with a section per catalog group, but only Phase 2's settings built (calendar: start date, weeks, and the league's week boundary copied in when the season starts; format: TCG cutoff, ban list revision). Model the calendar as a list of weeks, not just a count, so off weeks (Phase 4) fit without a rewrite. Before the season starts, saving overwrites the setup version; after, each change is a new version effective from week N. Rules form on the season page.
+- **YGO-12 (done):** the season rules document. Typed records (`season.rules.SeasonRulesDocument`, schema version 1) stored as JSON in `season_rules`, with only Phase 2's sections built: **competition** (format; round-robin only so far, set as how many times each pair meets: 1 = single, 2 = double; Swiss, weekly H2H and ladder later), **calendar** (start date; the season's weeks as a list, all regular for now, so off weeks fit later; a week-start snapshot that stays empty until the season begins and the league's setting applies) and **format** (TCG cutoff; the exact ban list revision, official or the league's own, which later revisions of the list don't change). **Every save is a new version** (append-only, not an overwrite): during setup versions take effect from week 0, so the latest applies; once the season has started a change takes effect from a chosen week, never before the current week or the latest change, and the calendar can't change. Identical saves are no-ops. Week 1 begins at the league's first week start on or after the start date (`calendar.SeasonCalendar`, DST-aware). **A round-robin's weeks are derived, not set:** rounds per cycle are n - 1 for an even player count or n for an odd one (one bye per round), one round per week, so weeks = cycles × rounds (10 players, single round-robin = 9 weeks, 9 matches each; `competition.RoundRobin`). During setup they follow the player list; the competition format, like the calendar, can't change once the season has started. `GET/PUT /api/leagues/{id}/seasons/{id}/rules`, `GET /api/leagues/{id}/ban-lists`. `season.SeasonAccess` is now the single season-level authorization check. Frontend: a Rules tab (form for commissioners, read-only for members) with the week layout and version history.
+  - *Phase 3:* when the draft moves a season out of setup, copy the league's week start into the calendar snapshot and write out the derived week list.
+  - *Later:* rounds per week (a league that plays faster than one round a week).
 - **YGO-13:** the card pool: `pool_card` (season, card, copies, flags, source: dated or exception) plus an append-only pool change log; generate the dated pool from the rules (TCG cutoff, include/exclude sets, card kinds); the exception list (add cards beyond the cutoff, with a reason, before or during the season, effective from week N); removals (rules above); per-card flags (soft-banned, requires ownership, max playable), with an archetype shortcut; marking the pool ready for the draft triggers the YGO-10 thumbnail prefetch (later additions are fetched as they're added).
 - **YGO-14:** the pool browser: thumbnail grid, filters (type, attribute, archetype, level, ATK/DEF, ban status, flags) and name search; "available only" waits for ownership (Phase 4).
 
