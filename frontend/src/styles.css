@@ -52,3 +52,12 @@ form.inline input { min-width: 10rem; }
 label.check { display: block; padding: 0.15rem 0; }
 label.check input { margin-right: 0.4rem; }
 tr.dim td { color: #888; }
+.form-grid { display: flex; flex-wrap: wrap; gap: 0.75rem 1.5rem; }
+.form-grid label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.9rem; }
+.form-grid input, .form-grid select { min-width: 12rem; }
+ol.weeks { columns: 2 18rem; font-size: 0.9rem; }
+ol.weeks li.current { font-weight: 600; }
+details { margin: 0.5rem 0; }
+.inline-label { font-size: 0.9rem; }
+input.narrow-num { width: 4rem; min-width: 0; }
+.derived { padding: 0.35rem 0; }
