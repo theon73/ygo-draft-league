@@ -46,7 +46,10 @@ public class GoogleLogin {
         return new GoogleUserService(accounts);
     }
 
-    /** Maps the verified Google profile to our user (creating it on first login). */
+    /**
+     * Maps the verified Google profile to our user (creating it on first login). The Google
+     * {@link OidcUser} is dropped here: only our own {@link CurrentUser} goes into the session.
+     */
     static class GoogleUserService extends OidcUserService {
 
         private final UserAccounts accounts;
@@ -57,12 +60,15 @@ public class GoogleLogin {
 
         @Override
         public OidcUser loadUser(OidcUserRequest request) throws OAuth2AuthenticationException {
-            OidcUser google = super.loadUser(request);
+            return toCurrentUser(super.loadUser(request));
+        }
+
+        CurrentUser toCurrentUser(OidcUser google) {
             if (google.getSubject() == null) {
                 throw new OAuth2AuthenticationException(new OAuth2Error("invalid_id_token", "No subject", null));
             }
             return accounts.login(new UserAccounts.LoginProfile(REGISTRATION_ID, google.getSubject(),
-                    google.getEmail(), google.getFullName(), google.getPicture()), google);
+                    google.getEmail(), google.getFullName(), google.getPicture()));
         }
     }
 }

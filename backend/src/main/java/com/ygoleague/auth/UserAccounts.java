@@ -5,7 +5,6 @@ import com.ygoleague.user.AppUserRepository;
 import com.ygoleague.user.UserIdentity;
 import com.ygoleague.user.UserIdentityRepository;
 import java.util.Optional;
-import org.springframework.security.oauth2.core.oidc.user.OidcUser;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,7 +31,7 @@ public class UserAccounts {
      * the avatar follows the provider.
      */
     @Transactional
-    public CurrentUser login(LoginProfile p, OidcUser oidc) {
+    public CurrentUser login(LoginProfile p) {
         AppUser user = identities.findByProviderAndSubject(p.provider(), p.subject())
                 .map(UserIdentity::getUser)
                 .orElseGet(() -> {
@@ -42,19 +41,19 @@ public class UserAccounts {
                     return created;
                 });
         if (p.avatarUrl() != null) user.setAvatarUrl(p.avatarUrl());
-        return principal(user, p.provider(), p.subject(), oidc);
+        return principal(user, p.provider(), p.subject());
     }
 
     /** Signs in with an identity that must already exist (the dev login never creates accounts). */
     @Transactional(readOnly = true)
     public Optional<CurrentUser> loginExisting(String provider, String subject) {
         return identities.findByProviderAndSubject(provider, subject)
-                .map(i -> principal(i.getUser(), provider, subject, null));
+                .map(i -> principal(i.getUser(), provider, subject));
     }
 
-    private CurrentUser principal(AppUser user, String provider, String subject, OidcUser oidc) {
+    private CurrentUser principal(AppUser user, String provider, String subject) {
         return new CurrentUser(user.getId(), user.getDisplayName(), user.getAvatarUrl(), provider, subject,
-                admins.isAdmin(provider, subject), oidc);
+                admins.isAdmin(provider, subject));
     }
 
     private static String displayName(LoginProfile p) {

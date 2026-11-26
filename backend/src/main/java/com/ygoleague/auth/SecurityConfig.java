@@ -21,6 +21,8 @@ import org.springframework.security.web.authentication.logout.HttpStatusReturnin
  *       every POST/PUT/DELETE echoes it in the {@code X-XSRF-TOKEN} header (see
  *       {@code frontend/src/api/client.ts}).
  *   <li>{@code /api/admin/**} needs {@code ROLE_ADMIN}, which only {@link AdminAllowlist} grants.
+ *   <li>After a Google login nothing Google-issued is kept: the access token is discarded
+ *       ({@link DiscardGoogleTokens}) and the session holds only our {@link CurrentUser}.
  * </ul>
  *
  * <p>Only for the web app: the CLI tasks (syncCatalog, importBanLists) run without a web server.
@@ -50,6 +52,7 @@ public class SecurityConfig {
                     .authorizationEndpoint(a -> a.baseUri("/api/oauth2/authorization"))
                     .redirectionEndpoint(r -> r.baseUri("/api/login/oauth2/code/*"))
                     .userInfoEndpoint(u -> u.oidcUserService(googleUsers.getObject()))
+                    .authorizedClientRepository(new DiscardGoogleTokens())
                     .defaultSuccessUrl("/", true)
                     .failureUrl("/?login=failed"));
         }

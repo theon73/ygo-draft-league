@@ -23,8 +23,8 @@ class UserAccountsTest {
 
     @Test
     void firstLoginCreatesTheAccountAndLaterLoginsReuseIt() {
-        var first = accounts.login(new UserAccounts.LoginProfile("google", "sub-42", "yugi@example.com", "Yugi Muto", "https://a/1"), null);
-        var again = accounts.login(new UserAccounts.LoginProfile("google", "sub-42", "yugi@example.com", "Renamed At Google", "https://a/2"), null);
+        var first = accounts.login(new UserAccounts.LoginProfile("google", "sub-42", "yugi@example.com", "Yugi Muto", "https://a/1"));
+        var again = accounts.login(new UserAccounts.LoginProfile("google", "sub-42", "yugi@example.com", "Renamed At Google", "https://a/2"));
 
         assertEquals(first.userId(), again.userId());
         assertEquals("Yugi Muto", again.displayName());       // name only taken on first login
@@ -35,11 +35,11 @@ class UserAccountsTest {
 
     @Test
     void namelessProfileFallsBackToEmailAndAllowlistGrantsAdmin() {
-        var admin = accounts.login(new UserAccounts.LoginProfile("google", "admin-sub", "kaiba@example.com", null, null), null);
+        var admin = accounts.login(new UserAccounts.LoginProfile("google", "admin-sub", "kaiba@example.com", null, null));
         assertEquals("kaiba", admin.displayName());
         assertTrue(admin.admin());
         assertTrue(admin.getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN")));
         // The allowlist is per identity: the same subject under another provider isn't an admin.
-        assertFalse(accounts.login(new UserAccounts.LoginProfile("dev", "admin-sub", null, "X", null), null).admin());
+        assertFalse(accounts.login(new UserAccounts.LoginProfile("dev", "admin-sub", null, "X", null)).admin());
     }
 }

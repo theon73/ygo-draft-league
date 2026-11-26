@@ -2,8 +2,9 @@ spring:
   application:
     name: ygo-league
   # Local secrets (GOOGLE_CLIENT_ID, ...) can live in backend/.env, which is gitignored.
+  # app.env-file moves it; the test task points it at a missing file so tests never see secrets.
   config:
-    import: optional:file:.env[.properties]
+    import: optional:file:${app.env-file:.env}[.properties]
   autoconfigure:
     # Boot would otherwise create a password user with a generated password. Logins are OAuth only.
     exclude: org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
@@ -17,9 +18,23 @@ spring:
     open-in-view: false
   flyway:
     enabled: true
+  session:
+    timeout: 30d
+    jdbc:
+      initialize-schema: never   # tables come from Flyway (V6__http_sessions.sql)
 
 server:
   port: 8080
+  servlet:
+    session:
+      # Stay signed in while you use the site at least once a month (idle timeout, refreshed on
+      # every request). The cookie itself is an absolute cap: sign in again every 90 days.
+      timeout: 30d
+      cookie:
+        max-age: 90d
+        http-only: true          # not readable by JavaScript
+        same-site: lax           # not sent on cross-site POSTs; still sent on the Google redirect back
+        secure: ${SESSION_COOKIE_SECURE:false}   # MUST be true in production (HTTPS only)
 
 management:
   endpoints:

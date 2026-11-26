@@ -28,6 +28,8 @@ dependencies {
     runtimeOnly 'org.postgresql:postgresql'
 
     implementation 'org.springframework.boot:spring-boot-starter-security-oauth2-client'
+    // Sessions in Postgres, so sign-ins survive restarts and deploys (see auth.SessionConfig).
+    implementation 'org.springframework.boot:spring-boot-starter-session-jdbc'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
@@ -42,11 +44,14 @@ dependencies {
 
 // ./gradlew bootRun -Pdev  runs with the dev profile: dev login, seeded test users and league.
 tasks.named('bootRun') {
-    if (project.hasProperty('dev')) args '--spring.profiles.active=dev'
+    // A system property, not an arg: `--args=...` on the command line replaces args, which would drop it.
+    if (project.hasProperty('dev')) systemProperty 'spring.profiles.active', 'dev'
 }
 
 tasks.named('test') {
     useJUnitPlatform()
+    // Never load a developer's backend/.env (real OAuth secrets) into tests.
+    systemProperty 'app.env-file', 'build/tests-have-no-env-file'
 }
 
 // One-shot catalog sync from YGOPRODeck, then exit. Add -Pforce to re-import an unchanged version.
