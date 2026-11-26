@@ -285,7 +285,8 @@ playoffs:
   - A fake OIDC provider (e.g. Keycloak in compose) is only worth adding if the real flow starts breaking in ways the dev login hides.
 - **YGO-3 (done):** card catalog sync from YGOPRODeck (cards, sets, prints, card text versions, sync log).
 - **YGO-4 (done):** ban lists (official YAML files + importer, league-owned custom lists with revisions).
-- **YGO-5:** login, the dev login, and the site admin allowlist.
+- **YGO-5 (done):** temporary read-only Explorer page (`/explore`, `/api/explore/*`) for the catalog and official ban lists, plus generic Home copy. Unauthenticated, so it exposes global data only; replace it with the real pool builder in Phase 2.
+- **YGO-6:** login, the dev login, and the site admin allowlist.
 - Later in Phase 1: create a league, invites, placeholder members, viewer allowlist, "My leagues"; cached card image endpoint.
 
 **Phase 2: Season setup**
