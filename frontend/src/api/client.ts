@@ -435,6 +435,13 @@ export interface DraftState {
   completedAt: string | null;
 }
 
+/** A live draft event: a signal that the draft changed (refetch the draft for the details). */
+export interface DraftChanged {
+  status: DraftState["status"];
+  picksMade: number;
+  onTheClockSeat: number | null;
+}
+
 export interface DraftSlot {
   overallPick: number;
   round: number;

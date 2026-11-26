@@ -30,6 +30,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -51,7 +52,8 @@ import tools.jackson.databind.ObjectMapper;
  *       draft allows it) and has a copy nobody holds.
  *   <li>The last pick completes the draft: the final board is frozen into {@code draft.result}
  *       and the season becomes active.
- *   <li>Any member can see the draft; the season's commissioners change and start it.
+ *   <li>Any member can see the draft and follow it live ({@link DraftEvents}); the season's
+ *       commissioners change and start it. Starting and every pick are announced to open streams.
  * </ul>
  */
 @Service
@@ -114,13 +116,26 @@ public class DraftService {
     private final SeasonPlayerRepository players;
     private final JdbcClient jdbc;
     private final ObjectMapper json;
+    private final DraftEvents events;
 
-    public DraftService(SeasonAccess access, SeasonRulesService rules, SeasonPlayerRepository players, JdbcClient jdbc, ObjectMapper json) {
+    public DraftService(SeasonAccess access, SeasonRulesService rules, SeasonPlayerRepository players, JdbcClient jdbc,
+                        ObjectMapper json, DraftEvents events) {
         this.access = access;
         this.rules = rules;
         this.players = players;
         this.jdbc = jdbc;
         this.json = json;
+        this.events = events;
+    }
+
+    /**
+     * Opens a live stream of draft changes for a member. Access is checked here, inside a short
+     * transaction; the stream itself holds no database connection.
+     */
+    @Transactional(readOnly = true)
+    public SseEmitter subscribe(String leagueId, String seasonId, CurrentUser caller) {
+        Season season = access.member(leagueId, seasonId, caller).season();
+        return events.subscribe(season.getId(), changeOf(season));
     }
 
     @Transactional(readOnly = true)
@@ -157,6 +172,7 @@ public class DraftService {
                 .param("s", season.getId()).param("t", draft.type().name())
                 .param("c", json.writeValueAsString(new DraftConfig(draft, seats))).param("u", caller.userId()).update();
         season.setStatus(SeasonStatus.DRAFTING);
+        events.publish(season.getId(), changeOf(season));
         return view(season, true, caller);
     }
 
@@ -202,6 +218,7 @@ public class DraftService {
                 .param("player", player.getId()).param("card", req.cardId()).param("by", caller.userId()).update();
 
         if (DraftProgress.complete(slots, log.size() + 1)) complete(season, config, slots);
+        events.publish(season.getId(), changeOf(season));
         return view(season, ref.commissioner(), caller);
     }
 
@@ -335,6 +352,19 @@ public class DraftService {
                 draft.roundCount(), draft.picksPerPlayer(), slots.size(), draftableCards(season, draft, false),
                 draftableCards(season, draft, true), seats, board, log.size(), clockView, mySeat, canPick,
                 List.of(), (Instant) d[1], (String) d[2], (Instant) d[3]);
+    }
+
+    /** The draft's state as the live stream announces it. */
+    private DraftEvents.DraftChanged changeOf(Season season) {
+        var row = jdbc.sql("select config::text, completed_at is not null from draft where season_id = :s")
+                .param("s", season.getId())
+                .query((rs, n) -> new Object[] {rs.getString(1), rs.getBoolean(2)}).optional();
+        if (row.isEmpty()) return new DraftEvents.DraftChanged(DraftStatus.NOT_STARTED, 0, null);
+        int made = jdbc.sql("select count(*) from draft_pick where season_id = :s and kind = 'PICK'")
+                .param("s", season.getId()).query(Integer.class).single();
+        if ((boolean) row.get()[1]) return new DraftEvents.DraftChanged(DraftStatus.COMPLETE, made, null);
+        OnTheClock clock = DraftProgress.onTheClock(slots(json.readValue((String) row.get()[0], DraftConfig.class)), made);
+        return new DraftEvents.DraftChanged(DraftStatus.IN_PROGRESS, made, clock == null ? null : clock.slot().seat());
     }
 
     private static List<Slot> slots(DraftConfig config) {
