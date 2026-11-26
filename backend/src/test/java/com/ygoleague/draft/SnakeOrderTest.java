@@ -45,4 +45,11 @@ class SnakeOrderTest {
         assertThrows(IllegalArgumentException.class,
                 () -> SnakeOrder.build(10, List.of(new RoundBlock(2, 5, 1))));
     }
+
+    @Test
+    void linearOrderRunsEveryRoundInSeatOrder() {
+        var slots = SnakeOrder.build(3, java.util.List.of(new SnakeOrder.RoundBlock(1, 2, 1)), false);
+        org.junit.jupiter.api.Assertions.assertEquals(java.util.List.of(1, 2, 3, 1, 2, 3),
+                slots.stream().map(SnakeOrder.Slot::seat).toList());
+    }
 }
