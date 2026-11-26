@@ -26,6 +26,20 @@ const SHOWS: { value: Show; label: string }[] = [
 
 type View = "grid" | "table";
 const VIEW_KEY = "poolView";
+// The same standard options in both views; each view still remembers its own choice.
+const PAGE_SIZES: Record<View, number[]> = { grid: [10, 25, 50, 100], table: [10, 25, 50, 100] };
+const DEFAULT_PAGE_SIZE: Record<View, number> = { grid: 50, table: 50 };
+const pageSizeKey = (v: View) => `poolPageSize.${v}`;
+
+function savedPageSize(v: View): number {
+  try {
+    const n = Number(localStorage.getItem(pageSizeKey(v)));
+    return PAGE_SIZES[v].includes(n) ? n : DEFAULT_PAGE_SIZE[v];
+  } catch {
+    return DEFAULT_PAGE_SIZE[v];
+  }
+}
+
 // Per-viewer convenience only, so a missing or blocked localStorage just means the default.
 function savedView(): View | null {
   try {
@@ -56,7 +70,9 @@ export default function SeasonPoolPage() {
 
   // Commissioners curate in the table; everyone else browses the grid. A choice is remembered.
   const shownView: View = view ?? (summary.data?.canManage ? "table" : "grid");
-  const pageSize = shownView === "grid" ? 48 : 50;
+  // Remembered per view, so the grid and the table each keep their own choice.
+  const [pageSizes, setPageSizes] = useState<Record<View, number>>(() => ({ grid: savedPageSize("grid"), table: savedPageSize("table") }));
+  const pageSize = pageSizes[shownView];
   const cards = useApi<PoolCardPage>(summary.data?.generatedAt ? `${base}/cards?${poolQueryString(params, page, pageSize)}` : null);
 
   if (summary.error) return <p className="bad">Couldn't load the pool ({summary.error})</p>;
@@ -91,6 +107,11 @@ export default function SeasonPoolPage() {
     const next = new URLSearchParams();
     if (params.get("show")) next.set("show", params.get("show")!);
     setParams(next);
+  };
+  const choosePageSize = (n: number) => {
+    setPageSizes((sizes) => ({ ...sizes, [shownView]: n }));
+    try { localStorage.setItem(pageSizeKey(shownView), String(n)); } catch { /* fine: not remembered */ }
+    setParam("page", "");   // back to page 1: the current page may not exist any more
   };
   const chooseView = (v: View) => {
     setView(v);
@@ -196,11 +217,19 @@ export default function SeasonPoolPage() {
           {cards.error && <p className="bad">Couldn't load cards ({cards.error})</p>}
           {cards.data && (
             <>
-              <p className="muted">
-                {cards.data.total.toLocaleString()} card{cards.data.total === 1 ? "" : "s"}
-                {hasFilters && " match"}
-                {cards.data.total > cards.data.pageSize && ` · page ${page + 1} of ${lastPage + 1}`}
-              </p>
+              <div className="results-bar">
+                <span className="muted">
+                  {cards.data.total.toLocaleString()} card{cards.data.total === 1 ? "" : "s"}
+                  {hasFilters && " match"}
+                  {cards.data.total > cards.data.pageSize && ` · page ${page + 1} of ${lastPage + 1}`}
+                </span>
+                <label className="per-page muted">
+                  Per page{" "}
+                  <select value={pageSize} onChange={(e) => choosePageSize(Number(e.target.value))} aria-label="Cards per page">
+                    {PAGE_SIZES[shownView].map((n) => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                </label>
+              </div>
               {shownView === "grid" ? (
                 <PoolGrid cards={cards.data.items} />
               ) : (
