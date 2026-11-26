@@ -33,6 +33,7 @@ Realistically Theo will be one of the few users, and our league is the main real
 | Free agency | **First-come claims** with configurable limits. No waivers or FAAB bidding. | ✓ |
 | Trade assets | Cards, plus **transaction allowances** (e.g. "a card + one of my FA claims this week", so the receiver gets an extra FA move this week and the sender loses one). Legitimizes what our league already does informally. | Nice-to-have |
 | Decks (decided 2026-11-25) | **Out of scope.** Deck building, deck lists and duels happen on **Dueling Nexus**; this app is the league's organizer (membership, pool, draft, rosters, transactions, schedule, results, standings). Optional, stateless bridges later: export a roster for Dueling Nexus, and paste a deck to check it against the roster and rules. No stored decks or deck names. | None |
+| Casual game modes (noted 2026-11-25) | **Later.** Modes outside league play, run standalone (invite by link, no league) or inside a league without affecting its standings. Ideas so far: a pick-one-of-three deck draft (40 picks of 1 from 3), and a lobby snake draft on a sampled pool of 40 × players. In both, the picks are the deck, exported to Dueling Nexus, so no deck builder is needed. See §4 "Other game modes"; names to come. | — |
 | Visibility | **Members only.** Any league member can follow every season, playing or not (e.g. a friend who follows the standings is just a member who isn't in a season). No public pages. | ✓ |
 | Roles (decided 2026-11-25, YGO-11) | **The league is the group; roles are per season.** League: one **owner** (the creator; manages members, invites, settings, seasons) and **members**. Season: **commissioners** (the owner always, implicitly, plus members chosen per season; need an account) and **players** (its participants; any member, placeholders included). One person can be both. A member who isn't playing a season just follows it. | ✓ |
 
@@ -136,7 +137,7 @@ AuditEvent (everything, append-only)
 - **PoolCard**: a card's membership in a season's pool, plus season flags: `copies` (draftable copies; 1 = exclusive), `maxPlayable`, `softBanned`, `unusable` (derived), `requiresOwnership` (e.g. Polymerization). Ban status comes from the season's ban list plus overrides. Holdings come from the ownership projection.
 - **SeasonRules**: a versioned rules document per season (`effectiveFromWeek`, `rules`, `schemaVersion`). Legality checks use the version in effect at the time.
 - **DraftEvent**: common fields `sequence`, `seasonPlayerId`, `poolCardId`, `at`, `actedBy` (for commissioner overrides). Type-specific fields: snake → `round`, `pickInRound`, `seat`; auction → `nominatedBy`, `price`; pack → `packId`, `pickInPack`.
-- **Transaction**: `type`, `week`, `initiator`, `counterparty?`, `status` (proposed → accepted/rejected/vetoed → executed), lines of gave/received. Each line is an asset: a pool card (with quantity) or a transaction allowance (e.g. 1 FA claim this week).
+- **Transaction**: `type`, `week`, `initiator`, `counterparty?`, `status` (proposed → accepted/rejected/vetoed → executed), lines of gave/received. Each line is an asset: a pool card (with quantity) or a transaction allowance (e.g. 1 FA claim this week). A counteroffer is a new trade proposal with `counterOf` pointing at the one it answers (status *countered*). **TradeComment**: (trade, author, text, at). **TradeListing** (trading block): (season player, cards offered, what they'd like, note, status open/closed); offers on it are trade proposals with `listingId` set. **Visibility (decided 2026-11-25, following fantasy-site convention):** trade proposals, counteroffers and their comments are private to the players involved and the season's commissioners; trading block listings and the offers and comments on them are public to the league. Completed trades show up in the league's transaction feed.
 - **Match / Game**: week, players, seeds, games won, winner, replay links; reported by one player and confirmed by the other.
 - **Stage / Match / Game**: a season has one or more stages (regular season, playoffs), each with a format. Matches are generic so that round-robin, Swiss, H2H weeks and ladder all fit.
 
@@ -228,13 +229,14 @@ playoffs:
 |---|---|---|---|
 | Card game | TCG only | — | fixed (§0) |
 | Release window | TCG release date ≤ cutoff (optionally also ≥ a start date) | Season | ✓ cutoff in the rules (YGO-12); applied when the pool is generated (YGO-13); start date later |
-| Sets | include/exclude specific sets | Season | v1, Phase 2 |
-| Manual adds/removes | individual cards | Season | v1, Phase 2 |
-| Exception list | hand-picked cards added on top of the dated pool (e.g. just past the cutoff), each with an optional reason; addable mid-season as a dated change effective from week N | Season | v1, YGO-13 |
+| Sets | include/exclude specific sets | Season | later (needs a set picker; the cutoff covers our league) |
+| Manual adds/removes | individual cards | Season | ✓ YGO-13 |
+| Exception list | hand-picked cards added on top of the dated pool (e.g. just past the cutoff), each with an optional reason; addable mid-season as a dated change effective from week N | Season | ✓ YGO-13 |
 | Mid-season additions reach rosters by | free agency, commissioner assignment, or a supplemental draft | Season | open; Phase 4 |
-| Card kinds | exclude tokens etc. (Skill Cards are never imported) | Season | v1, Phase 2 |
+| Card kinds | tokens are always excluded from the dated pool (Skill Cards are never imported); other kinds later if needed | Season | ✓ YGO-13 |
+| Pool size | the whole generated pool, or a random sample of N cards per player (e.g. 40 × players) for a small, fast draft; sampled once and recorded, so the pool is fixed and reproducible | Season | later (with the casual modes) |
 | Card text era | current text, or text as of the cutoff date (`card_text_version`, e.g. Goat errata) | Season | later |
-| Per-card flags | copies (copies mode), max playable, soft-banned, requires ownership | Season | v1 (flags), Phase 2 |
+| Per-card flags | soft-banned, requires ownership (per card or per archetype); copy limit from the ban list with a per-card league override; copies (copies mode) later | Season | ✓ YGO-13 (flags) |
 
 *Ban list and restrictions*
 
@@ -277,6 +279,9 @@ playoffs:
 | Transaction windows | when in the week trades and claims are open | Season | later |
 | Commissioner approval | trades need approval, can be vetoed within N hours, or neither | Season | v1 (off), Phase 4 |
 | Allowance trading | FA claims / trades can be traded as assets | Season | later (nice-to-have) |
+| Counteroffers and trade comments | answer a proposal with a changed one; comment thread on each offer | Season | v1, Phase 4 (with trades) |
+| Trading block | players list cards they want to move; others reply with offers or comments | Season | later, Phase 4+ |
+| Trade visibility | proposals, counteroffers and comments private to the players involved and the season's commissioners; trading block public to the league; completed trades in the league feed | — | decided 2026-11-25 (fixed by design for now) |
 | Dropped cards | return to free agency immediately or after a delay | Season | later |
 
 *Dueling Nexus bridge (optional; decks themselves live on Dueling Nexus)*
@@ -298,6 +303,7 @@ playoffs:
 | Reporting | one player reports and the other confirms; auto-confirm after N hours; commissioner-only | Season | v1 report + confirm, Phase 4 |
 | Replay links | required or optional | Season | later |
 | Forfeits | deadline to play a week's match; what happens if missed | Season | later |
+| Match scheduling | players agree a match time in the app; the expected time is shown to the league for spectators; calendar feed and reminders optional | Season | later |
 | Late / backfilled matches | a past week's match can still be played and reported after its deadline instead of becoming a forfeit: an automatic grace period (N days), a commissioner-granted extension for one match, or both. A late result counts for its original week, and standings recompute from it. Example: a player can't play until the day after the deadline, so the commissioner extends that one match. | Season | later, Phase 4 (design the match deadline with this in mind) |
 | Tiebreakers | ordered list (wins, game diff, games won, head-to-head, …) | Season | v1, Phase 4 |
 
@@ -337,6 +343,9 @@ Not league settings: site admins and the catalog sync (platform level, YGO-6), d
 
 ### Transactions
 - ⭐ Trade proposals: propose → accept/reject → executes on accept
+- **Counteroffers** (requested 2026-11-25): the recipient answers a proposal with a changed one instead of a plain reject. A counter is a new proposal linked to the one it answers (the original is marked *countered*), so a negotiation reads as a chain and only the latest offer can be accepted
+- **Comments on trade offers**: a short thread on each proposal for the people involved ("I'd do it if you add X"), kept with the trade's history
+- **Trading block** (requested 2026-11-25): a board where a player lists cards they're looking to move ("I have this card I want to give away"), optionally with what they'd like back. Other players answer a listing with offers (ordinary trade proposals linked to it) or comments. Closing the listing, or accepting one of its offers, takes it off the board
 - ⭐ Free agency claims validated against pool, ownership and weekly limits
 - Transaction feed / league activity log
 - Trade deadline and transaction windows
@@ -353,6 +362,7 @@ Not league settings: site admins and the catalog sync (platform level, YGO-6), d
 - Playoff bracket view that updates from standings
 - Two-sided match reporting (report + confirm)
 - Weekly matchup preview: opponent roster, H2H
+- **Match scheduling** (requested 2026-11-25, later): the two players of a match agree a time in the app (propose / accept times, or each share availability), and the agreed or expected time is shown to the league so others can watch. Optionally a league calendar of upcoming matches, a calendar (.ics) feed, and Discord reminders. Times are shown in the league's zone and each viewer's own
 
 ### History & stats
 - ⭐ Season archive: standings, champion, draft board per season
@@ -381,6 +391,20 @@ Not league settings: site admins and the catalog sync (platform level, YGO-6), d
 - Mobile-friendly
 - Members-only leagues; members who aren't playing a season follow it
 - **CI pipeline (needed at some point, at the latest before the first deploy).** GitHub Actions on every PR: backend `./gradlew test` (Testcontainers needs Docker, which GitHub's Ubuntu runners have) and frontend `npm run build`. Later it can also build the backend image and deploy on merge to `main`. Tests need no secrets: they never load `backend/.env` and use a fake Google client.
+
+### Other game modes (requested 2026-11-25)
+Casual modes that run on their own, without a league, or inside one without counting toward its standings.
+
+- **Pick-one-of-three deck draft** (the format people know from arena-style card games): each player makes **40 picks in a row, choosing 1 of 3 cards each time**, and the 40 picks are their deck. They then play one or more matches (on Dueling Nexus) against others who drafted the same way, for fun.
+  - **Who:** anyone can start a session and invite people by link (no league needed), or a league member starts one inside a league. Each player drafts on their own, at their own pace; nobody waits for anyone.
+  - **Card source:** a TCG cutoff date (the dated pool), a season's pool, or a cube, with the ban list applied. Reuses the pool builder (YGO-13) and the catalog.
+  - **Afterwards:** export the deck for Dueling Nexus (the same bridge as roster export); optionally record wins and losses for the session, kept apart from any league standings.
+  - **To decide when built:** how the 3 options are chosen (purely random, or weighted by rarity or card type so decks stay playable); duplicates (whether a card can be offered again); Extra Deck cards (picked within the 40, offered in separate picks, or excluded); whether everyone sees the same sequence of options (fairer to compare) or their own; the deck size (40 by default, configurable).
+  - **Model sketch:** `DraftSession` (owner, card source, settings, optional league), `SessionPlayer`, and an append-only pick log (`pick number, the 3 offered card ids, the chosen one`), so a run can always be replayed and checked.
+- **Lobby snake draft on a sampled pool** (requested 2026-11-25): a lobby of n players gets a pool of **40 × n cards** drawn from a card source, and they snake-draft it until everyone has 40, which is their deck. Standalone (a lobby you invite people to) or in league format.
+  - **Reuses** the Phase 3 snake draft (order, picks per turn, timer, draft board, pick log) and the pool builder; the only new piece is sampling the pool. In league format it's simply a season whose pool is a sample instead of the whole dated pool (see "Pool size" in the settings catalog).
+  - **To decide when built:** how the pool is sampled (uniformly from the source, or balanced by card type or rarity so every deck is playable); whether the sample can contain copies; whether to add a margin (e.g. 45 × n so the last picks aren't forced); Extra Deck cards (inside the 40 or a separate allotment); and whether the lobby drafts live (together, with a timer) or asynchronously.
+- *Names for these modes to be chosen later.*
 
 ### Theo's additions
 - _(add here)_
@@ -422,12 +446,13 @@ Not league settings: site admins and the catalog sync (platform level, YGO-6), d
 - **League vs season (decided 2026-11-25).** A league is the lasting group (members, roles, invites, time zone, history); a season is one run of play inside it (participants, rules, pool, draft, rosters, matches). Kept separate rather than "one league per season" so membership carries over, cross-season history works, and next season can start from last season's rules. The UI keeps the layer out of the way: a league opens on its current season (newest not complete), with season tabs there and past seasons under Seasons.
 - **The pool can change, including mid-season (decided 2026-11-25).** Real use: our league retroactively added cards just past the cutoff, to help people play certain decks or to boost losing rosters. So a season's pool is **the dated pool** (generated from the rules: TCG cutoff, sets, card kinds) **plus an exception list** of hand-picked cards, each with an optional reason. Pool changes are append-only, dated events (who, when, card, effective from week N, reason), so the past is always judged by the pool as it was: a week-3 deck never depends on a card added in week 6. Exception cards are marked as such in the pool browser.
   - *Open (Phase 4):* how a mid-season addition reaches rosters: it becomes a free agent (first-come claims), the commissioner assigns it to a specific roster, or a small supplemental draft. Possibly configurable.
-  - *Open (YGO-13):* removals. Proposed: a card can only be removed while nobody owns it; to take an owned card out of play, soft-ban it through the rules instead.
+  - *Decided (YGO-13):* a card can only be removed while nobody owns it; to take an owned card out of play, soft-ban it instead.
 - **YGO-11 (done):** seasons, per-season roles, participants, seat order, league time zone and week start. **Roles moved from the league to the season** (V9 migrates existing data: each league's creator becomes its owner, other commissioners become commissioners of that league's existing seasons, everyone else a member; tested in `V9SeasonRolesMigrationTest`). The owner creates seasons (unique name per league); a season's commissioners (the owner plus anyone chosen, accounts only) choose its commissioners and participants (any member, placeholders included), set seats by hand or draw them at random. Every draw is kept in `season_seat_draw` and shown to the league (who, when, result). Seats are always 1..n; changing participants keeps everyone else's relative order and appends newcomers. Participants and seats are fixed once the season leaves setup; team names stay editable (by a commissioner or the player). League time zone: an IANA region zone, set from the creator's browser on creation (UTC if unknown) and editable in league settings. The Setup page shows one Members table with a per-member season role (—, Player, Commissioner, Commissioner & player): a dropdown for the season's commissioners, set in one step via `PUT /api/leagues/{id}/seasons/{id}/members/{memberId}`, and plain text for everyone else. League week start: a weekday and local time (default Monday 00:00), editable in settings with a preview of the current week. Frontend: league tabs (current season, Seasons, Members, Settings), season tabs (Setup, plus placeholders for Draft, Rosters, Standings, Transactions). League and season pages share their loaded data through React contexts (outlet context only reaches one route level, which blanked the season setup page).
 - **YGO-12 (done):** the season rules document. Typed records (`season.rules.SeasonRulesDocument`, schema version 1) stored as JSON in `season_rules`, with only Phase 2's sections built: **competition** (format; round-robin only so far, set as how many times each pair meets: 1 = single, 2 = double; Swiss, weekly H2H and ladder later), **calendar** (start date; the season's weeks as a list, all regular for now, so off weeks fit later; a week-start snapshot that stays empty until the season begins and the league's setting applies) and **format** (TCG cutoff; the exact ban list revision, official or the league's own, which later revisions of the list don't change). **Every save is a new version** (append-only, not an overwrite): during setup versions take effect from week 0, so the latest applies; once the season has started a change takes effect from a chosen week, never before the current week or the latest change, and the calendar can't change. Identical saves are no-ops. Week 1 begins at the league's first week start on or after the start date (`calendar.SeasonCalendar`, DST-aware). **A round-robin's weeks are derived, not set:** rounds per cycle are n - 1 for an even player count or n for an odd one (one bye per round), one round per week, so weeks = cycles × rounds (10 players, single round-robin = 9 weeks, 9 matches each; `competition.RoundRobin`). During setup they follow the player list; the competition format, like the calendar, can't change once the season has started. `GET/PUT /api/leagues/{id}/seasons/{id}/rules`, `GET /api/leagues/{id}/ban-lists`. `season.SeasonAccess` is now the single season-level authorization check. Frontend: a Rules tab (form for commissioners, read-only for members) with the week layout and version history.
   - *Phase 3:* when the draft moves a season out of setup, copy the league's week start into the calendar snapshot and write out the derived week list.
   - *Later:* rounds per week (a league that plays faster than one round a week).
-- **YGO-13:** the card pool: `pool_card` (season, card, copies, flags, source: dated or exception) plus an append-only pool change log; generate the dated pool from the rules (TCG cutoff, include/exclude sets, card kinds); the exception list (add cards beyond the cutoff, with a reason, before or during the season, effective from week N); removals (rules above); per-card flags (soft-banned, requires ownership, max playable), with an archetype shortcut; marking the pool ready for the draft triggers the YGO-10 thumbnail prefetch (later additions are fetched as they're added).
+- **YGO-13 (done):** the card pool (V10). `pool_card` holds the current pool (season, card, source DATED or EXCEPTION, copies = 1 for exclusive ownership, flags, reason, and `added_in_week`/`removed_in_week` so each card's time in the pool is known per week); `pool_change` is the append-only log (generated, added, removed, flags; who, when, effective week, reason). **Generate** (setup only) takes every card released in the TCG on or before the rules' cutoff, tokens excluded (about 2.7k cards and 0.2 s for March 2008); regenerating after a cutoff change adds and drops dated cards and keeps exceptions and hand removals. **Exceptions**: any catalog card added by hand with an optional reason, before or during the season. **Removal** only while nobody owns the card (`PoolOwnership`, which says "nobody" until the Phase 3 draft creates ownership); otherwise soft-ban. **Flags**: soft-banned, requires ownership, per card or for a whole archetype at once. **Copy limits follow the season's ban list** (Forbidden 0, Limited 1, Semi-Limited 2, otherwise 3); a league can override a card's limit in either direction as a house rule (e.g. a Limited card at 2), shown as such, and clear it to go back to the list. The pool shows each card's ban status, with a filter and counts. Mid-season changes take effect from a chosen week, never earlier than the current one. **Thumbnails are prefetched automatically** after generating and when a card is added (no separate "ready" step; the draft starting is the real lock). Frontend: a Pool tab (summary, generate, filters and search, flag controls, adding exceptions, archetype shortcut, history).
+  - *Later:* including or excluding specific sets when generating (needs a set picker); copies above 1 (copies ownership mode).
 - **YGO-14:** the pool browser: thumbnail grid, filters (type, attribute, archetype, level, ATK/DEF, ban status, flags) and name search; "available only" waits for ownership (Phase 4).
 
 **Phase 3: Draft room**
@@ -447,6 +472,7 @@ Not league settings: site admins and the catalog sync (platform level, YGO-6), d
 **Phase 6: Deferred options + public polish**
 - The deferred options from §0: copy-based ownership, auction and pack drafts (real sets + cubes), Swiss / H2H / ladder competition.
 - Onboarding for new commissioners, rules presets (e.g. "Goat format", "Edison"), and hardening for strangers using it (rate limits, abuse handling).
+- Other game modes (§4 "Other game modes"): the pick-one-of-three deck draft and the lobby snake draft on a sampled pool. Either can come earlier if wanted: the first needs only the catalog and a card source (YGO-13's pool); the second also needs the Phase 3 snake draft.
 
 ---
 

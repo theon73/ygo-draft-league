@@ -61,3 +61,19 @@ details { margin: 0.5rem 0; }
 .inline-label { font-size: 0.9rem; }
 input.narrow-num { width: 4rem; min-width: 0; }
 .derived { padding: 0.35rem 0; }
+table.pool td.thumb, td.thumb { width: 40px; padding-right: 0.5rem; }
+td.thumb .card-image-small { width: 34px; }
+nav.tabs.small { border: none; display: flex; gap: 0.25rem; }
+nav.tabs.small button { background: none; border: 1px solid #ddd; border-radius: 4px; padding: 0.2rem 0.6rem; cursor: pointer; }
+nav.tabs.small button.active { background: #e8e4f8; border-color: #b9b0e6; }
+details.panel summary { cursor: pointer; font-weight: 600; }
+.badge.ban-forbidden { background: #fbe3e3; color: #a12121; }
+.badge.ban-limited { background: #fdf0d8; color: #8a5a00; }
+.badge.ban-semi_limited { background: #fdf7d8; color: #6f6200; }
+.card-preview-anchor { display: inline-block; }
+.card-popover { position: fixed; z-index: 50; background: #fff; border: 1px solid #d8d4cc; border-radius: 6px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18); padding: 0.75rem; max-height: calc(100vh - 32px); overflow-y: auto; }
+.card-popover .card-image-full { width: 100%; }
+.popover-name { font-weight: 600; margin: 0.5rem 0 0.1rem; }
+.popover-stats { margin: 0 0 0.4rem; font-size: 0.85rem; }
+.popover-text { white-space: pre-line; font-size: 0.85rem; margin: 0; }

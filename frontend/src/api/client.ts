@@ -33,8 +33,8 @@ export async function apiPatch<T = void>(path: string, body?: unknown): Promise<
   return apiSend<T>("PATCH", path, body);
 }
 
-export async function apiDelete(path: string): Promise<void> {
-  return apiSend<void>("DELETE", path);
+export async function apiDelete(path: string, body?: unknown): Promise<void> {
+  return apiSend<void>("DELETE", path, body);
 }
 
 async function apiSend<T>(method: string, path: string, body?: unknown): Promise<T> {
@@ -318,4 +318,77 @@ export interface SeasonRules {
   currentWeek: number | null; // 0 = pre-season
   minEffectiveWeek: number;
   history: { version: number; effectiveFromWeek: number; by: string | null; at: string }[];
+}
+
+// Season card pool
+
+export interface PoolSummary {
+  canManage: boolean;
+  started: boolean; // mid-season changes need an effective week
+  minEffectiveWeek: number;
+  rulesCutoff: string | null; // the cutoff in the rules now
+  generatedCutoff: string | null; // the cutoff the dated pool was last generated from
+  generatedAt: string | null;
+  total: number;
+  dated: number;
+  exceptions: number;
+  softBanned: number;
+  requiresOwnership: number;
+  overridden: number; // cards with a house copy limit instead of the ban list's
+  removed: number;
+  banList: string | null; // the ban list in the season's rules
+  forbidden: number; // pool cards by ban list status
+  limited: number;
+  semiLimited: number;
+}
+
+export interface PoolCard {
+  cardId: number;
+  name: string;
+  cardType: string;
+  archetype: string | null;
+  tcgDate: string;
+  passcode: number;
+  source: "DATED" | "EXCEPTION";
+  softBanned: boolean;
+  requiresOwnership: boolean;
+  maxPlayable: number | null; // this league's override of the copy limit; null = follow the ban list
+  reason: string | null;
+  addedInWeek: number;
+  removedInWeek: number | null;
+  banStatus: BanStatus | null; // on the season's ban list
+  effectiveMax: number; // override ?? ban list limit (0/1/2) ?? 3
+  race: string; // monster type, or a spell/trap's subtype ("Quick-Play", "Continuous", ...)
+  attribute: string | null;
+  level: number | null;
+  rank: number | null;
+  linkRating: number | null;
+  atk: number | null;
+  def: number | null;
+}
+
+export interface PoolCardPage {
+  total: number;
+  page: number;
+  pageSize: number;
+  items: PoolCard[];
+}
+
+export interface PoolCandidate {
+  cardId: number;
+  name: string;
+  cardType: string;
+  tcgDate: string;
+  passcode: number;
+  inPool: boolean;
+}
+
+export interface PoolChange {
+  kind: "GENERATED" | "ADDED" | "REMOVED" | "FLAGS";
+  card: string | null;
+  effectiveFromWeek: number;
+  detail: Record<string, unknown>;
+  reason: string | null;
+  by: string | null;
+  at: string;
 }
