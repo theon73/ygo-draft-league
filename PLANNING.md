@@ -79,7 +79,7 @@ The sheet works, but it depends on people following the rules and on manual upke
 | Frontend | React + TypeScript + Vite | React Router; add TanStack Query for server state |
 | Backend | Spring Boot 4 (Java 21), Gradle | Spring MVC, Data JPA, Validation, Actuator |
 | DB | PostgreSQL 17 | Flyway migrations |
-| Auth | Spring Security OAuth2 Login (Google and/or Discord) | Session cookie for the SPA; per-league roles: `COMMISSIONER`, `PLAYER`, `VIEWER`. Dev-only login for local work (see Phase 1) |
+| Auth | Spring Security OAuth2 Login (Google; decided 2026-11-25) | Session cookie for the SPA; per-league roles: `COMMISSIONER`, `PLAYER`, `VIEWER`. Dev-only login for local work (see Phase 1) |
 | Realtime | SSE to start (draft room, activity feed) | Upgrade to WebSocket/STOMP only if two-way realtime is needed |
 | Card data | YGOPRODeck API, synced weekly into our DB | See §3 "Card catalog". Images: separate ticket (cache on first view) |
 | Notifications | Discord webhook | Picks on the clock, trades, results |
@@ -278,7 +278,7 @@ playoffs:
 - Migrations for the core tenancy model: `app_user`, `league`, `league_member` (nullable user, role), `league_invite`, `season` scoped to a league, `season_player`, versioned `season_rules`. Delete the V1 player seed in a new migration (done in YGO-2); dev sample data goes in a dev-only seed instead.
 - OAuth2 login, "My leagues", create a league (creator becomes commissioner), invite links, placeholder members, viewer allowlist.
 - **Local auth (decided 2026-11-25).** There are three layers:
-  - **Dev login, `dev` profile only.** `POST /api/dev/login` (by user id or name) creates the same session and principal as a real OAuth login, resolving the user through `user_identity` with `provider = 'dev'`. Code after login is identical in dev and prod, and no permission checks are skipped. A dev-only seed (a separate Flyway location loaded only by the `dev` profile) creates test users and a sample league. When the backend reports dev mode, the frontend shows a "log in as…" switcher.
+  - **Dev login, `dev` profile only.** `POST /api/dev/login` (by user id or name) creates the same session and principal as a real OAuth login, resolving the user through `user_identity` with `provider = 'dev'`. Code after login is identical in dev and prod, and no permission checks are skipped. A dev-only seed creates test users and a sample league. *(Built as a Java runner, `auth.DevSeed`, rather than a dev-only Flyway location: Flyway refuses to start when the DB holds a migration it can't see, which would break switching between dev and non-dev runs on one local DB.)* When the backend reports dev mode, the frontend shows a "log in as…" switcher.
   - **Automated tests** use Spring Security test support (mock principal / `oauth2Login()` in MockMvc), not the dev endpoint.
   - **Real OAuth locally**, via separate dev OAuth apps with `localhost` redirect URIs, to test the actual login flow occasionally.
   - **Prod guardrails:** the controller is `@Profile("dev")` (absent from prod, not just disabled). `dev` is never a default profile. Startup fails if `dev` is active alongside a prod marker (`prod` profile or a non-localhost DB URL). A test asserts `/api/dev/login` returns 404 without the `dev` profile.
@@ -286,7 +286,12 @@ playoffs:
 - **YGO-3 (done):** card catalog sync from YGOPRODeck (cards, sets, prints, card text versions, sync log).
 - **YGO-4 (done):** ban lists (official YAML files + importer, league-owned custom lists with revisions).
 - **YGO-5 (done):** temporary read-only Explorer page (`/explore`, `/api/explore/*`) for the catalog and official ban lists, plus generic Home copy. Unauthenticated, so it exposes global data only; replace it with the real pool builder in Phase 2.
-- **YGO-6:** login, the dev login, and the site admin allowlist.
+- **YGO-6 (done):** login, the dev login, and the site admin allowlist.
+  - **Google only.** Enabled when `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` are set (env or gitignored `backend/.env`). The OAuth endpoints are under `/api` (`/api/oauth2/authorization/google`, callback `/api/login/oauth2/code/google`), so the dev proxy and the planned `/api/*` production routing both cover them. A first login creates the user. The display name is taken from Google once; the avatar follows Google. **Two OAuth clients:** the dev client (localhost redirect, consent screen in Testing, secret in `backend/.env`) exists now. Production gets its own client, ideally in its own Cloud project, at first deploy, so secrets rotate independently and the live app never accepts localhost redirects. Google subjects are the same across clients, so `APP_ADMINS` entries carry over.
+  - **Principal:** `auth.CurrentUser` (our user id, display name, the identity used, admin flag) is stored in the HTTP session for both Google and dev logins. Sessions are in memory for now, so a backend restart signs everyone out; move to Spring Session JDBC before deploying more than one instance.
+  - **API behaviour:** signed-out calls get 401, never a redirect. CSRF uses Spring Security's SPA mode (`XSRF-TOKEN` cookie echoed as `X-XSRF-TOKEN`). `GET /api/auth/session` returns the user, the configured providers and whether dev login is on. Logout is `POST /api/auth/logout`.
+  - **Admins:** `APP_ADMINS` lists `provider:subject` identities (shown to each user by `/api/auth/session`). `/api/admin/**` needs the role. First admin action: `POST /api/admin/catalog/sync` (a button on the Explorer).
+  - **Dev:** `./gradlew bootRun -Pdev` seeds Alice (commissioner, site admin), Bob, Carol (players), Dave (viewer) and a placeholder in "Dev League".
 - Later in Phase 1: create a league, invites, placeholder members, viewer allowlist, "My leagues"; cached card image endpoint.
 
 **Phase 2: Season setup**
@@ -348,7 +353,6 @@ The sheet remains useful as a **requirements reference**: it shows what a real s
 ## 8. Open questions
 
 - Own domain? (Hosting itself is decided; see §2.) Fly.io vs Railway, and which Postgres provider, are decided at first deploy.
-- Google vs Discord login (or both)? Is everyone in the league on Discord? *(Needed early now: accounts are Phase 1.)*
 - A source for historical (pre-errata) card text, so `card_text_version` doesn't have to be curated by hand?
 - Where to get real-set pack data (rarity odds, pack composition) for pack drafts? YGOPRODeck has set lists and rarities but not pull rates.
 - Expose league data to Claude via an MCP server so the Claude Helper sheet isn't needed?

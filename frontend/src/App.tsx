@@ -1,6 +1,7 @@
 import { NavLink, Route, Routes } from "react-router-dom";
 import Home from "./pages/Home";
 import Placeholder from "./pages/Placeholder";
+import AccountMenu from "./auth/AccountMenu";
 import Explore from "./pages/explore/Explore";
 import CardView from "./pages/explore/CardView";
 import BanListView from "./pages/explore/BanListView";
@@ -26,6 +27,7 @@ export default function App() {
             </NavLink>
           ))}
         </nav>
+        <AccountMenu />
       </header>
       <main>
         <Routes>

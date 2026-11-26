@@ -9,7 +9,8 @@ General-purpose web app for running Yu-Gi-Oh draft leagues, fantasy-football sty
 
 ## Commands
 - DB: `docker compose up -d`
-- Backend: `cd backend && ./gradlew bootRun`
+- Backend: `cd backend && ./gradlew bootRun` (`-Pdev` for the dev profile: "log in as…" switcher, seeded test users and Dev League; never use `dev` outside local work)
+- Google sign-in: set `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` (env or gitignored `backend/.env`); site admins via `APP_ADMINS=google:<subject>` (see `/api/auth/session` for your identity)
 - Backend tests: `cd backend && ./gradlew test` (repository tests use Testcontainers, so Docker must be running)
 - Card catalog: `cd backend && ./gradlew syncCatalog` (one-shot YGOPRODeck sync into the local DB; `-Pforce` re-imports an unchanged version)
 - Ban lists: `cd backend && ./gradlew importBanLists` (imports `src/main/resources/banlists/**.yaml`; exits 1 on any card name it can't match, so run it after adding or editing a list)

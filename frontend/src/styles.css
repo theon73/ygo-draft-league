@@ -22,3 +22,7 @@ form { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; }
 input { padding: 0.35rem 0.5rem; min-width: 16rem; }
 .card-text { white-space: pre-line; background: #fff; border: 1px solid #e4e2dc; padding: 0.75rem; }
 .columns { columns: 3 14rem; padding-left: 1.2rem; }
+.account { margin-left: auto; display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; }
+.avatar { width: 24px; height: 24px; border-radius: 50%; }
+.badge { margin-left: 0.35rem; font-size: 0.7rem; padding: 0.05rem 0.35rem; border-radius: 4px; background: #e8e4f8; color: #3b2f8a; }
+a.button { padding: 0.3rem 0.6rem; border: 1px solid #bbb; border-radius: 4px; background: #fff; color: inherit; text-decoration: none; }

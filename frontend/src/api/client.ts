@@ -12,7 +12,61 @@ export async function apiGet<T>(path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+// Spring Security's SPA CSRF mode: the backend sets a readable XSRF-TOKEN cookie, and every
+// state-changing request must echo it in the X-XSRF-TOKEN header.
+function csrfToken(): string | undefined {
+  return document.cookie
+    .split("; ")
+    .find((c) => c.startsWith("XSRF-TOKEN="))
+    ?.slice("XSRF-TOKEN=".length);
+}
+
+export async function apiPost<T = void>(path: string, body?: unknown): Promise<T> {
+  const token = csrfToken();
+  const res = await fetch(`/api${path}`, {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      ...(body !== undefined && { "Content-Type": "application/json" }),
+      ...(token && { "X-XSRF-TOKEN": decodeURIComponent(token) }),
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  if (!res.ok) throw new ApiError(res.status, `${res.status} ${res.statusText}`);
+  const text = await res.text();
+  return (text ? JSON.parse(text) : undefined) as T;
+}
+
 // ---- Types mirroring backend DTOs ----
+
+export interface SessionUser {
+  displayName: string;
+  avatarUrl: string | null;
+  admin: boolean;
+  identity: string; // provider:subject, what goes in APP_ADMINS
+}
+
+export interface Session {
+  user: SessionUser | null;
+  providers: string[];
+  devLogin: boolean;
+}
+
+export interface DevUser {
+  subject: string;
+  displayName: string;
+  admin: boolean;
+}
+
+export interface SyncResult {
+  status: string;
+  startedAt: string;
+  finishedAt: string | null;
+  sourceVersion: string | null;
+  cardsAdded: number | null;
+  cardsUpdated: number | null;
+  error: string | null;
+}
 
 export interface Health {
   status: string;
