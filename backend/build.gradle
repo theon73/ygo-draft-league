@@ -52,3 +52,12 @@ tasks.register('syncCatalog', org.springframework.boot.gradle.tasks.run.BootRun)
     args '--app.catalog.sync-and-exit=true', '--spring.main.web-application-type=none'
     if (project.hasProperty('force')) args '--app.catalog.sync.force=true'
 }
+
+// Import the curated official ban lists, then exit (1 if any card name doesn't match the catalog).
+tasks.register('importBanLists', org.springframework.boot.gradle.tasks.run.BootRun) {
+    group = 'application'
+    description = 'Import official ban list YAML files into the local DB, then exit.'
+    mainClass = 'com.ygoleague.LeagueApplication'
+    classpath = sourceSets.main.runtimeClasspath
+    args '--app.banlists.import-and-exit=true', '--spring.main.web-application-type=none'
+}

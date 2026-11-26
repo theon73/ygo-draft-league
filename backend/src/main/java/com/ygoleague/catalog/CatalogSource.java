@@ -15,7 +15,8 @@ public interface CatalogSource {
      * Streams every importable card to {@code sink}, one at a time, so the full catalog never has
      * to sit in memory.
      *
+     * @param sets the source's set list, used to fill in release dates the source omits
      * @return the number of source cards deliberately not imported (OCG-only, Skill Cards)
      */
-    int forEachCard(Consumer<CardRecord> sink);
+    int forEachCard(List<SetRecord> sets, Consumer<CardRecord> sink);
 }

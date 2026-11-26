@@ -135,15 +135,18 @@ AuditEvent (everything, append-only)
 - **Deck**: list of (poolCardId, copies) for main/side/extra. Validated on save. The submission policy (none / optional / required-and-locked) and visibility to opponents come from the rules.
 
 **Card catalog (built in YGO-3, 2026-11-25).**
-- **Scope:** TCG only. Cards with no TCG date (OCG-only, ~500) and Speed Duel Skill Cards are skipped. Tokens are kept, and pool building can filter them.
+- **Scope:** TCG only. Cards with no TCG date (OCG-only, ~500) and Speed Duel Skill Cards are skipped. Tokens are kept, and pool building can filter them. YGOPRODeck occasionally omits the TCG date of a real TCG card (found: Change of Heart). If such a card has TCG prints, its date falls back to its earliest dated set, which is approximate but keeps the card.
 - **Identity:** YGOPRODeck's `id` is **not** stable. It's just the first artwork listed, and the order differs between responses (Dark Magician comes back as 46986414 or 46986420). Cards match on `konami_id` (unique; missing for ~12 tokens/unreleased cards), falling back to any shared passcode. A card stores every artwork's passcode.
 - **Sync:** weekly scheduled job plus `./gradlew syncCatalog` (`-Pforce` to re-import). Skipped when YGOPRODeck's `checkDBVer` version is unchanged. One transaction with an advisory lock. Unchanged cards are detected by a content hash over the record with prices, popularity and ordering normalized away. Nothing is ever deleted. Each run is logged in `catalog_sync`. No HTTP trigger yet (see admin access below).
 - **Sets:** the set name is the key, because set codes are prefixes several products share (both 2013 tin waves are `CT10`).
 - **Size:** ~14k cards, ~45k prints, ~40 MB including the raw JSON. A full sync takes ~6 s.
 
-**Ban lists (YGO-4, decided 2026-11-25).**
-- **Official lists:** dated TCG lists live as YAML files in the repo (one per list, card names as on Yugipedia, optional passcode to disambiguate). An importer matches names to the catalog and fails on any name it can't match. Theo will help source historical lists from Yugipedia.
-- **Custom lists:** league-owned, with Forbidden / Limited / Semi-Limited statuses. A custom list starts from scratch or as a copy of any existing list. These replace the earlier idea of per-season overrides.
+**Ban lists (built in YGO-4, 2026-11-25).**
+- **Revisions, not edits.** A ban list is an identity plus append-only revisions. Season rules reference a specific *revision*, so editing a list never changes what a past season played under. Saving identical content is a no-op.
+- **Official lists:** dated TCG lists are YAML files in `backend/src/main/resources/banlists/tcg/<effective-date>.yaml`. Card names are quoted, as on Yugipedia, with an optional passcode to disambiguate. They're imported on startup, after every catalog sync, and via `./gradlew importBanLists` (exits 1 on any unmatched name, with suggestions). Each file is all-or-nothing. A changed file becomes a new revision.
+- **Matching** is case-insensitive and normalizes curly quotes, dashes, accents and spacing. The import warns when a listed card was released after the list's date (a hint of a wrong match or a wrong date).
+- **Shipped so far:** March 2008 (105 cards) and March 2017 (176 cards), supplied by Theo, with effective dates (2008-03-01, 2017-03-31) confirmed by Theo.
+- **Custom lists:** league-owned, with Forbidden / Limited / Semi-Limited statuses. A custom list starts from scratch or as a copy of any revision the league can see (official, or its own). Leagues can't see each other's lists. These replace the earlier idea of per-season overrides.
 - YGOPRODeck's `banlist_info` only carries *current* TCG/OCG/Goat statuses, so it isn't a historical source.
 
 **Site admin access (decided 2026-11-25).** Global actions (catalog sync, official ban list edits) need a platform-level admin, separate from league roles. Admin status comes from an **allowlist of login identities in server config/env**, never a DB flag and never settable through any API, so a bug in user editing can't escalate anyone. Admin actions are idempotent or versioned, and audit-logged. Until an admin UI exists, these run only on a schedule, from the CLI, or via repo files.
@@ -281,7 +284,7 @@ playoffs:
   - **Prod guardrails:** the controller is `@Profile("dev")` (absent from prod, not just disabled). `dev` is never a default profile. Startup fails if `dev` is active alongside a prod marker (`prod` profile or a non-localhost DB URL). A test asserts `/api/dev/login` returns 404 without the `dev` profile.
   - A fake OIDC provider (e.g. Keycloak in compose) is only worth adding if the real flow starts breaking in ways the dev login hides.
 - **YGO-3 (done):** card catalog sync from YGOPRODeck (cards, sets, prints, card text versions, sync log).
-- **YGO-4:** ban lists (official YAML files + importer, league-owned custom lists).
+- **YGO-4 (done):** ban lists (official YAML files + importer, league-owned custom lists with revisions).
 - **YGO-5:** login, the dev login, and the site admin allowlist.
 - Later in Phase 1: create a league, invites, placeholder members, viewer allowlist, "My leagues"; cached card image endpoint.
 

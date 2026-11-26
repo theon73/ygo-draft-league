@@ -1,6 +1,7 @@
 # Java / Gradle
 backend/build/
 backend/.gradle/
+backend/bin/
 *.class
 
 # Node

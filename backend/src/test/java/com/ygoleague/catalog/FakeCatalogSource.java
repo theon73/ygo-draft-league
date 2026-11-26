@@ -44,13 +44,14 @@ class FakeCatalogSource implements CatalogSource {
     }
 
     @Override
-    public int forEachCard(Consumer<CardRecord> sink) {
+    public int forEachCard(List<SetRecord> sets, Consumer<CardRecord> sink) {
+        var setDates = YgoProDeckCardParser.setDates(sets);
         int ignored = 0;
         int delivered = 0;
         try (InputStream in = resource("cardinfo.json")) {
             for (JsonNode card : mapper.readTree(in).path("data").values()) {
                 if (failAfter != null && delivered == failAfter) throw new IllegalStateException("simulated outage");
-                var record = parser.toRecord(edit.apply((ObjectNode) card.deepCopy()));
+                var record = parser.toRecord(edit.apply((ObjectNode) card.deepCopy()), setDates);
                 if (record.isPresent()) {
                     sink.accept(record.get());
                     delivered++;

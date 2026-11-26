@@ -28,6 +28,9 @@ app:
     sync:
       scheduled: true
       cron: "0 0 9 * * MON"   # Mondays 09:00 UTC; skipped cheaply if YGOPRODeck hasn't changed
+  banlists:
+    location: "classpath*:banlists/**/*.yaml"   # curated official lists (see OfficialBanListFile)
+    import-on-startup: true
   public-ids:
     # Sqids settings for opaque URL ids (see PublicIds). PERMANENT: changing either value
     # changes every public id and breaks all existing links. Not a secret.

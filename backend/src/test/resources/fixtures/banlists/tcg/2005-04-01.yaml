@@ -1,0 +1,10 @@
+name: "Test Goat List"
+effective: 2005-04-01
+source: "test fixture"
+forbidden:
+  - "Pot of Greed"
+limited:
+  - "Sangan"
+  - { name: "Dark Magician", passcode: 46986414 }
+semiLimited:
+  - "Future Card"   # released after the list: imported with a warning

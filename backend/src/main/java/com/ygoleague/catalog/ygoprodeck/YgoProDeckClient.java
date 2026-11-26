@@ -62,7 +62,7 @@ public class YgoProDeckClient implements CatalogSource {
     }
 
     @Override
-    public int forEachCard(Consumer<CardRecord> sink) {
+    public int forEachCard(List<SetRecord> sets, Consumer<CardRecord> sink) {
         Path tmp = null;
         try {
             tmp = Files.createTempFile("ygoprodeck-cards", ".json");
@@ -70,7 +70,7 @@ public class YgoProDeckClient implements CatalogSource {
             http.get().uri("/cardinfo.php?misc=yes")
                     .exchange((req, res) -> Files.copy(okBody(res), target, StandardCopyOption.REPLACE_EXISTING));
             try (InputStream in = Files.newInputStream(tmp)) {
-                return parser.parseCards(in, sink);
+                return parser.parseCards(in, YgoProDeckCardParser.setDates(sets), sink);
             }
         } catch (IOException e) {
             throw new UncheckedIOException(e);
