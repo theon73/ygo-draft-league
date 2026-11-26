@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import type { CardPage, ExploreSummary } from "../../api/client";
+import { apiPost, type CardPage, type ExploreSummary, type SyncResult } from "../../api/client";
+import { useSession } from "../../auth/session";
 import { useApi } from "../../hooks/useApi";
 
 // Temporary read-only view of the global data (catalog + official ban lists) until the real
@@ -15,6 +16,18 @@ export default function Explore() {
 
   const go = (nextQ: string, nextPage: number) =>
     setParams(nextQ || nextPage ? { ...(nextQ && { q: nextQ }), ...(nextPage && { page: String(nextPage) }) } : {});
+
+  const { session } = useSession();
+  const [syncMsg, setSyncMsg] = useState<string | null>(null);
+  const syncNow = async () => {
+    setSyncMsg("Syncing… (a few seconds)");
+    try {
+      const r = await apiPost<SyncResult>("/admin/catalog/sync");
+      setSyncMsg(`Sync ${r.status.toLowerCase()}` + (r.cardsAdded != null ? `: ${r.cardsAdded} added, ${r.cardsUpdated} updated` : "") + (r.error ? ` (${r.error})` : ""));
+    } catch (e) {
+      setSyncMsg(`Sync failed (${(e as Error).message})`);
+    }
+  };
 
   const s = summary.data;
   const c = cards.data;
@@ -39,6 +52,12 @@ export default function Explore() {
                   (s.lastSync.error ? `: ${s.lastSync.error}` : "")
                 : "No catalog sync yet. Run ./gradlew syncCatalog in backend/."}
             </span>
+            {session?.user?.admin && (
+              <>
+                <br />
+                <button onClick={syncNow}>Sync catalog now</button> <span className="muted">{syncMsg}</span>
+              </>
+            )}
           </p>
 
           <h3>Official ban lists</h3>

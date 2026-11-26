@@ -1,0 +1,10 @@
+# Local development only: `./gradlew bootRun -Pdev`. Enables the dev login (auth.DevLoginController)
+# and seeds test users plus a sample league (auth.DevSeed). auth.DevProfileGuard refuses to start
+# this profile against a non-local database or together with `prod`.
+app:
+  auth:
+    # Seeded user alice is a site admin, on top of anyone in APP_ADMINS.
+    admins: ${APP_ADMINS:},dev:alice
+  catalog:
+    sync:
+      scheduled: false

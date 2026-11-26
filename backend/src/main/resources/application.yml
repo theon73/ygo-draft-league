@@ -1,6 +1,12 @@
 spring:
   application:
     name: ygo-league
+  # Local secrets (GOOGLE_CLIENT_ID, ...) can live in backend/.env, which is gitignored.
+  config:
+    import: optional:file:.env[.properties]
+  autoconfigure:
+    # Boot would otherwise create a password user with a generated password. Logins are OAuth only.
+    exclude: org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/ygoleague}
     username: ${DB_USER:ygoleague}
@@ -22,6 +28,14 @@ management:
         include: health,info
 
 app:
+  auth:
+    google:
+      # "Sign in with Google" is enabled only when the client id is set (see auth.GoogleLogin).
+      client-id: ${GOOGLE_CLIENT_ID:}
+      client-secret: ${GOOGLE_CLIENT_SECRET:}
+    # Site admins as provider:subject, comma-separated. Your own identity is shown by
+    # GET /api/auth/session once you're signed in. Config only, never the DB (see AdminAllowlist).
+    admins: ${APP_ADMINS:}
   catalog:
     ygoprodeck:
       base-url: https://db.ygoprodeck.com/api/v7
