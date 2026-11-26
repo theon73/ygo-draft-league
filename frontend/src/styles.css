@@ -32,3 +32,14 @@ td.actions { white-space: nowrap; text-align: right; }
 td.actions button + button { margin-left: 0.35rem; }
 input.narrow { min-width: 12rem; }
 h4 { margin: 1.25rem 0 0.25rem; }
+/* Card images: fixed card ratio (59:86), so the layout doesn't jump while images load. */
+.card-image { display: inline-block; aspect-ratio: 59 / 86; background: #e7e4dc; border-radius: 4px; overflow: hidden; vertical-align: top; }
+.card-image img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.card-image.loading img { opacity: 0; }
+.card-image-small { width: 68px; }
+.card-image-full { width: 260px; }
+.card-image-missing { display: flex; align-items: center; justify-content: center; height: 100%; font-size: 0.75rem; color: #777; text-align: center; padding: 0.25rem; }
+.card-art { display: flex; gap: 1rem; align-items: flex-start; margin-bottom: 1rem; flex-wrap: wrap; }
+.alt-arts { display: flex; flex-wrap: wrap; gap: 0.4rem; max-width: 300px; }
+.alt-arts button { padding: 2px; border: 2px solid transparent; background: none; cursor: pointer; }
+.alt-arts button.selected { border-color: #3b4fb8; }

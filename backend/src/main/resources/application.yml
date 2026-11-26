@@ -57,6 +57,12 @@ app:
     sync:
       scheduled: true
       cron: "0 0 9 * * MON"   # Mondays 09:00 UTC; skipped cheaply if YGOPRODeck hasn't changed
+  images:
+    # Card image cache (see image.CardImageService and PLANNING.md "Card images").
+    store: local                                   # local disk now; R2 later
+    local-dir: ${CARD_IMAGE_DIR:data/card-images}  # relative to backend/; gitignored
+    upstream-base-url: https://images.ygoprodeck.com/images
+    fetches-per-second: 5                          # one throttle for the whole app
   banlists:
     location: "classpath*:banlists/**/*.yaml"   # curated official lists (see OfficialBanListFile)
     import-on-startup: true

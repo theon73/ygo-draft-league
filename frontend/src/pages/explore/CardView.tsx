@@ -1,4 +1,6 @@
+import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import CardImage from "../../components/CardImage";
 import type { CardDetail } from "../../api/client";
 import { useApi } from "../../hooks/useApi";
 import { statusLabel } from "./banStatus";
@@ -6,6 +8,7 @@ import { statusLabel } from "./banStatus";
 export default function CardView() {
   const { id } = useParams();
   const { data: c, error } = useApi<CardDetail>(`/explore/cards/${id}`);
+  const [art, setArt] = useState(0);
 
   if (error) return <p className="bad">Couldn't load card ({error})</p>;
   if (!c) return <p className="muted">Loading…</p>;
@@ -24,6 +27,18 @@ export default function CardView() {
     <section>
       <p><Link to="/explore">← Explorer</Link></p>
       <h2>{c.name}</h2>
+      <div className="card-art">
+        <CardImage passcode={c.passcodes[Math.min(art, c.passcodes.length - 1)]} size="full" alt={c.name} />
+        {c.passcodes.length > 1 && (
+          <div className="alt-arts">
+            {c.passcodes.map((p, i) => (
+              <button key={p} className={i === art ? "selected" : ""} onClick={() => setArt(i)} title={`Artwork ${i + 1} (${p})`}>
+                <CardImage passcode={p} size="small" alt={`${c.name}, artwork ${i + 1}`} />
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
       <p>
         {c.cardType} · {stats.join(" · ")}
         <br />
