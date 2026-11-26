@@ -32,8 +32,17 @@ export async function apiPost<T = void>(path: string, body?: unknown): Promise<T
     },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
-  if (!res.ok) throw new ApiError(res.status, `${res.status} ${res.statusText}`);
   const text = await res.text();
+  if (!res.ok) {
+    // Our endpoints return {"message": "..."} for validation errors; show that when present.
+    let message = `${res.status} ${res.statusText}`;
+    try {
+      message = (JSON.parse(text) as { message?: string }).message ?? message;
+    } catch {
+      /* not JSON */
+    }
+    throw new ApiError(res.status, message);
+  }
   return (text ? JSON.parse(text) : undefined) as T;
 }
 
@@ -135,4 +144,30 @@ export interface BanListDetail {
   info: BanListInfo;
   note: string | null;
   entries: { cardId: number; name: string; cardType: string; status: BanStatus }[];
+}
+
+// Leagues
+
+export type LeagueRole = "COMMISSIONER" | "PLAYER" | "VIEWER";
+
+export interface LeagueSummary {
+  id: string; // public id, used in URLs
+  name: string;
+  myRole: LeagueRole;
+  memberCount: number;
+}
+
+export interface LeagueMember {
+  displayName: string;
+  role: LeagueRole;
+  placeholder: boolean; // a seat for someone without an account yet
+  you: boolean;
+}
+
+export interface LeagueDetail {
+  id: string;
+  name: string;
+  myRole: LeagueRole;
+  createdAt: string;
+  members: LeagueMember[];
 }

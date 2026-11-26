@@ -190,6 +190,122 @@ playoffs:
   rounds: [ { pairs: [[3,6],[4,5]] }, semis, finals ]
 ```
 
+**Settings catalog (enumerated 2026-11-25).** Everything a league should eventually be able to configure, so each feature knows its settings before it's built. Settings are added with the feature that uses them, not up front. *Scope*: **League** = a column or table on the league, changes apply from now on. **Season** = a field in the versioned `season_rules` document (see SeasonRules), so mid-season changes take effect from a given week and the past stays judged by the old rules. *Status*: ✓ built, **v1** = needed for our league's first season in the app, *later* = behind the same interfaces (§0).
+
+*League*
+
+| Setting | Options | Scope | Status / built with |
+|---|---|---|---|
+| Name | text, ≤ 60 chars | League | ✓ YGO-8 |
+| Description / house-rules blurb | markdown | League | later |
+| Visibility | members only, plus a viewer allowlist (no public pages, §0) | League | fixed by design; viewers in YGO-9 |
+| Commissioners | promote/demote members; at least one must remain | League | v1, YGO-9 |
+| Placeholder members | named seats without accounts, claimed via invite | League | v1, YGO-9 |
+| Invites | who may create them (commissioners only, or players too); default expiry, max uses | League | v1, YGO-9 |
+| Member display names | per-league name, editable | League | later |
+| Time zone | IANA zone; defines week boundaries, deadlines and draft times | League | v1, Phase 2 |
+| Notifications | Discord webhook URL; which events (picks, trades, FA, results) | League | later, Phase 3–4 |
+| New-season defaults | clone the last season's rules, or start from a preset ("Goat", "Edison") | League | later, Phase 2 / 6 |
+| Archive / delete / transfer ownership | | League | later |
+
+*Season setup*
+
+| Setting | Options | Scope | Status / built with |
+|---|---|---|---|
+| Name, status | setup → drafting → active → complete | Season | ✓ schema; Phase 2 |
+| Participants | which members play this season; team names | Season | v1, Phase 2 |
+| Seat order | manual, random, or from last season's standings (e.g. reverse) | Season | v1, Phase 2 |
+| Calendar | start date, number of regular-season weeks, week boundary (day and time) | Season | v1, Phase 2 |
+
+*Card pool*
+
+| Setting | Options | Scope | Status / built with |
+|---|---|---|---|
+| Card game | TCG only | — | fixed (§0) |
+| Release window | TCG release date ≤ cutoff (optionally also ≥ a start date) | Season | v1, Phase 2 |
+| Sets | include/exclude specific sets | Season | v1, Phase 2 |
+| Manual adds/removes | individual cards | Season | v1, Phase 2 |
+| Card kinds | exclude tokens etc. (Skill Cards are never imported) | Season | v1, Phase 2 |
+| Card text era | current text, or text as of the cutoff date (`card_text_version`, e.g. Goat errata) | Season | later |
+| Per-card flags | copies (copies mode), max playable, soft-banned, requires ownership | Season | v1 (flags), Phase 2 |
+
+*Ban list and restrictions*
+
+| Setting | Options | Scope | Status / built with |
+|---|---|---|---|
+| Ban list | a specific revision of an official or league-owned list | Season | ✓ lists (YGO-4); selection Phase 2 |
+| Soft bans | cards or archetypes that can't be drafted or played | Season | v1, Phase 2 |
+| Ownership-required cards | e.g. Polymerization must be on your roster to be played | Season | v1, Phase 2 |
+
+*Ownership and rosters*
+
+| Setting | Options | Scope | Status / built with |
+|---|---|---|---|
+| Ownership mode | exclusive, or copies (N owners per pool card) | Season | v1 exclusive; copies later |
+| Copies per pool card | default N (copies mode) | Season | later |
+| Playable copies per owned card | e.g. own 1, play up to 3 (or the legal max) | Season | v1, Phase 4 |
+| Roster size | min / max cards held (affects FA claims and drops) | Season | later |
+
+*Draft*
+
+| Setting | Options | Scope | Status / built with |
+|---|---|---|---|
+| Draft type | snake, auction / salary cap, pack (real sets or cube) | Season | v1 snake; others later |
+| Rounds | segments of rounds with picks per turn (e.g. 10 × 1, then 15 × 2) | Season | v1, Phase 3 |
+| Order | snake or linear; first-round order from seat order | Season | v1, Phase 3 |
+| Start time | scheduled start (in the league time zone) | Season | v1, Phase 3 |
+| Pick timer | none or N seconds; on expiry: wait, skip, or auto-pick from the player's queue; optional overnight pause window | Season | later, Phase 3 |
+| Commissioner controls | pause, undo, pick on someone's behalf | Season | v1, Phase 3 |
+| Auction settings | budget, minimum bid, nomination order, bid timer | Season | later |
+| Pack settings | source (sets / cube), packs per player, cards per pack, pass direction, rarity odds | Season | later |
+| Mock drafts | allowed or not | League | later |
+
+*Transactions*
+
+| Setting | Options | Scope | Status / built with |
+|---|---|---|---|
+| Trades per week | number or unlimited | Season | v1, Phase 4 |
+| Free-agent claims per week | number or unlimited; first-come only (no waivers / FAAB, §0) | Season | v1, Phase 4 |
+| Trade deadline | week number or none | Season | v1, Phase 4 |
+| Transaction windows | when in the week trades and claims are open | Season | later |
+| Commissioner approval | trades need approval, can be vetoed within N hours, or neither | Season | v1 (off), Phase 4 |
+| Allowance trading | FA claims / trades can be traded as assets | Season | later (nice-to-have) |
+| Dropped cards | return to free agency immediately or after a delay | Season | later |
+
+*Decks*
+
+| Setting | Options | Scope | Status / built with |
+|---|---|---|---|
+| Submission | none, optional, required | Season | v1 optional, Phase 4 |
+| Lock | per week or per match; lock deadline | Season | later |
+| Visibility | visible to opponents, hidden until the match, hidden until the week ends | Season | v1 visible, Phase 4 |
+| Deck size limits | main min/max, extra max, side max (format-dependent, e.g. 40–60 / 15 / 15) | Season | v1, Phase 4 |
+| Copy limit | per card (normally 3; ban list statuses lower it) | Season | v1, Phase 4 |
+
+*Matches and standings*
+
+| Setting | Options | Scope | Status / built with |
+|---|---|---|---|
+| Competition format | round-robin (single or double), Swiss (N rounds), weekly H2H, ladder | Season | v1 round-robin; others later |
+| Best-of | per match (e.g. Bo3); can differ for playoffs | Season | v1, Phase 4 |
+| Draws | allowed or not; points per win / draw / loss | Season | later |
+| Reporting | one player reports and the other confirms; auto-confirm after N hours; commissioner-only | Season | v1 report + confirm, Phase 4 |
+| Replay links | required or optional | Season | later |
+| Forfeits | deadline to play a week's match; what happens if missed | Season | later |
+| Late / backfilled matches | a past week's match can still be played and reported after its deadline instead of becoming a forfeit: an automatic grace period (N days), a commissioner-granted extension for one match, or both. A late result counts for its original week, and standings recompute from it. Example: a player can't play until the day after the deadline, so the commissioner extends that one match. | Season | later, Phase 4 (design the match deadline with this in mind) |
+| Tiebreakers | ordered list (wins, game diff, games won, head-to-head, …) | Season | v1, Phase 4 |
+
+*Playoffs*
+
+| Setting | Options | Scope | Status / built with |
+|---|---|---|---|
+| Enabled, qualifiers | on/off; number of seeds | Season | v1, Phase 4 |
+| Bracket | byes, play-ins, round pairings (see the RulesConfig example) | Season | v1, Phase 4 |
+| Best-of per round | e.g. Bo3, finals Bo5 | Season | later |
+| Third-place match | on/off | Season | later |
+
+Not league settings: site admins and the catalog sync (platform level, YGO-6), draft queues (always private), and the card game (TCG only).
+
 ---
 
 ## 4. Feature backlog
@@ -260,6 +376,7 @@ playoffs:
 - ⭐ Multi-league: "My leagues" dashboard, per-league roles, league switcher
 - Mobile-friendly
 - Members-only leagues, plus a commissioner-managed allowlist of read-only viewer accounts
+- **CI pipeline (needed at some point, at the latest before the first deploy).** GitHub Actions on every PR: backend `./gradlew test` (Testcontainers needs Docker, which GitHub's Ubuntu runners have) and frontend `npm run build`. Later it can also build the backend image and deploy on merge to `main`. Tests need no secrets: they never load `backend/.env` and use a fake Google client.
 
 ### Theo's additions
 - _(add here)_
@@ -293,7 +410,7 @@ playoffs:
   - **API behaviour:** signed-out calls get 401, never a redirect. CSRF uses Spring Security's SPA mode (`XSRF-TOKEN` cookie echoed as `X-XSRF-TOKEN`). `GET /api/auth/session` returns the user, the configured providers and whether dev login is on. Logout is `POST /api/auth/logout`.
   - **Admins:** `APP_ADMINS` lists `provider:subject` identities (shown to each user by `/api/auth/session`). `/api/admin/**` needs the role. First admin action: `POST /api/admin/catalog/sync` (a button on the Explorer).
   - **Dev:** `./gradlew bootRun -Pdev` seeds Alice (commissioner, site admin), Bob, Carol (players), Dave (viewer) and a placeholder in "Dev League".
-- **YGO-8:** leagues and per-league access: "My leagues", create a league (creator becomes commissioner), league page with members, one authorization service for league roles (non-members get 404), league-scoped navigation.
+- **YGO-8 (done):** leagues and per-league access. `GET/POST /api/leagues` ("My leagues", create with a name of up to 60 characters; the creator becomes commissioner) and `GET /api/leagues/{publicId}` (overview with members; user ids never exposed). `league.LeagueAccess.require(publicId, user, minimumRole)` is the single authorization check: **non-members, unknown and malformed ids all get 404** (a league's existence isn't revealed), members below the required role get 403. Roles are ordered commissioner > player > viewer. Frontend: `/leagues` and `/leagues/:id` with league tabs (overview, plus placeholders for standings, rosters, draft and transactions).
 - **YGO-9:** invites (open and placeholder-claim), placeholder members, viewer allowlist.
 - **YGO-10:** cached card image endpoint.
 
