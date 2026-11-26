@@ -114,10 +114,11 @@ public record SeasonRulesDocument(CalendarRules calendar, FormatRules format, Co
      * @param scheduledStart     when the draft is planned to start; informational (a commissioner starts it)
      * @param forbiddenDraftable whether cards Forbidden on the season's ban list can be drafted; off by
      *                           default, since in exclusive ownership they'd be a wasted pick
+     * @param pickTimer          the pick timer, or null for none
      */
     public record DraftRules(DraftType type, DraftOrder order, List<RoundBlock> rounds, java.time.Instant scheduledStart,
-                             boolean forbiddenDraftable) {
-        public static final DraftRules EMPTY = new DraftRules(DraftType.SNAKE, DraftOrder.SNAKE, List.of(), null, false);
+                             boolean forbiddenDraftable, PickTimer pickTimer) {
+        public static final DraftRules EMPTY = new DraftRules(DraftType.SNAKE, DraftOrder.SNAKE, List.of(), null, false, null);
 
         public DraftRules {
             type = type == null ? DraftType.SNAKE : type;
@@ -134,6 +135,27 @@ public record SeasonRulesDocument(CalendarRules calendar, FormatRules format, Co
             return rounds.stream().mapToInt(r -> (r.toRound() - r.fromRound() + 1) * r.picksPerTurn()).sum();
         }
     }
+
+    /**
+     * The pick timer (YGO-18); null in {@link DraftRules} means no timer. Each pick gets the full
+     * time, counted from when it comes on the clock.
+     *
+     * @param seconds   time per pick
+     * @param onExpiry  what happens when it runs out
+     * @param pauseFrom optional overnight pause in the league's time zone, e.g. 23:00 to 08:00 (may
+     *                  wrap midnight; both or neither): the clock doesn't run inside it
+     */
+    public record PickTimer(int seconds, TimerExpiry onExpiry, java.time.LocalTime pauseFrom, java.time.LocalTime pauseTo) {
+        public PickTimer {
+            onExpiry = onExpiry == null ? TimerExpiry.WAIT : onExpiry;
+        }
+    }
+
+    /**
+     * WAIT: the pick stays open (shown as overdue). SKIP: the draft moves on and the player makes the
+     * pick up later. AUTO_PICK: the first available card in the player's queue, or a skip if none.
+     */
+    public enum TimerExpiry { WAIT, SKIP, AUTO_PICK }
 
     public enum DraftType { SNAKE }
 

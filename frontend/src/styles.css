@@ -122,3 +122,13 @@ table.board th.mine { background: #e8e4f8; }
 .on-clock.mine { background: #fdf0d8; }
 .badge.owned { background: #e2f1e5; color: #1f6b33; }
 .tile-action { margin-top: 0.3rem; }
+
+/* Queue, timer, skips (YGO-18) */
+.countdown { font-weight: 600; }
+.countdown.overdue { color: #a12121; }
+table.board td.slot .skipped { color: #a12121; font-style: italic; }
+ol.queue { padding-left: 1.5rem; }
+ol.queue li { display: flex; align-items: center; gap: 0.4rem; margin: 0.15rem 0; }
+ol.queue li.taken .queue-name { text-decoration: line-through; color: #888; }
+.queue-thumb.card-image-small, img.queue-thumb { width: 28px; }
+.queue-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -1,9 +1,13 @@
 package com.ygoleague.api.season;
 
 import com.ygoleague.auth.CurrentUser;
+import com.ygoleague.draft.DraftQueue;
+import com.ygoleague.draft.DraftQueue.QueueView;
 import com.ygoleague.draft.DraftService;
+import com.ygoleague.draft.DraftService.AwayRequest;
 import com.ygoleague.draft.DraftService.DraftUpdate;
 import com.ygoleague.draft.DraftService.PickRequest;
+import java.util.List;
 import com.ygoleague.draft.DraftService.DraftView;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -16,15 +20,24 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
-/** A season's draft: its settings, board and readiness, starting it, and making picks. Rules are in {@link DraftService}. */
+/**
+ * A season's draft: its settings, board and readiness, starting it, making picks, live updates, and
+ * each player's private queue and away mode. Rules are in {@link DraftService} and {@link DraftQueue}.
+ */
 @RestController
 @RequestMapping("/api/leagues/{leagueId}/seasons/{seasonId}/draft")
 public class DraftController {
 
-    private final DraftService drafts;
+    public record QueueReplace(List<Long> cardIds) {}
 
-    public DraftController(DraftService drafts) {
+    public record QueueAdd(Long cardId) {}
+
+    private final DraftService drafts;
+    private final DraftQueue queue;
+
+    public DraftController(DraftService drafts, DraftQueue queue) {
         this.drafts = drafts;
+        this.queue = queue;
     }
 
     @GetMapping
@@ -53,5 +66,31 @@ public class DraftController {
     public DraftView pick(@PathVariable String leagueId, @PathVariable String seasonId, @RequestBody PickRequest body,
                           @AuthenticationPrincipal CurrentUser user) {
         return drafts.pick(leagueId, seasonId, body, user);
+    }
+
+    /** The caller's own queue and away mode (players only). */
+    @GetMapping("/queue")
+    public QueueView queue(@PathVariable String leagueId, @PathVariable String seasonId, @AuthenticationPrincipal CurrentUser user) {
+        return queue.get(leagueId, seasonId, user);
+    }
+
+    /** Replaces the caller's queue: the cards in order (reordering and removing go through here). */
+    @PutMapping("/queue")
+    public QueueView replaceQueue(@PathVariable String leagueId, @PathVariable String seasonId, @RequestBody QueueReplace body,
+                                  @AuthenticationPrincipal CurrentUser user) {
+        return queue.replace(leagueId, seasonId, body.cardIds(), user);
+    }
+
+    /** Adds a card to the end of the caller's queue. */
+    @PostMapping("/queue")
+    public QueueView addToQueue(@PathVariable String leagueId, @PathVariable String seasonId, @RequestBody QueueAdd body,
+                                @AuthenticationPrincipal CurrentUser user) {
+        return queue.add(leagueId, seasonId, body.cardId(), user);
+    }
+
+    @PutMapping("/away")
+    public QueueView away(@PathVariable String leagueId, @PathVariable String seasonId, @RequestBody AwayRequest body,
+                          @AuthenticationPrincipal CurrentUser user) {
+        return drafts.setAway(leagueId, seasonId, body, user);
     }
 }
