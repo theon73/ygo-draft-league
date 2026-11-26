@@ -56,7 +56,7 @@ class DraftApiTest {
 
     @BeforeEach
     void reset() throws Exception {
-        jdbc.execute("truncate draft_queue, draft_pick, draft, pool_change, pool_card, season_seat_draw, season_commissioner, season_rules, season_player, season, "
+        jdbc.execute("truncate draft_pause, draft_queue, draft_pick, draft, pool_change, pool_card, season_seat_draw, season_commissioner, season_rules, season_player, season, "
                 + "league_invite, league_member, ban_list_entry, ban_list_revision, ban_list, card_print, card_text_version, card, "
                 + "league, user_identity, app_user restart identity cascade");
         for (int i = 1; i <= 20; i++) card("Card " + i, "2002-03-08");
@@ -229,6 +229,14 @@ class DraftApiTest {
                 jdbc.queryForList("select (e->>'displayName') || ':' || (e->>'cardName') from draft, jsonb_array_elements(result->'board') e "
                         + "order by (e->>'overallPick')::int", String.class));
         pick(yugi, "Card 7", 7).andExpect(status().isConflict()).andExpect(jsonPath("$.message").value("The draft is over"));
+        // Locked in for good: no undo, pause or going back.
+        mvc.perform(get(draft("")).with(as(yugi)))
+                .andExpect(jsonPath("$.undoable").doesNotExist())
+                .andExpect(jsonPath("$.canUnstart").value(false));
+        for (String control : List.of("/undo", "/pause", "/resume", "/unstart")) {
+            send(post(draft(control)), yugi, null).andExpect(status().isConflict()).andExpect(jsonPath("$.message").value("The draft is over"));
+        }
+        Assertions.assertEquals(6, jdbc.queryForObject("select count(*) from card_holding", Integer.class));
     }
 
     // ---- live updates (YGO-17) ----
@@ -242,19 +250,19 @@ class DraftApiTest {
         MvcResult stream = mvc.perform(get(draft("/events")).with(as(kaiba)).accept(MediaType.TEXT_EVENT_STREAM))
                 .andExpect(request().asyncStarted()).andReturn();
         // The current state straight away, then one event per change.
-        Assertions.assertEquals(List.of("{\"status\":\"NOT_STARTED\",\"picksMade\":0,\"onTheClockSeat\":null}"), events(stream));
+        Assertions.assertEquals(List.of("{\"status\":\"NOT_STARTED\",\"picksMade\":0,\"onTheClockSeat\":null,\"paused\":false}"), events(stream));
 
         send(post(draft("/start")), yugi, null).andExpect(status().isOk());
         pick(yugi, "Card 1", 1).andExpect(status().isOk());
         pick(yugi, "Card 1", 2).andExpect(status().isConflict());   // refused: nothing to announce
         Assertions.assertEquals(List.of(
-                "{\"status\":\"NOT_STARTED\",\"picksMade\":0,\"onTheClockSeat\":null}",
-                "{\"status\":\"IN_PROGRESS\",\"picksMade\":0,\"onTheClockSeat\":1}",
-                "{\"status\":\"IN_PROGRESS\",\"picksMade\":1,\"onTheClockSeat\":2}"), events(stream));
+                "{\"status\":\"NOT_STARTED\",\"picksMade\":0,\"onTheClockSeat\":null,\"paused\":false}",
+                "{\"status\":\"IN_PROGRESS\",\"picksMade\":0,\"onTheClockSeat\":1,\"paused\":false}",
+                "{\"status\":\"IN_PROGRESS\",\"picksMade\":1,\"onTheClockSeat\":2,\"paused\":false}"), events(stream));
 
         for (int i = 2; i <= 6; i++) pick(yugi, "Card " + i, i).andExpect(status().isOk());
         List<String> all = events(stream);
-        Assertions.assertEquals("{\"status\":\"COMPLETE\",\"picksMade\":6,\"onTheClockSeat\":null}", all.getLast());
+        Assertions.assertEquals("{\"status\":\"COMPLETE\",\"picksMade\":6,\"onTheClockSeat\":null,\"paused\":false}", all.getLast());
     }
 
     // ---- queue, timer, away (YGO-18) ----
@@ -397,6 +405,146 @@ class DraftApiTest {
         Assertions.assertEquals(Boolean.TRUE, jdbc.queryForObject(
                 "select (e->>'skipped')::boolean and e->>'cardId' is null from draft, jsonb_array_elements(result->'board') e "
                         + "where (e->>'overallPick')::int = 1", Boolean.class));
+    }
+
+    // ---- commissioner controls (YGO-19) ----
+
+    @Test
+    void undoWalksBackThroughTheLogAndFreesTheCards() throws Exception {
+        readyWithKaibaInSeat2();
+        send(post(draft("/start")), yugi, null).andExpect(status().isOk());
+        pick(yugi, "Card 1", 1).andExpect(status().isOk());
+        pick(kaiba, "Card 2", 2).andExpect(status().isOk())
+                .andExpect(jsonPath("$.undoable").doesNotExist());   // players don't see it
+        send(post(draft("/undo")), kaiba, null).andExpect(status().isForbidden());
+
+        mvc.perform(get(draft("")).with(as(yugi)))
+                .andExpect(jsonPath("$.undoable.overallPick").value(2))
+                .andExpect(jsonPath("$.undoable.card").value("Card 2"))
+                .andExpect(jsonPath("$.undoable.displayName").value("Kaiba"));
+        send(post(draft("/undo")), yugi, null).andExpect(status().isOk())
+                .andExpect(jsonPath("$.board[1].pick").doesNotExist())
+                .andExpect(jsonPath("$.picksMade").value(1))
+                .andExpect(jsonPath("$.onTheClock.seat").value(2))
+                .andExpect(jsonPath("$.availableCards").value(19))
+                .andExpect(jsonPath("$.undoable.card").value("Card 1"));
+        send(post(draft("/undo")), yugi, null).andExpect(status().isOk())
+                .andExpect(jsonPath("$.picksMade").value(0))
+                .andExpect(jsonPath("$.onTheClock.seat").value(1))
+                .andExpect(jsonPath("$.undoable").doesNotExist());
+        send(post(draft("/undo")), yugi, null).andExpect(status().isConflict());
+        Assertions.assertEquals(0, jdbc.queryForObject("select count(*) from card_holding", Integer.class));
+
+        // Nothing is lost from the log, and the same cards can be picked again.
+        pick(yugi, "Card 1", 1).andExpect(status().isOk());
+        pick(kaiba, "Card 2", 2).andExpect(status().isOk());
+        Assertions.assertEquals(List.of("PICK", "PICK", "UNDO", "UNDO", "PICK", "PICK"),
+                jdbc.queryForList("select kind from draft_pick order by sequence", String.class));
+    }
+
+    @Test
+    void afterAnUndoWhoeverIsOnTheClockGetsAFreshTimer() throws Exception {
+        readyWithKaibaInSeat2();
+        timer(60, "SKIP", null, null);
+        send(post(draft("/start")), yugi, null).andExpect(status().isOk());
+        drafts.expireDue(Instant.now().plusSeconds(61));   // P1 skipped by the timer
+        // Make it look like this all happened a while ago.
+        jdbc.update("update draft set started_at = started_at - interval '2 minutes'");
+        jdbc.update("update draft_pick set made_at = made_at - interval '1 minute'");
+
+        send(post(draft("/undo")), yugi, null).andExpect(status().isOk())
+                .andExpect(jsonPath("$.onTheClock.seat").value(1))
+                .andExpect(jsonPath("$.board[0].skipped").value(false));
+        drafts.expireDue(Instant.now().plusSeconds(30));   // a stale timer would have expired by now
+        mvc.perform(get(draft("")).with(as(yugi))).andExpect(jsonPath("$.picksMade").value(0));
+        drafts.expireDue(Instant.now().plusSeconds(61));
+        mvc.perform(get(draft("")).with(as(yugi))).andExpect(jsonPath("$.board[0].skipped").value(true));
+    }
+
+    @Test
+    void undoingAnAutoPickTurnsAwayModeOffSoItIsntPickedAgain() throws Exception {
+        readyWithKaibaInSeat2();
+        queue(kaiba, "Card 5");
+        queue(kaiba, "Card 6");
+        send(put(draft("/away")), kaiba, "{\"away\":true}").andExpect(status().isOk());
+        send(post(draft("/start")), yugi, null).andExpect(status().isOk());
+        pick(yugi, "Card 1", 1).andExpect(jsonPath("$.board[1].pick.name").value("Card 5"));
+
+        send(post(draft("/undo")), yugi, null).andExpect(status().isOk())
+                .andExpect(jsonPath("$.board[1].pick").doesNotExist())
+                .andExpect(jsonPath("$.onTheClock.seat").value(2));
+        mvc.perform(get(draft("/queue")).with(as(kaiba))).andExpect(jsonPath("$.away").value(false));
+    }
+
+    @Test
+    void anUndoneMakeUpIsOwedAgain() throws Exception {
+        readyWithKaibaInSeat2();
+        timer(60, "SKIP", null, null);
+        send(post(draft("/start")), yugi, null).andExpect(status().isOk());
+        drafts.expireDue(Instant.now().plusSeconds(61));
+        pick(yugi, "Card 1", 1).andExpect(jsonPath("$.board[0].pick.madeUp").value(true));
+        send(post(draft("/undo")), yugi, null).andExpect(status().isOk())
+                .andExpect(jsonPath("$.board[0].pick").doesNotExist())
+                .andExpect(listAt("$.owed[*].overallPick", List.of(1)))
+                .andExpect(jsonPath("$.onTheClock.seat").value(2));
+        pick(yugi, "Card 1", 1).andExpect(status().isOk());   // and can be made up again
+    }
+
+    @Test
+    void pausingStopsPicksAndTheTimerAndResumingGivesTheTimeBack() throws Exception {
+        readyWithKaibaInSeat2();
+        timer(60, "SKIP", null, null);
+        send(post(draft("/start")), yugi, null).andExpect(status().isOk());
+        send(post(draft("/pause")), kaiba, null).andExpect(status().isForbidden());
+        send(post(draft("/pause")), yugi, null).andExpect(status().isOk())
+                .andExpect(jsonPath("$.held").value(true))
+                .andExpect(jsonPath("$.heldBy").value("Yugi"))
+                .andExpect(jsonPath("$.deadline").doesNotExist())
+                .andExpect(jsonPath("$.canPick").value(false));
+        send(post(draft("/pause")), yugi, null).andExpect(status().isConflict());
+        pick(yugi, "Card 1", 1).andExpect(status().isConflict()).andExpect(jsonPath("$.message").value("The draft is paused"));
+        drafts.expireDue(Instant.now().plusSeconds(600));
+        mvc.perform(get(draft("")).with(as(yugi))).andExpect(jsonPath("$.picksMade").value(0));
+
+        // P1 had used 10 s when the pause began, 90 s ago; resuming now leaves 50 s.
+        send(post(draft("/resume")), yugi, null).andExpect(status().isOk()).andExpect(jsonPath("$.held").value(false));
+        jdbc.update("update draft set started_at = now() - interval '100 seconds'");
+        jdbc.update("update draft_pause set paused_at = now() - interval '90 seconds', resumed_at = now()");
+        drafts.expireDue(Instant.now().plusSeconds(40));
+        mvc.perform(get(draft("")).with(as(yugi))).andExpect(jsonPath("$.picksMade").value(0));
+        drafts.expireDue(Instant.now().plusSeconds(55));
+        mvc.perform(get(draft("")).with(as(yugi))).andExpect(jsonPath("$.board[0].skipped").value(true));
+        send(post(draft("/resume")), yugi, null).andExpect(status().isConflict());
+    }
+
+    @Test
+    void aDraftWithNoPicksCanGoBackToSetup() throws Exception {
+        ready(3);
+        send(post(draft("/start")), yugi, null).andExpect(jsonPath("$.canUnstart").value(true));
+        send(post(draft("/unstart")), kaiba, null).andExpect(status().isForbidden());
+        send(post(draft("/unstart")), yugi, null).andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("NOT_STARTED"))
+                .andExpect(jsonPath("$.readiness.length()").value(5));
+        Assertions.assertEquals("SETUP", jdbc.queryForObject("select status from season", String.class));
+        mvc.perform(get(l("/seasons/" + season + "/rules")).with(as(yugi)))
+                .andExpect(jsonPath("$.calendar.weekStartLocked").value(false))
+                .andExpect(jsonPath("$.calendar.weeksDerived").value(true));
+        settings("LINEAR", ROUNDS).andExpect(status().isOk());   // editable again
+
+        // With a pick in effect it can't; once every pick is undone it can, and the log is cleared.
+        settings("SNAKE", "[{\"fromRound\":1,\"toRound\":2,\"picksPerTurn\":1}]");
+        send(post(draft("/start")), yugi, null).andExpect(status().isOk());
+        pick(yugi, "Card 1", 1).andExpect(jsonPath("$.canUnstart").value(false));
+        send(post(draft("/pause")), yugi, null).andExpect(status().isOk());
+        send(post(draft("/unstart")), yugi, null).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("Picks have been made; undo them all first to go back to setup"));
+        send(post(draft("/undo")), yugi, null).andExpect(jsonPath("$.canUnstart").value(true));
+        send(post(draft("/unstart")), yugi, null).andExpect(status().isOk()).andExpect(jsonPath("$.status").value("NOT_STARTED"));
+        Assertions.assertEquals(0, jdbc.queryForObject("select count(*) from draft_pick", Integer.class));
+        Assertions.assertEquals(0, jdbc.queryForObject("select count(*) from draft_pause", Integer.class));
+        send(post(draft("/start")), yugi, null).andExpect(status().isOk())
+                .andExpect(jsonPath("$.picksMade").value(0))
+                .andExpect(jsonPath("$.held").value(false));
     }
 
     // ---- helpers ----

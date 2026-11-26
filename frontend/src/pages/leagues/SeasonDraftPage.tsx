@@ -78,6 +78,7 @@ export default function SeasonDraftPage() {
             {d.completedAt ? `; completed ${new Date(d.completedAt).toLocaleString()}. The season is under way.` : "."}
             {" "}{d.picksMade} of {d.totalPicks} picks made.
           </p>
+          {d.status === "IN_PROGRESS" && d.canManage && <CommissionerControls draft={d} base={base} onDone={() => { draft.reload(); reloadSeason(); reloadLeague(); }} />}
           {d.status === "IN_PROGRESS" && <Clock draft={d} />}
         </>
       )}
@@ -90,9 +91,64 @@ export default function SeasonDraftPage() {
   );
 }
 
+// Pause/resume, undo the last pick, and (before any pick) back to setup.
+function CommissionerControls({ draft: d, base, onDone }: { draft: DraftState; base: string; onDone: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const act = async (path: string, confirm?: string) => {
+    if (confirm && !window.confirm(confirm)) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await apiPost(`${base}/${path}`);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+      onDone();
+    }
+  };
+  const u = d.undoable;
+  const undoLabel = u && `#${u.overallPick} ${u.displayName}: ${u.card ?? "skipped"}${u.kind === "AUTO" ? " (auto)" : ""}${u.makeup ? " (make-up)" : ""}`;
+  const undoNote = u && (u.makeup
+    ? "The pick will be owed again."
+    : `${u.displayName} will be on the clock again${d.timer ? " with a fresh timer" : ""}.`)
+    + (u?.kind === "AUTO" ? ` Their away mode turns off so it isn't picked again.` : "");
+  return (
+    <div className="commish">
+      <span className="muted">Commissioner:</span>{" "}
+      {d.held
+        ? <button onClick={() => void act("resume")} disabled={busy}>Resume draft</button>
+        : <button onClick={() => void act("pause")} disabled={busy}>Pause draft</button>}{" "}
+      {u && (
+        <button onClick={() => void act("undo", `Undo ${undoLabel}? ${undoNote} The undo is kept in the draft log.`)} disabled={busy}
+                title={`Undo ${undoLabel}`}>
+          Undo last pick
+        </button>
+      )}{" "}
+      {d.canUnstart && (
+        <button onClick={() => void act("unstart", "Take the draft back to setup? Its log (including undone picks) is cleared, and players, seats, the pool and the calendar can change again.")}
+                disabled={busy}>
+          Back to setup
+        </button>
+      )}
+      {u && <span className="muted"> Last: {undoLabel}</span>}
+      {error && <p className="bad">{error}</p>}
+    </div>
+  );
+}
+
 function Clock({ draft: d }: { draft: DraftState }) {
   const c = d.onTheClock;
   if (!c) return null;
+  if (d.held) {
+    return (
+      <p className="on-clock paused">
+        <strong>The draft is paused</strong>{d.heldBy && ` by ${d.heldBy}`}{d.heldSince && ` since ${new Date(d.heldSince).toLocaleTimeString()}`}.
+        {" "}{c.displayName} is up next with pick #{c.overallPick}{d.timer && "; their timer is stopped"}.
+      </p>
+    );
+  }
   const mine = d.mySeat === c.seat;
   const myOwed = d.owed.filter((o) => o.seat === d.mySeat);
   return (

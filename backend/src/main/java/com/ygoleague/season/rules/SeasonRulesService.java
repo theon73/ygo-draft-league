@@ -189,6 +189,21 @@ public class SeasonRulesService {
         append(season, doc.withCalendar(calendar), 0, caller.userId());
     }
 
+    /**
+     * Undoing a draft start (YGO-19): the calendar goes back to what it was before the start (the
+     * week start follows the league again; derived weeks are derived again), as a new version.
+     */
+    @Transactional
+    public void unlockCalendarAfterUnstart(Season season, SeasonRulesDocument.CalendarRules before, java.time.Instant draftStartedAt,
+                                           CurrentUser caller) {
+        if (before == null) {
+            // Drafts started before YGO-19 didn't record it: take the last version saved before the start.
+            before = rules.findFirstBySeasonIdAndCreatedAtBeforeOrderByVersionDesc(season.getId(), draftStartedAt)
+                    .map(this::parse).orElse(SeasonRulesDocument.EMPTY).calendar();
+        }
+        append(season, latest(season).withCalendar(before), 0, caller.userId());
+    }
+
     /** Writes a new version unless it would be identical to the latest. */
     private void append(Season season, SeasonRulesDocument doc, int effectiveFrom, long userId) {
         SeasonRules latestRow = rules.findFirstBySeasonIdOrderByVersionDesc(season.getId()).orElse(null);

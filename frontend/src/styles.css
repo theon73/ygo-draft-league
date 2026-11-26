@@ -132,3 +132,7 @@ ol.queue li { display: flex; align-items: center; gap: 0.4rem; margin: 0.15rem 0
 ol.queue li.taken .queue-name { text-decoration: line-through; color: #888; }
 .queue-thumb.card-image-small, img.queue-thumb { width: 28px; }
 .queue-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Commissioner controls (YGO-19) */
+.commish { margin: 0.5rem 0; }
+.on-clock.paused { background: #e8e4f8; }

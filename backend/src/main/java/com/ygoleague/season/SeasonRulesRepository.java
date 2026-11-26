@@ -9,6 +9,9 @@ public interface SeasonRulesRepository extends JpaRepository<SeasonRules, Long> 
     Optional<SeasonRules> findFirstBySeasonIdAndEffectiveFromWeekLessThanEqualOrderByVersionDesc(
             Long seasonId, int week);
 
+    /** The latest version saved before a moment (undoing an old draft start, YGO-19). */
+    Optional<SeasonRules> findFirstBySeasonIdAndCreatedAtBeforeOrderByVersionDesc(Long seasonId, java.time.Instant before);
+
     /** Latest version regardless of week; used to number and validate the next version. */
     Optional<SeasonRules> findFirstBySeasonIdOrderByVersionDesc(Long seasonId);
 }

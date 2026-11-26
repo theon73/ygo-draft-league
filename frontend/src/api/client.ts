@@ -430,6 +430,11 @@ export interface DraftState {
   onTheClock: OnTheClock | null; // while in progress
   deadline: string | null; // when the pick on the clock runs out (with a timer)
   paused: boolean; // the timer is in its overnight pause right now
+  held: boolean; // a commissioner has paused the draft
+  heldSince: string | null;
+  heldBy: string | null;
+  undoable: UndoTarget | null; // what "undo last pick" would reverse (commissioners, while it runs)
+  canUnstart: boolean; // a commissioner can take it back to setup (nothing in the log yet)
   owed: OwedPick[]; // skipped picks not yet made up (everyone's)
   pickable: PickableSlot[]; // slots the viewer may fill now: the one on the clock and/or make-ups
   mySeat: number | null; // the viewer's seat, if they play
@@ -443,6 +448,15 @@ export interface DraftState {
 }
 
 export type TimerExpiry = "WAIT" | "SKIP" | "AUTO_PICK";
+
+export interface UndoTarget {
+  overallPick: number;
+  seat: number;
+  displayName: string;
+  card: string | null; // null for a skip
+  kind: "PICK" | "AUTO" | "SKIP";
+  makeup: boolean;
+}
 
 export interface PickTimer {
   seconds: number; // per pick
@@ -480,6 +494,7 @@ export interface DraftChanged {
   status: DraftState["status"];
   picksMade: number;
   onTheClockSeat: number | null;
+  paused: boolean; // a commissioner has paused the draft
 }
 
 export interface DraftSlot {

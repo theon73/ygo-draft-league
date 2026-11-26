@@ -38,8 +38,11 @@ public class DraftEvents {
     static final Duration TIMEOUT = Duration.ofMinutes(30);
     static final Duration HEARTBEAT = Duration.ofSeconds(20);
 
-    /** @param onTheClockSeat null when nobody is (not started, or complete) */
-    public record DraftChanged(DraftService.DraftStatus status, int picksMade, Integer onTheClockSeat) {}
+    /**
+     * @param onTheClockSeat null when nobody is (not started, or complete)
+     * @param paused         a commissioner has paused the draft
+     */
+    public record DraftChanged(DraftService.DraftStatus status, int picksMade, Integer onTheClockSeat, boolean paused) {}
 
     private static final Logger log = LoggerFactory.getLogger(DraftEvents.class);
 
