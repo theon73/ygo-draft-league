@@ -95,6 +95,21 @@ export default function SeasonDraftPage() {
 function CommissionerControls({ draft: d, base, onDone }: { draft: DraftState; base: string; onDone: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [editingTimer, setEditingTimer] = useState(false);
+  const [timer, setTimer] = useState<TimerForm>(() => timerForm(d.timer));
+  const saveTimer = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await apiPut(`${base}/timer`, timerBody(timer));
+      setEditingTimer(false);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+      onDone();
+    }
+  };
   const act = async (path: string, confirm?: string) => {
     if (confirm && !window.confirm(confirm)) return;
     setBusy(true);
@@ -132,7 +147,17 @@ function CommissionerControls({ draft: d, base, onDone }: { draft: DraftState; b
           Back to setup
         </button>
       )}
+      {" "}<button onClick={() => setEditingTimer((v) => !v)} disabled={busy}>{editingTimer ? "Cancel timer change" : "Change timer"}</button>
       {u && <span className="muted"> Last: {undoLabel}</span>}
+      {editingTimer && (
+        <div className="timer-change">
+          <TimerFields value={timer} onChange={setTimer} timeZone={d.timeZone} />
+          <p>
+            <button onClick={() => void saveTimer()} disabled={busy}>Save timer</button>{" "}
+            <span className="muted">The pick on the clock gets the full new time from now (from the resume, if paused).</span>
+          </p>
+        </div>
+      )}
       {error && <p className="bad">{error}</p>}
     </div>
   );
@@ -383,6 +408,7 @@ function DraftSummary({ draft: d }: { draft: DraftState }) {
       <span className="muted">
         {d.draftableCards.toLocaleString()} draftable cards{d.forbiddenDraftable ? " (Forbidden cards can be drafted)" : " (Forbidden and soft-banned cards excluded)"}.
         {" "}{describeTimer(d.timer)}
+        {d.timerChangedBy && d.timerChangedAt && ` (changed by ${d.timerChangedBy}, ${new Date(d.timerChangedAt).toLocaleTimeString()})`}
       </span>
     </p>
   );
@@ -390,6 +416,62 @@ function DraftSummary({ draft: d }: { draft: DraftState }) {
 
 type Unit = "seconds" | "minutes" | "hours";
 const UNIT_SECONDS: Record<Unit, number> = { seconds: 1, minutes: 60, hours: 3600 };
+
+// The pick timer as edited: an amount and a unit (saved in seconds), plus the optional overnight pause.
+interface TimerForm { on: boolean; amount: string; unit: Unit; onExpiry: TimerExpiry; pauseOn: boolean; pauseFrom: string; pauseTo: string }
+
+function timerForm(t: PickTimer | null): TimerForm {
+  const unit: Unit = !t ? "minutes" : t.seconds % 3600 === 0 ? "hours" : t.seconds % 60 === 0 ? "minutes" : "seconds";
+  return {
+    on: t !== null, amount: t ? String(t.seconds / UNIT_SECONDS[unit]) : "2", unit, onExpiry: t?.onExpiry ?? "AUTO_PICK",
+    pauseOn: !!t?.pauseFrom, pauseFrom: t?.pauseFrom?.slice(0, 5) ?? "23:00", pauseTo: t?.pauseTo?.slice(0, 5) ?? "08:00",
+  };
+}
+
+/** The request fields for a timer (timerSeconds 0 = no timer). */
+function timerBody(f: TimerForm) {
+  if (!f.on) return { timerSeconds: 0 };
+  return {
+    timerSeconds: Math.round(Number(f.amount) * UNIT_SECONDS[f.unit]), timerExpiry: f.onExpiry,
+    ...(f.pauseOn ? { pauseFrom: f.pauseFrom, pauseTo: f.pauseTo } : {}),
+  };
+}
+
+// The timer controls, shared by the draft settings (before the start) and the commissioner bar (during).
+function TimerFields({ value: f, onChange, timeZone }: { value: TimerForm; onChange: (f: TimerForm) => void; timeZone: string }) {
+  const set = (patch: Partial<TimerForm>) => onChange({ ...f, ...patch });
+  return (
+    <>
+      <label className="check">
+        <input type="checkbox" checked={f.on} onChange={(e) => set({ on: e.target.checked })} /> Each pick has a time limit
+      </label>
+      {f.on && (
+        <>
+          <p className="round-block">
+            <input type="number" className="narrow-num" min={1} value={f.amount} onChange={(e) => set({ amount: e.target.value })} aria-label="Time per pick" />{" "}
+            <select value={f.unit} onChange={(e) => set({ unit: e.target.value as Unit })} aria-label="Unit">
+              <option value="seconds">seconds</option>
+              <option value="minutes">minutes</option>
+              <option value="hours">hours</option>
+            </select>{" "}
+            per pick; when it runs out{" "}
+            <select value={f.onExpiry} onChange={(e) => set({ onExpiry: e.target.value as TimerExpiry })} aria-label="When time runs out">
+              <option value="AUTO_PICK">auto-pick from the player's queue (skip if empty)</option>
+              <option value="SKIP">skip (the player makes it up later)</option>
+              <option value="WAIT">wait for the pick</option>
+            </select>
+          </p>
+          <label className="check">
+            <input type="checkbox" checked={f.pauseOn} onChange={(e) => set({ pauseOn: e.target.checked })} /> Pause overnight from{" "}
+            <input type="time" value={f.pauseFrom} onChange={(e) => set({ pauseFrom: e.target.value })} disabled={!f.pauseOn} aria-label="Pause from" /> to{" "}
+            <input type="time" value={f.pauseTo} onChange={(e) => set({ pauseTo: e.target.value })} disabled={!f.pauseOn} aria-label="Pause until" />{" "}
+            <span className="muted">({timeZone.replaceAll("_", " ")}; the clock stops in between, for drafts that run over days)</span>
+          </label>
+        </>
+      )}
+    </>
+  );
+}
 
 // Round blocks are edited as "N rounds at P picks per turn" and saved as contiguous round ranges.
 interface Block { rounds: string; picks: string }
@@ -409,15 +491,7 @@ function DraftSettings({ draft: d, base, onSaved }: { draft: DraftState; base: s
   const [blocks, setBlocks] = useState<Block[]>(toBlocks(d.rounds));
   const [start, setStart] = useState(d.scheduledStart ? localInput(d.scheduledStart, d.timeZone) : "");
   const [forbidden, setForbidden] = useState(d.forbiddenDraftable);
-  // The timer is edited as an amount and a unit, and saved in seconds.
-  const initialUnit: Unit = !d.timer ? "minutes" : d.timer.seconds % 3600 === 0 ? "hours" : d.timer.seconds % 60 === 0 ? "minutes" : "seconds";
-  const [timerOn, setTimerOn] = useState(d.timer !== null);
-  const [amount, setAmount] = useState(d.timer ? String(d.timer.seconds / UNIT_SECONDS[initialUnit]) : "2");
-  const [unit, setUnit] = useState<Unit>(initialUnit);
-  const [onExpiry, setOnExpiry] = useState<TimerExpiry>(d.timer?.onExpiry ?? "AUTO_PICK");
-  const [pauseOn, setPauseOn] = useState(!!d.timer?.pauseFrom);
-  const [pauseFrom, setPauseFrom] = useState(d.timer?.pauseFrom?.slice(0, 5) ?? "23:00");
-  const [pauseTo, setPauseTo] = useState(d.timer?.pauseTo?.slice(0, 5) ?? "08:00");
+  const [timer, setTimer] = useState<TimerForm>(() => timerForm(d.timer));
   const [error, setError] = useState<string | null>(null);
 
   const rounds = toRounds(blocks);
@@ -428,10 +502,7 @@ function DraftSettings({ draft: d, base, onSaved }: { draft: DraftState; base: s
     setError(null);
     try {
       await apiPut(`${base}/settings`, {
-        order, rounds, scheduledStart: start || null, forbiddenDraftable: forbidden,
-        ...(timerOn
-          ? { timerSeconds: Math.round(Number(amount) * UNIT_SECONDS[unit]), timerExpiry: onExpiry, ...(pauseOn ? { pauseFrom, pauseTo } : {}) }
-          : { timerSeconds: 0 }),
+        order, rounds, scheduledStart: start || null, forbiddenDraftable: forbidden, ...timerBody(timer),
       });
       onSaved();
     } catch (e) {
@@ -482,36 +553,12 @@ function DraftSettings({ draft: d, base, onSaved }: { draft: DraftState; base: s
       </label>
 
       <h5>Pick timer</h5>
-      <label className="check">
-        <input type="checkbox" checked={timerOn} onChange={(e) => setTimerOn(e.target.checked)} /> Each pick has a time limit
-      </label>
-      {timerOn && (
-        <>
-          <p className="round-block">
-            <input type="number" className="narrow-num" min={1} value={amount} onChange={(e) => setAmount(e.target.value)} aria-label="Time per pick" />{" "}
-            <select value={unit} onChange={(e) => setUnit(e.target.value as Unit)} aria-label="Unit">
-              <option value="seconds">seconds</option>
-              <option value="minutes">minutes</option>
-              <option value="hours">hours</option>
-            </select>{" "}
-            per pick; when it runs out{" "}
-            <select value={onExpiry} onChange={(e) => setOnExpiry(e.target.value as TimerExpiry)} aria-label="When time runs out">
-              <option value="AUTO_PICK">auto-pick from the player's queue (skip if empty)</option>
-              <option value="SKIP">skip (the player makes it up later)</option>
-              <option value="WAIT">wait for the pick</option>
-            </select>
-          </p>
-          <label className="check">
-            <input type="checkbox" checked={pauseOn} onChange={(e) => setPauseOn(e.target.checked)} /> Pause overnight from{" "}
-            <input type="time" value={pauseFrom} onChange={(e) => setPauseFrom(e.target.value)} disabled={!pauseOn} aria-label="Pause from" /> to{" "}
-            <input type="time" value={pauseTo} onChange={(e) => setPauseTo(e.target.value)} disabled={!pauseOn} aria-label="Pause until" />{" "}
-            <span className="muted">({d.timeZone.replaceAll("_", " ")}; the clock stops in between, for drafts that run over days)</span>
-          </label>
-          <p className="muted">
-            Short timers (seconds or minutes) suit a live draft; hours suit a slow one. Skipped picks can be made up until the
-            draft ends; any still owed when the last pick is made are forfeited.
-          </p>
-        </>
+      <TimerFields value={timer} onChange={setTimer} timeZone={d.timeZone} />
+      {timer.on && (
+        <p className="muted">
+          Short timers (seconds or minutes) suit a live draft; hours suit a slow one. Skipped picks can be made up until the
+          draft ends; any still owed when the last pick is made are forfeited. Commissioners can change the timer during the draft.
+        </p>
       )}
       <p><button onClick={() => void save()}>Save draft settings</button></p>
       {error && <p className="bad">{error}</p>}
