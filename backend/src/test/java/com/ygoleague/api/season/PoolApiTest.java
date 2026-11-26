@@ -124,7 +124,7 @@ class PoolApiTest {
         send(post(pool("/generate")), yugi, null)
                 .andExpect(jsonPath("$.exceptions").value(0))
                 .andExpect(jsonPath("$.dated").value(5));
-        mvc.perform(get(pool("/cards")).param("filter", "REMOVED").with(as(yugi)))
+        mvc.perform(get(pool("/cards")).param("show", "REMOVED").with(as(yugi)))
                 .andExpect(listAt("$.items[*].name", List.of("Pot of Greed")));
     }
 
@@ -149,7 +149,7 @@ class PoolApiTest {
         mvc.perform(get(pool("/candidates")).param("q", "dragon").with(as(yugi)))
                 .andExpect(listAt("$[*].name", List.of("Judgment Dragon", "Stardust Dragon")))
                 .andExpect(listAt("$[*].inPool", List.of(true, false)));
-        mvc.perform(get(pool("/cards")).param("filter", "EXCEPTIONS").with(as(kaiba)))
+        mvc.perform(get(pool("/cards")).param("show", "EXCEPTIONS").with(as(kaiba)))
                 .andExpect(listAt("$.items[*].name", List.of("Judgment Dragon")));
     }
 
@@ -188,7 +188,7 @@ class PoolApiTest {
                 .andExpect(jsonPath("$.softBanned").value(2))
                 .andExpect(jsonPath("$.requiresOwnership").value(1));
         send(patch(pool("/archetypes/Nope")), yugi, "{\"softBanned\":true}").andExpect(status().isNotFound());
-        mvc.perform(get(pool("/cards")).param("filter", "FLAGGED").with(as(kaiba)))
+        mvc.perform(get(pool("/cards")).param("show", "FLAGGED").with(as(kaiba)))
                 .andExpect(listAt("$.items[*].name", List.of("Elemental HERO Avian", "Elemental HERO Burstinatrix", "Polymerization")));
         mvc.perform(get(pool("/changes")).with(as(kaiba))).andExpect(jsonPath("$[0].detail.archetype").value("Elemental HERO"));
     }
@@ -210,7 +210,7 @@ class PoolApiTest {
                 .andExpect(listAt("$.items[*].name", List.of("Elemental HERO Avian", "Elemental HERO Burstinatrix", "Polymerization", "Pot of Greed")))
                 .andExpect(listAt("$.items[*].banStatus", java.util.Arrays.asList("SEMI_LIMITED", null, "LIMITED", "FORBIDDEN")))
                 .andExpect(listAt("$.items[*].effectiveMax", List.of(2, 3, 1, 0)));
-        mvc.perform(get(pool("/cards")).param("filter", "BAN_LIST").with(as(kaiba)))
+        mvc.perform(get(pool("/cards")).param("show", "BAN_LIST").with(as(kaiba)))
                 .andExpect(jsonPath("$.total").value(3));
         // Rows carry the stats for their one-line summary.
         mvc.perform(get(pool("/cards")).param("q", "avian").with(as(kaiba)))

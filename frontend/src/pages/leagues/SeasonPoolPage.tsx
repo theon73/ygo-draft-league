@@ -1,8 +1,8 @@
 import { useState, type FormEvent } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   apiDelete, apiGet, apiPatch, apiPost,
-  type PoolCandidate, type PoolCard, type PoolCardPage, type PoolChange, type PoolSummary,
+  type PoolCandidate, type PoolCard, type PoolCardPage, type PoolChange, type PoolFacets, type PoolSummary,
 } from "../../api/client";
 import CardImage from "../../components/CardImage";
 import CardPreview from "../../components/CardPreview";
@@ -11,15 +11,44 @@ import { statusLabel } from "../explore/banStatus";
 import { useApi } from "../../hooks/useApi";
 import { useLeague } from "./LeagueLayout";
 import { useSeason } from "./SeasonLayout";
+import PoolFilters from "./PoolFilters";
+import PoolGrid from "./PoolGrid";
+import { activeFilterCount, MONSTER_ONLY, poolQueryString, type MultiParam } from "./poolQuery";
 
-type Filter = "ALL" | "EXCEPTIONS" | "FLAGGED" | "BAN_LIST" | "REMOVED";
-const FILTERS: { value: Filter; label: string }[] = [
+type Show = "ALL" | "EXCEPTIONS" | "FLAGGED" | "BAN_LIST" | "REMOVED";
+const SHOWS: { value: Show; label: string }[] = [
   { value: "ALL", label: "All" },
   { value: "EXCEPTIONS", label: "Exceptions" },
   { value: "BAN_LIST", label: "On ban list" },
   { value: "FLAGGED", label: "Flagged" },
   { value: "REMOVED", label: "Removed" },
 ];
+
+type View = "grid" | "table";
+const VIEW_KEY = "poolView";
+// The same standard options in both views; each view still remembers its own choice.
+const PAGE_SIZES: Record<View, number[]> = { grid: [10, 25, 50, 100], table: [10, 25, 50, 100] };
+const DEFAULT_PAGE_SIZE: Record<View, number> = { grid: 50, table: 50 };
+const pageSizeKey = (v: View) => `poolPageSize.${v}`;
+
+function savedPageSize(v: View): number {
+  try {
+    const n = Number(localStorage.getItem(pageSizeKey(v)));
+    return PAGE_SIZES[v].includes(n) ? n : DEFAULT_PAGE_SIZE[v];
+  } catch {
+    return DEFAULT_PAGE_SIZE[v];
+  }
+}
+
+// Per-viewer convenience only, so a missing or blocked localStorage just means the default.
+function savedView(): View | null {
+  try {
+    const v = localStorage.getItem(VIEW_KEY);
+    return v === "grid" || v === "table" ? v : null;
+  } catch {
+    return null;
+  }
+}
 
 // The copy limit the ban list sets; a league override (maxPlayable) wins over it.
 const listLimit = (c: PoolCard) => (c.banStatus === "FORBIDDEN" ? 0 : c.banStatus === "LIMITED" ? 1 : c.banStatus === "SEMI_LIMITED" ? 2 : 3);
@@ -29,21 +58,66 @@ export default function SeasonPoolPage() {
   const { season } = useSeason();
   const base = `/leagues/${league.id}/seasons/${season.id}/pool`;
   const summary = useApi<PoolSummary>(base);
-  const [filter, setFilter] = useState<Filter>("ALL");
-  const [q, setQ] = useState("");
-  const [search, setSearch] = useState("");
-  const [page, setPage] = useState(0);
-  const cards = useApi<PoolCardPage>(`${base}/cards?q=${encodeURIComponent(search)}&filter=${filter}&page=${page}`);
+  const facets = useApi<PoolFacets>(`${base}/facets`, summary.data ? `${summary.data.total}-${summary.data.generatedAt}` : undefined);
+  const [params, setParams] = useSearchParams();
+  const [view, setView] = useState<View | null>(savedView);
+  const page = Number(params.get("page") ?? 0);
+  const show = (params.get("show") ?? "ALL") as Show;
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   // Mid-season, every change takes effect from a week (never earlier than now).
   const [week, setWeek] = useState<string>("");
+
+  // Commissioners curate in the table; everyone else browses the grid. A choice is remembered.
+  const shownView: View = view ?? (summary.data?.canManage ? "table" : "grid");
+  // Remembered per view, so the grid and the table each keep their own choice.
+  const [pageSizes, setPageSizes] = useState<Record<View, number>>(() => ({ grid: savedPageSize("grid"), table: savedPageSize("table") }));
+  const pageSize = pageSizes[shownView];
+  const cards = useApi<PoolCardPage>(summary.data?.generatedAt ? `${base}/cards?${poolQueryString(params, page, pageSize)}` : null);
 
   if (summary.error) return <p className="bad">Couldn't load the pool ({summary.error})</p>;
   if (!summary.data) return <p className="muted">Loading…</p>;
   const s = summary.data;
   const manage = s.canManage;
   const effective: { effectiveFromWeek?: number } = s.started ? { effectiveFromWeek: Number(week || s.minEffectiveWeek) } : {};
+
+  // Updaters build on the latest URL (functional form), so two changes in one event both stick.
+  const setParam = (name: string, value: string) => {
+    setParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (value) next.set(name, value); else next.delete(name);
+      if (name !== "page") next.delete("page");   // a new filter starts from the first page
+      return next;
+    }, { replace: name !== "page" && name !== "show" });
+  };
+  const setList = (name: MultiParam, values: string[]) => setParams((prev) => {
+    const next = new URLSearchParams(prev);
+    next.delete(name);
+    for (const v of values) next.append(name, v);
+    next.delete("page");
+    if (name === "kind" && values.length > 0) {
+      // Filters for kinds no longer shown would only empty the list, so drop them.
+      if (!values.includes("MONSTER")) for (const p of MONSTER_ONLY) next.delete(p);
+      if (!values.includes("SPELL")) next.delete("spellType");
+      if (!values.includes("TRAP")) next.delete("trapType");
+    }
+    return next;
+  }, { replace: true });
+  const clearFilters = () => {
+    const next = new URLSearchParams();
+    if (params.get("show")) next.set("show", params.get("show")!);
+    setParams(next);
+  };
+  const choosePageSize = (n: number) => {
+    setPageSizes((sizes) => ({ ...sizes, [shownView]: n }));
+    try { localStorage.setItem(pageSizeKey(shownView), String(n)); } catch { /* fine: not remembered */ }
+    setParam("page", "");   // back to page 1: the current page may not exist any more
+  };
+  const chooseView = (v: View) => {
+    setView(v);
+    try { localStorage.setItem(VIEW_KEY, v); } catch { /* fine: not remembered */ }
+    setParam("page", "");
+  };
 
   const act = async (change: () => Promise<unknown>) => {
     setError(null);
@@ -75,6 +149,7 @@ export default function SeasonPoolPage() {
 
   const stale = s.rulesCutoff && s.generatedCutoff && s.rulesCutoff !== s.generatedCutoff;
   const lastPage = cards.data ? Math.max(0, Math.ceil(cards.data.total / cards.data.pageSize) - 1) : 0;
+  const hasFilters = activeFilterCount(params) > 0 || params.getAll("kind").length > 0 || !!params.get("q");
 
   return (
     <>
@@ -94,8 +169,8 @@ export default function SeasonPoolPage() {
           <br />
           <span className="muted">
             {s.banList
-              ? `Ban list: ${s.banList} (${s.forbidden} forbidden, ${s.limited} limited, ${s.semiLimited} semi-limited in this pool). Copy limits follow it unless you set one here.`
-              : "No ban list in the rules, so every card is limited to 3 unless you set a limit here."}
+              ? `Ban list: ${s.banList} (${s.forbidden} forbidden, ${s.limited} limited, ${s.semiLimited} semi-limited in this pool). Copy limits follow it unless ${manage ? "you set one here" : "the league sets one"}.`
+              : `No ban list in the rules, so every card is limited to 3 unless ${manage ? "you set a limit here" : "the league sets one"}.`}
           </span>
         </p>
       )}
@@ -124,23 +199,40 @@ export default function SeasonPoolPage() {
 
       {s.generatedAt !== null && (
         <>
-          <nav className="tabs small">
-            {FILTERS.map((f) => (
-              <button key={f.value} className={f.value === filter ? "active" : ""} onClick={() => { setFilter(f.value); setPage(0); }}>
-                {f.label}
-              </button>
-            ))}
-          </nav>
-          <form onSubmit={(e) => { e.preventDefault(); setSearch(q.trim()); setPage(0); }}>
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search the pool by name" />
-            <button type="submit">Search</button>
-          </form>
+          <div className="pool-toolbar">
+            <nav className="tabs small" aria-label="Show">
+              {SHOWS.filter((x) => manage || x.value !== "REMOVED").map((x) => (
+                <button key={x.value} className={x.value === show ? "active" : ""} onClick={() => setParam("show", x.value === "ALL" ? "" : x.value)}>
+                  {x.label}
+                </button>
+              ))}
+            </nav>
+            <nav className="tabs small view-toggle" aria-label="View">
+              <button className={shownView === "grid" ? "active" : ""} onClick={() => chooseView("grid")}>Grid</button>
+              <button className={shownView === "table" ? "active" : ""} onClick={() => chooseView("table")}>Table</button>
+            </nav>
+          </div>
+          <PoolFilters key={`${params.get("q") ?? ""}|${params.get("cardText") ?? ""}`} params={params} setOne={setParam} setList={setList} clear={clearFilters}
+                       facets={facets.data} hasBanList={!!s.banList} />
+          {cards.error && <p className="bad">Couldn't load cards ({cards.error})</p>}
           {cards.data && (
             <>
-              <p className="muted">
-                {cards.data.total.toLocaleString()} card{cards.data.total === 1 ? "" : "s"}
-                {cards.data.total > cards.data.pageSize && ` · page ${page + 1} of ${lastPage + 1}`}
-              </p>
+              <div className="results-bar">
+                <span className="muted">
+                  {cards.data.total.toLocaleString()} card{cards.data.total === 1 ? "" : "s"}
+                  {hasFilters && " match"}
+                  {cards.data.total > cards.data.pageSize && ` · page ${page + 1} of ${lastPage + 1}`}
+                </span>
+                <label className="per-page muted">
+                  Per page{" "}
+                  <select value={pageSize} onChange={(e) => choosePageSize(Number(e.target.value))} aria-label="Cards per page">
+                    {PAGE_SIZES[shownView].map((n) => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                </label>
+              </div>
+              {shownView === "grid" ? (
+                <PoolGrid cards={cards.data.items} />
+              ) : (
               <table className="pool">
                 <thead>
                   <tr><th /><th>Card</th><th>Released</th><th>Soft-ban</th><th>Must own</th><th>Max copies</th>{manage && <th />}</tr>
@@ -163,7 +255,7 @@ export default function SeasonPoolPage() {
                         </span>
                       </td>
                       <td>{c.tcgDate}</td>
-                      {manage && filter !== "REMOVED" ? (
+                      {manage && show !== "REMOVED" ? (
                         <>
                           <td><input type="checkbox" checked={c.softBanned} disabled={busy} aria-label={`Soft-ban ${c.name}`}
                                      onChange={(e) => void setFlags(c, { softBanned: e.target.checked })} /></td>
@@ -192,10 +284,11 @@ export default function SeasonPoolPage() {
                   ))}
                 </tbody>
               </table>
+              )}
               {cards.data.total > cards.data.pageSize && (
                 <p>
-                  <button disabled={page === 0} onClick={() => setPage(page - 1)}>Previous</button>{" "}
-                  <button disabled={page >= lastPage} onClick={() => setPage(page + 1)}>Next</button>
+                  <button disabled={page === 0} onClick={() => setParam("page", String(page - 1))}>Previous</button>{" "}
+                  <button disabled={page >= lastPage} onClick={() => setParam("page", String(page + 1))}>Next</button>
                 </p>
               )}
             </>
