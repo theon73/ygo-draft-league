@@ -292,6 +292,8 @@ export interface SeasonRules {
   version: number | null; // null until first saved
   transactions: TransactionRules;
   results: { autoConfirmHours: number | null; confirmHours: number; tiebreakers: Tiebreaker[] };
+  playoffs: PlayoffSettings;
+  playoffsStarted: boolean; // then the playoff settings are fixed
   effectiveFromWeek: number;
   canManage: boolean;
   started: boolean; // season left setup: changes need effectiveFromWeek
@@ -554,6 +556,56 @@ export interface Schedule {
   drawnBy: string | null; // null = automatically when the draft completed
   draws: number;
   weeks: ScheduleWeek[];
+}
+
+// Playoffs (YGO-27).
+
+export interface PlayoffSettings {
+  enabled: boolean;
+  directQualifiers: number | null; // the top N go straight into the bracket
+  playInTeams: number | null; // null/0 = none, 2 = one match for one spot, 4 = NBA style (two spots)
+  bestOf: number | null; // null = the regular season's
+  playInBestOf: number | null; // null = the playoffs'
+}
+
+// A play-in or playoff match. a / b are null until known; aFrom / bFrom say where they'll come from.
+export interface BracketMatch {
+  id: string;
+  stage: "PLAY_IN" | "PLAYOFFS";
+  round: number;
+  label: string;
+  seedA: number | null;
+  seedB: number | null;
+  a: SchedulePlayer | null;
+  b: SchedulePlayer | null;
+  aFrom: string | null;
+  bFrom: string | null;
+  bestOf: number;
+  readyAt: string | null;
+  deadline: string | null; // a week after both players are known
+  overdue: boolean;
+  result: MatchResult | null;
+  winner: SchedulePlayer | null;
+  mine: boolean;
+  canReport: boolean;
+  canConfirm: boolean;
+  canEnter: boolean;
+}
+
+export interface Playoffs {
+  enabled: boolean;
+  settings: PlayoffSettings;
+  shape: string | null; // "Seeds 1-4 qualify directly; 5-8 play in for 2 spots; …"
+  playoffBestOf: number;
+  playInBestOf: number;
+  started: string | null;
+  canStart: boolean;
+  canComplete: boolean; // no playoffs: a commissioner completes the season
+  why: string | null; // why it can't start / complete now (commissioners)
+  seeds: { seed: number; player: SchedulePlayer; playIn: boolean }[]; // frozen once started; a preview before
+  matches: BracketMatch[];
+  champion: SchedulePlayer | null;
+  complete: boolean;
 }
 
 // Trades (YGO-24): one private conversation per pair of players.

@@ -62,10 +62,12 @@ public class ResultService {
     private final SeasonRepository seasons;
     private final PublicIds publicIds;
     private final TransactionAnnouncer announcer;
+    private final PlayoffService playoffs;
     private final JdbcClient jdbc;
 
     public ResultService(SeasonAccess access, SeasonRulesService rules, SeasonRepository seasons, PublicIds publicIds,
-                         TransactionAnnouncer announcer, JdbcClient jdbc) {
+                         TransactionAnnouncer announcer, PlayoffService playoffs, JdbcClient jdbc) {
+        this.playoffs = playoffs;
         this.access = access;
         this.rules = rules;
         this.seasons = seasons;
@@ -75,7 +77,18 @@ public class ResultService {
     }
 
     /** A match and its two players (null b = a bye). */
-    record Match(long id, long seasonId, int week, Long a, Long b, String aName, String bName, Long aUser, Long bUser) {}
+    /**
+     * @param week    the regular season's league week (null for the play-in and playoffs)
+     * @param stage   REGULAR, PLAY_IN or PLAYOFFS
+     * @param bestOf  fixed for play-in and playoff matches when the bracket is made (null: from the week's rules)
+     * @param label   "Play-in: 5 v 6", "Final", … (null for regular matches)
+     */
+    record Match(long id, long seasonId, Integer week, Long a, Long b, String aName, String bName, Long aUser, Long bUser, String stage,
+                 Integer bestOf, String label) {
+        boolean bracket() { return !"REGULAR".equals(stage); }
+
+        String where() { return label != null ? label : "Week " + week; }
+    }
 
     /** The live (not superseded) report of a match. */
     record Report(long id, int gamesA, int gamesB, String forfeit, String status, Long reportedPlayer, long reportedBy) {}
@@ -91,9 +104,11 @@ public class ResultService {
         Long me = playerOf(m, caller);
         if (me == null) throw forbidden("Only the two players report a match; a commissioner can enter it for them");
         open(season);
+        checkStage(season, m);
         if (req == null || req.gamesA() == null || req.gamesB() == null) throw bad("Enter the games each player won");
         int bestOf = bestOf(season, m);
         checkScore(req.gamesA(), req.gamesB(), bestOf);
+        if (m.bracket() && req.gamesA().equals(req.gamesB())) throw bad("A playoff match needs a winner; play another game");
         List<String> replays = replays(req.replays(), bestOf);
         List<String> notes = notes(req.notes(), bestOf);
 
@@ -128,6 +143,7 @@ public class ResultService {
         jdbc.sql("update match_report set status = 'CONFIRMED', confirmed_by = :u, confirmed_at = now() where id = :r")
                 .param("u", caller.userId()).param("r", r.id()).update();
         announceFinal(season, m, r.gamesA(), r.gamesB(), null, "");
+        if (m.bracket()) playoffs.advance(season);
     }
 
     @Transactional
@@ -141,7 +157,7 @@ public class ResultService {
         if (note != null && note.length() > 500) throw bad("Keep the note to 500 characters");
         jdbc.sql("update match_report set status = 'DISPUTED', dispute_note = :n, disputed_by = :u, disputed_at = now() where id = :r")
                 .param("n", note).param("u", caller.userId()).param("r", r.id()).update();
-        announcer.announce(season, NotificationEvent.RESULTS, "results", "⚠️ Week " + m.week() + ": **" + DiscordText.escape(m.aName()) + "** vs **"
+        announcer.announce(season, NotificationEvent.RESULTS, "results", "⚠️ " + m.where() + ": **" + DiscordText.escape(m.aName()) + "** vs **"
                 + DiscordText.escape(m.bName()) + "**: the reported result is disputed; a commissioner will settle it.");
     }
 
@@ -154,8 +170,9 @@ public class ResultService {
         Season season = ref.season();
         lock(season);
         Match m = match(season, matchId);
-        if (m.b() == null) throw bad("A bye has no result");
+        if (m.b() == null) throw bad(m.bracket() ? "Both players aren't known yet" : "A bye has no result");
         open(season);
+        checkStage(season, m);
         if (req == null) throw bad("Enter the games or a forfeit");
         String forfeit = req.forfeit() == null || req.forfeit().isBlank() ? null : req.forfeit().strip().toUpperCase();
         int a = 0;
@@ -163,11 +180,13 @@ public class ResultService {
         int bestOf = bestOf(season, m);
         if (forfeit != null) {
             if (!List.of("A", "B", "BOTH").contains(forfeit)) throw bad("A forfeit is by player A, player B, or both");
+            if (m.bracket() && forfeit.equals("BOTH")) throw bad("Someone has to go through in the playoffs: one player forfeits, not both");
         } else {
             if (req.gamesA() == null || req.gamesB() == null) throw bad("Enter the games each player won, or a forfeit");
             a = req.gamesA();
             b = req.gamesB();
             checkScore(a, b, bestOf);
+            if (m.bracket() && a == b) throw bad("A playoff match needs a winner");
         }
         live(m).ifPresent(r -> supersede(r.id()));
         jdbc.sql("""
@@ -178,6 +197,7 @@ public class ResultService {
                 .param("r", textArray(replays(req.replays(), bestOf))).param("n", textArray(notes(req.notes(), bestOf)))
                 .param("u", caller.userId()).update();
         announceFinal(season, m, a, b, forfeit, " (entered by " + DiscordText.escape(caller.displayName()) + ")");
+        if (m.bracket()) playoffs.advance(season);
     }
 
     // ---- Auto-confirm -------------------------------------------------------------------------
@@ -190,18 +210,18 @@ public class ResultService {
      */
     @Transactional
     public int autoConfirmDue(Instant now) {
-        record Due(long reportId, long seasonId, long matchId, Instant reportedAt, int week, int a, int b) {}
+        record Due(long reportId, long seasonId, long matchId, Instant reportedAt, Integer week, int a, int b) {}
         List<Due> pending = jdbc.sql("""
                         select r.id, r.season_id, r.match_id, r.reported_at, m.week, r.games_a, r.games_b
                         from match_report r join season_match m on m.id = r.match_id
                         where r.status = 'PENDING' order by r.reported_at""")
-                .query((rs, n) -> new Due(rs.getLong(1), rs.getLong(2), rs.getLong(3), rs.getTimestamp(4).toInstant(), rs.getInt(5),
+                .query((rs, n) -> new Due(rs.getLong(1), rs.getLong(2), rs.getLong(3), rs.getTimestamp(4).toInstant(), (Integer) rs.getObject(5),
                         rs.getInt(6), rs.getInt(7)))
                 .list();
         int done = 0;
         for (Due d : pending) {
             Season season = seasons.findById(d.seasonId()).orElseThrow();
-            int hours = rules.inEffect(season, d.week()).results().confirmHours();
+            int hours = (d.week() == null ? rules.latest(season) : rules.inEffect(season, d.week())).results().confirmHours();
             if (d.reportedAt().plus(hours, ChronoUnit.HOURS).isAfter(now)) continue;
             int changed = jdbc.sql("""
                             update match_report set status = 'CONFIRMED', confirmed_at = :now, auto_confirmed = true
@@ -211,6 +231,7 @@ public class ResultService {
             done++;
             Match m = matchById(season, d.matchId());
             announceFinal(season, m, d.a(), d.b(), null, " (auto-confirmed)");
+            if (m.bracket()) playoffs.advance(season);
         }
         return done;
     }
@@ -279,7 +300,7 @@ public class ResultService {
                 default -> an + " and " + bn + " both forfeit";
             };
         }
-        announcer.announce(season, NotificationEvent.RESULTS, "results", "Week " + m.week() + ": " + line + suffix);
+        announcer.announce(season, NotificationEvent.RESULTS, "results", m.where() + ": " + line + suffix);
     }
 
     private Report pendingForOpponent(Match m, CurrentUser caller, String what) {
@@ -314,7 +335,16 @@ public class ResultService {
         return player != null && player.equals(m.a()) ? m.aName() : m.bName();
     }
 
+    /** Regular-season results can't change once the playoffs have started (seeding is frozen from them). */
+    private void checkStage(Season season, Match m) {
+        if (!m.bracket() && jdbc.sql("select exists (select 1 from stage where season_id = :s and kind = 'PLAYOFFS')")
+                .param("s", season.getId()).query(Boolean.class).single()) {
+            throw conflict("The playoffs have started, so regular-season results are final");
+        }
+    }
+
     private int bestOf(Season season, Match m) {
+        if (m.bestOf() != null) return m.bestOf();
         return rules.inEffect(season, m.week()).competition().bestOf();
     }
 
@@ -333,29 +363,17 @@ public class ResultService {
 
     private Match matchById(Season season, long id) {
         return jdbc.sql("""
-                        select m.id, m.season_id, m.week, m.player_a_id, m.player_b_id, am.display_name, bm.display_name, am.user_id, bm.user_id
-                        from season_match m
+                        select m.id, m.season_id, m.week, m.player_a_id, m.player_b_id, am.display_name, bm.display_name, am.user_id, bm.user_id,
+                               st.kind, m.best_of, m.label
+                        from season_match m join stage st on st.id = m.stage_id
                         left join season_player ap on ap.id = m.player_a_id left join league_member am on am.id = ap.league_member_id
                         left join season_player bp on bp.id = m.player_b_id left join league_member bm on bm.id = bp.league_member_id
                         where m.id = :m and m.season_id = :s""")
                 .param("m", id).param("s", season.getId())
-                .query((rs, n) -> new Match(rs.getLong(1), rs.getLong(2), rs.getInt(3), (Long) rs.getObject(4), (Long) rs.getObject(5),
-                        rs.getString(6), rs.getString(7), (Long) rs.getObject(8), (Long) rs.getObject(9)))
+                .query((rs, n) -> new Match(rs.getLong(1), rs.getLong(2), (Integer) rs.getObject(3), (Long) rs.getObject(4), (Long) rs.getObject(5),
+                        rs.getString(6), rs.getString(7), (Long) rs.getObject(8), (Long) rs.getObject(9), rs.getString(10),
+                        (Integer) rs.getObject(11), rs.getString(12)))
                 .optional().orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No such match"));
-    }
-
-    // ---- Standings ----------------------------------------------------------------------------
-
-    /** Final results of a season's regular-season matches, for {@link Standings}. */
-    List<Standings.Result<Long>> finalResults(Season season) {
-        return jdbc.sql("""
-                        select m.player_a_id, m.player_b_id, r.games_a, r.games_b, r.forfeit
-                        from match_report r join season_match m on m.id = r.match_id join stage st on st.id = m.stage_id
-                        where r.season_id = :s and r.status = 'CONFIRMED' and st.kind = 'REGULAR' and m.player_b_id is not null""")
-                .param("s", season.getId())
-                .query((rs, n) -> new Standings.Result<>(rs.getLong(1), rs.getLong(2), rs.getInt(3), rs.getInt(4),
-                        rs.getString(5) == null ? null : Standings.Forfeit.valueOf(rs.getString(5))))
-                .list();
     }
 
     private static ResponseStatusException bad(String message) {

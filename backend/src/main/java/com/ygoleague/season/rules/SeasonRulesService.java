@@ -64,7 +64,9 @@ public class SeasonRulesService {
                               CompetitionFormat competitionFormat, Integer roundRobinCycles, Integer matchBestOf, Integer effectiveFromWeek,
                               Integer freeAgencyPerWeek, Integer tradesPerWeek, Integer tradeDeadlineWeek,
                               Boolean commissionerApproval, Integer autoConfirmHours,
-                              List<com.ygoleague.competition.Standings.Tiebreaker> tiebreakers) {}
+                              List<com.ygoleague.competition.Standings.Tiebreaker> tiebreakers,
+                              Boolean playoffsEnabled, Integer playoffDirectQualifiers, Integer playInTeams, Integer playoffBestOf,
+                              Integer playInBestOf) {}
 
     public static final int MAX_PER_WEEK = 50;
 
@@ -76,7 +78,8 @@ public class SeasonRulesService {
      */
     public record RulesView(Integer version, int effectiveFromWeek, boolean canManage, boolean started,
                             CalendarView calendar, FormatView format, CompetitionView competition,
-                            SeasonRulesDocument.TransactionRules transactions, ResultsView results, List<WeekView> weeks,
+                            SeasonRulesDocument.TransactionRules transactions, ResultsView results,
+                            SeasonRulesDocument.PlayoffRules playoffs, boolean playoffsStarted, List<WeekView> weeks,
                             Integer currentWeek, int minEffectiveWeek, List<VersionView> history) {}
 
     /**
@@ -151,7 +154,7 @@ public class SeasonRulesService {
                 new SeasonRulesDocument.TransactionRules(perWeek(update.freeAgencyPerWeek(), "Free-agent claims"),
                         perWeek(update.tradesPerWeek(), "Trades"), deadline(update.tradeDeadlineWeek()),
                         Boolean.TRUE.equals(update.commissionerApproval())),
-                results(update));
+                results(update), playoffs(update));
 
         int effectiveFrom = 0;
         if (season.getStatus() != SeasonStatus.SETUP) {
@@ -161,6 +164,9 @@ public class SeasonRulesService {
             }
             // Fixed from the start: keep it exactly as locked then (its week start, and a round-robin's weeks written out).
             proposed = proposed.withCalendar(current.calendar());
+            if (playoffsStarted(season) && !proposed.playoffs().equals(current.playoffs())) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "The playoffs have started, so their settings are fixed");
+            }
             int min = minEffectiveWeek(season, latest, current);
             if (update.effectiveFromWeek() == null) throw bad("Choose the week this change takes effect from");
             int max = Math.max(min, weekCount(season, current));
@@ -250,6 +256,11 @@ public class SeasonRulesService {
                 .map(this::parse).orElse(SeasonRulesDocument.EMPTY);
     }
 
+    private boolean playoffsStarted(Season season) {
+        return jdbc.sql("select exists (select 1 from stage where season_id = :s and kind = 'PLAYOFFS')")
+                .param("s", season.getId()).query(Boolean.class).single();
+    }
+
     /** The season's weeks with their start and end (empty until the calendar is complete). */
     @Transactional(readOnly = true)
     public List<WeekView> weeks(Season season) {
@@ -315,7 +326,7 @@ public class SeasonRulesService {
                 canManage, season.getStatus() != SeasonStatus.SETUP, calendar,
                 new FormatView(doc.format().tcgCutoff(), banListChoice(doc.format().banListRevisionId())),
                 competition, doc.transactions(), new ResultsView(doc.results().autoConfirmHours(), doc.results().confirmHours(),
-                        doc.results().order()), weeks, currentWeek, minEffectiveWeek(season, latest, doc), history);
+                        doc.results().order()), doc.playoffs(), playoffsStarted(season), weeks, currentWeek, minEffectiveWeek(season, latest, doc), history);
     }
 
     /**
@@ -414,6 +425,20 @@ public class SeasonRulesService {
             throw bad("List each tiebreaker at most once");
         }
         return new SeasonRulesDocument.ResultRules(hours, order);
+    }
+
+    private static SeasonRulesDocument.PlayoffRules playoffs(RulesUpdate u) {
+        boolean on = Boolean.TRUE.equals(u.playoffsEnabled());
+        Integer direct = u.playoffDirectQualifiers();
+        Integer playIn = u.playInTeams() == null ? 0 : u.playInTeams();
+        if (on && direct == null) throw bad("Set how many teams qualify for the playoffs directly");
+        if (direct != null && (direct < 1 || direct > 64)) throw bad("1 to 64 teams can qualify directly");
+        if (!List.of(0, 2, 4).contains(playIn)) throw bad("A play-in has 2 teams (one match for one spot) or 4 (two spots), or none");
+        if (on && direct + playIn / 2 < 2) throw bad("The playoffs need at least two teams in the bracket");
+        for (Integer b : java.util.Arrays.asList(u.playoffBestOf(), u.playInBestOf())) {
+            if (b != null && (b < 1 || b > 9 || b % 2 == 0)) throw bad("A match is best of 1, 3, 5, 7 or 9");
+        }
+        return new SeasonRulesDocument.PlayoffRules(on, direct, playIn == 0 ? null : playIn, u.playoffBestOf(), u.playInBestOf());
     }
 
     private static Integer deadline(Integer week) {

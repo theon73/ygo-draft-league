@@ -93,7 +93,7 @@ public class FreeAgencyService {
                             a.unlimited() ? null : a.base() + a.received() - a.given(), a.used(), a.left());
                 })
                 .toList();
-        String closed = TransactionWindow.closedReason(season, "Free agency");
+        String closed = TransactionWindow.closedReason(jdbc, season, "Free agency");
         return new FreeAgencyView(closed == null, closed, week, budget, limits.base(season, Kind.FREE_AGENCY, budget), mine);
     }
 
@@ -103,7 +103,7 @@ public class FreeAgencyService {
         Season season = ref.season();
         if (req == null || req.claimCardId() == null || req.dropCardId() == null) throw bad("Choose a card to claim and a card to drop");
         TransactionWindow.lock(jdbc, season);
-        String closed = TransactionWindow.closedReason(season, "Free agency");
+        String closed = TransactionWindow.closedReason(jdbc, season, "Free agency");
         if (closed != null) throw conflict(closed);
 
         Player player = target(season, ref, req.memberId());

@@ -607,7 +607,7 @@ public class TradeService {
 
     /** Closed until the draft is over, after the season, and after the trade deadline week. */
     private String closedReason(Season season, int week) {
-        String closed = TransactionWindow.closedReason(season, "Trading");
+        String closed = TransactionWindow.closedReason(jdbc, season, "Trading");
         if (closed != null) return closed;
         Integer deadline = rules.inEffect(season, WeeklyLimits.allowanceWeek(week)).transactions().tradeDeadlineWeek();
         if (deadline != null && week > deadline) return "The trade deadline (week " + deadline + ") has passed";

@@ -1,10 +1,28 @@
 import { useEffect, useState } from "react";
 import { apiPut, type BanListOption, type SeasonRules, type Tiebreaker } from "../../api/client";
 import { useApi } from "../../hooks/useApi";
+import { currentWeekNote } from "./currentWeek";
 import { useLeague } from "./LeagueLayout";
 import { useSeason } from "./SeasonLayout";
 
 const dayLabel = (d: string) => d.charAt(0) + d.slice(1).toLowerCase();
+// The same description the server gives (PlayoffService.shape), live while editing.
+function playoffShape(direct: number, playIn: number): string {
+  if (!direct || direct < 1) return "Set how many teams qualify directly.";
+  const bracket = direct + playIn / 2;
+  if (bracket < 2) return "The bracket needs at least two teams.";
+  let size = 1;
+  while (size < bracket) size *= 2;
+  const byes = size - bracket;
+  let s = direct === 1 ? "Seed 1 qualifies directly" : `Seeds 1-${direct} qualify directly`;
+  if (playIn === 2) s += `; ${direct + 1} v ${direct + 2} play in for 1 spot`;
+  if (playIn === 4) s += `; ${direct + 1}-${direct + 4} play in for 2 spots (NBA style: the winner of ${direct + 1} v ${direct + 2} is in, its loser plays the winner of ${direct + 3} v ${direct + 4} for the last spot)`;
+  s += `; ${bracket} in the bracket`;
+  if (byes === 1) s += ", seed 1 has a bye";
+  else if (byes > 1) s += `, seeds 1${byes === 2 ? " and 2" : `-${byes}`} have byes`;
+  return s + ".";
+}
+
 const TIEBREAKERS: Record<Tiebreaker, string> = { GAME_DIFF: "Game difference", GAMES_WON: "Games won", HEAD_TO_HEAD: "Head-to-head" };
 
 export default function SeasonRulesPage() {
@@ -36,9 +54,18 @@ function RulesForm({ rules, banLists, base, onSaved }: { rules: SeasonRules; ban
   const [approval, setApproval] = useState(rules.transactions.commissionerApproval);
   const [confirmHours, setConfirmHours] = useState(rules.results.autoConfirmHours?.toString() ?? "");
   const [tiebreakers, setTiebreakers] = useState<Tiebreaker[]>(rules.results.tiebreakers);
+  const po = rules.playoffs;
+  const [poOn, setPoOn] = useState(po.enabled);
+  const [direct, setDirect] = useState(po.directQualifiers?.toString() ?? "");
+  const [playIn, setPlayIn] = useState(String(po.playInTeams ?? 0));
+  // Best-ofs follow the regular season unless a box is ticked (then the input appears).
+  const [poOwnBo, setPoOwnBo] = useState(po.bestOf !== null);
+  const [poBo, setPoBo] = useState(String(po.bestOf ?? rules.competition.bestOf));
+  const [piOwnBo, setPiOwnBo] = useState(po.playInBestOf !== null);
+  const [piBo, setPiBo] = useState(String(po.playInBestOf ?? po.bestOf ?? rules.competition.bestOf));
   const [fromWeek, setFromWeek] = useState(rules.minEffectiveWeek.toString());
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
-  useEffect(() => setMessage(null), [startDate, weeks, cutoff, banList, fromWeek, format, cycles, bestOf, faPerWeek, tradesPerWeek, deadline, approval, confirmHours, tiebreakers]);
+  useEffect(() => setMessage(null), [startDate, weeks, cutoff, banList, fromWeek, format, cycles, bestOf, faPerWeek, tradesPerWeek, deadline, approval, confirmHours, tiebreakers, poOn, direct, playIn, poOwnBo, poBo, piOwnBo, piBo]);
 
   const save = async () => {
     try {
@@ -56,6 +83,11 @@ function RulesForm({ rules, banLists, base, onSaved }: { rules: SeasonRules; ban
         commissionerApproval: approval,
         autoConfirmHours: confirmHours === "" ? null : Number(confirmHours),
         tiebreakers,
+        playoffsEnabled: poOn,
+        playoffDirectQualifiers: direct ? Number(direct) : null,
+        playInTeams: Number(playIn),
+        playoffBestOf: poOn && poOwnBo ? Number(poBo) : null,
+        playInBestOf: poOn && Number(playIn) > 0 && piOwnBo ? Number(piBo) : null,
         ...(rules.started && { effectiveFromWeek: Number(fromWeek) }),
       });
       onSaved();
@@ -189,11 +221,11 @@ function RulesForm({ rules, banLists, base, onSaved }: { rules: SeasonRules; ban
         <label>Trade deadline (last week)
           <input type="number" min={0} max={52} value={deadline} onChange={(e) => setDeadline(e.target.value)} disabled={!edit} placeholder="None" />
         </label>
-        <label className="check">
-          <input type="checkbox" checked={approval} onChange={(e) => setApproval(e.target.checked)} disabled={!edit} />{" "}
-          Commissioners approve accepted trades
-        </label>
       </div>
+      <label className="check">
+        <input type="checkbox" checked={approval} onChange={(e) => setApproval(e.target.checked)} disabled={!edit} />{" "}
+        Commissioners approve accepted trades
+      </label>
       <p className="muted">
         A claim picks up a free agent and drops a card from the roster, so rosters keep their size. Blank means unlimited, 0 turns
         claims off. A trade counts for both players, and must be even (the same number of cards each way). Limits reset when each week
@@ -225,6 +257,52 @@ function RulesForm({ rules, banLists, base, onSaved }: { rules: SeasonRules; ban
         ))}
       </ol>
 
+      <h4>Playoffs</h4>
+      {rules.playoffsStarted && <p className="muted">The playoffs have started, so these settings are fixed.</p>}
+      <label className="check">
+        <input type="checkbox" checked={poOn} onChange={(e) => setPoOn(e.target.checked)} disabled={!edit || rules.playoffsStarted} /> This season has playoffs
+      </label>
+      {!poOn && <p className="muted">Without playoffs, the regular-season standings decide the champion.</p>}
+      {poOn && (
+        <>
+          <div className="form-grid">
+            <label>Teams that qualify directly
+              <input type="number" min={1} max={64} value={direct} onChange={(e) => setDirect(e.target.value)} disabled={!edit || rules.playoffsStarted} />
+            </label>
+            <label>Play-in
+              <select value={playIn} onChange={(e) => setPlayIn(e.target.value)} disabled={!edit || rules.playoffsStarted}>
+                <option value="0">None</option>
+                <option value="2">2 teams: one match for one spot</option>
+                <option value="4">4 teams (NBA style): two spots</option>
+              </select>
+            </label>
+          </div>
+          <p className="muted">{playoffShape(Number(direct), Number(playIn))}</p>
+          <label className="check">
+            <input type="checkbox" checked={poOwnBo} onChange={(e) => setPoOwnBo(e.target.checked)} disabled={!edit || rules.playoffsStarted} /> Playoff matches use a different best-of
+            {!poOwnBo && <span className="muted"> (now best of {rules.competition.bestOf}, like the regular season)</span>}
+          </label>
+          {poOwnBo && (
+            <label className="inline-label indent">Playoff matches are best of{" "}
+              <select value={poBo} onChange={(e) => setPoBo(e.target.value)} disabled={!edit || rules.playoffsStarted}>{[1, 3, 5, 7, 9].map((n) => <option key={n} value={n}>{n}</option>)}</select>
+            </label>
+          )}
+          {Number(playIn) > 0 && (
+            <>
+              <label className="check">
+                <input type="checkbox" checked={piOwnBo} onChange={(e) => setPiOwnBo(e.target.checked)} disabled={!edit || rules.playoffsStarted} /> Play-in matches use a different best-of
+                {!piOwnBo && <span className="muted"> (now the same as the playoffs)</span>}
+              </label>
+              {piOwnBo && (
+                <label className="inline-label indent">Play-in matches are best of{" "}
+                  <select value={piBo} onChange={(e) => setPiBo(e.target.value)} disabled={!edit || rules.playoffsStarted}>{[1, 3, 5, 7, 9].map((n) => <option key={n} value={n}>{n}</option>)}</select>
+                </label>
+              )}
+            </>
+          )}
+        </>
+      )}
+
       {edit && (
         <p>
           {rules.started && (
@@ -232,6 +310,7 @@ function RulesForm({ rules, banLists, base, onSaved }: { rules: SeasonRules; ban
               <input type="number" className="narrow-num" min={rules.minEffectiveWeek} value={fromWeek} onChange={(e) => setFromWeek(e.target.value)} />
             </label>
           )}{" "}
+          {rules.started && <span className="muted">{currentWeekNote(rules.currentWeek, rules.calendar.regularWeeks)}</span>}{" "}
           <button onClick={() => void save()}>Save rules</button>
         </p>
       )}

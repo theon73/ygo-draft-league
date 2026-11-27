@@ -34,14 +34,12 @@ public class StandingsService {
 
     private final SeasonAccess access;
     private final SeasonRulesService rules;
-    private final ResultService results;
     private final PublicIds publicIds;
     private final JdbcClient jdbc;
 
-    public StandingsService(SeasonAccess access, SeasonRulesService rules, ResultService results, PublicIds publicIds, JdbcClient jdbc) {
+    public StandingsService(SeasonAccess access, SeasonRulesService rules, PublicIds publicIds, JdbcClient jdbc) {
         this.access = access;
         this.rules = rules;
-        this.results = results;
         this.publicIds = publicIds;
         this.jdbc = jdbc;
     }
@@ -49,7 +47,11 @@ public class StandingsService {
     @Transactional(readOnly = true)
     public StandingsView standings(String leagueId, String seasonId, CurrentUser caller) {
         SeasonAccess.SeasonRef ref = access.member(leagueId, seasonId, caller);
-        Season season = ref.season();
+        return standings(ref.season(), ref.me().getId());
+    }
+
+    /** The table as it stands; {@code myMemberId} marks "you" (0 for nobody). */
+    public StandingsView standings(Season season, long myMemberId) {
         record P(long id, long memberId, String name, String team) {}
         Map<Long, P> players = new LinkedHashMap<>();
         jdbc.sql("""
@@ -58,14 +60,14 @@ public class StandingsService {
                 .param("s", season.getId())
                 .query(rs -> { players.put(rs.getLong(1), new P(rs.getLong(1), rs.getLong(2), rs.getString(3), rs.getString(4))); });
 
-        List<Standings.Result<Long>> finals = results.finalResults(season);
+        List<Standings.Result<Long>> finals = finalResults(season);
         List<Standings.Tiebreaker> order = rules.latest(season).results().order();
         List<Standings.Row<Long>> table = Standings.table(List.copyOf(players.keySet()), finals, order,
                 id -> players.get(id).name().toLowerCase());
         List<Row> rows = table.stream().map(r -> {
             P p = players.get(r.player());
             return new Row(r.rank(), publicIds.encode(PublicIdType.LEAGUE_MEMBER, p.memberId()), p.name(), p.team(),
-                    p.memberId() == ref.me().getId(), r.played(), r.wins(), r.losses(), r.draws(), r.gamesWon(), r.gamesLost(), r.gameDiff());
+                    p.memberId() == myMemberId, r.played(), r.wins(), r.losses(), r.draws(), r.gamesWon(), r.gamesLost(), r.gameDiff());
         }).toList();
 
         int remaining = jdbc.sql("""
@@ -76,5 +78,30 @@ public class StandingsService {
         int waiting = jdbc.sql("select count(*) from match_report where season_id = :s and status in ('PENDING', 'DISPUTED')")
                 .param("s", season.getId()).query(Integer.class).single();
         return new StandingsView(order, finals.stream().anyMatch(Standings.Result::draw), remaining, waiting, rows);
+    }
+
+    /** The season players in standings order (1st first): playoff seeding and the champion without playoffs. */
+    public List<Long> order(Season season) {
+        record P(long id, String name) {}
+        List<P> players = jdbc.sql("""
+                        select sp.id, m.display_name from season_player sp join league_member m on m.id = sp.league_member_id
+                        where sp.season_id = :s""")
+                .param("s", season.getId()).query((rs, n) -> new P(rs.getLong(1), rs.getString(2))).list();
+        java.util.Map<Long, String> names = new java.util.HashMap<>();
+        for (P p : players) names.put(p.id(), p.name().toLowerCase());
+        return Standings.table(players.stream().map(P::id).toList(), finalResults(season), rules.latest(season).results().order(), names::get)
+                .stream().map(Standings.Row::player).toList();
+    }
+
+    /** Final results of a season's regular-season matches. */
+    List<Standings.Result<Long>> finalResults(Season season) {
+        return jdbc.sql("""
+                        select m.player_a_id, m.player_b_id, r.games_a, r.games_b, r.forfeit
+                        from match_report r join season_match m on m.id = r.match_id join stage st on st.id = m.stage_id
+                        where r.season_id = :s and r.status = 'CONFIRMED' and st.kind = 'REGULAR' and m.player_b_id is not null""")
+                .param("s", season.getId())
+                .query((rs, n) -> new Standings.Result<>(rs.getLong(1), rs.getLong(2), rs.getInt(3), rs.getInt(4),
+                        rs.getString(5) == null ? null : Standings.Forfeit.valueOf(rs.getString(5))))
+                .list();
     }
 }

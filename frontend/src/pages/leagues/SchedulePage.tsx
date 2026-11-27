@@ -9,7 +9,7 @@ import { useSeason } from "./SeasonLayout";
 // the draft completes; commissioners can draw again until week 1 begins. Results (YGO-26) are
 // reported, confirmed, disputed and (by commissioners) entered from the match tiles.
 
-type Action = "report" | "confirm" | "enter";
+export type Action = "report" | "confirm" | "enter";
 interface Selected { matchId: string; action: Action; where: "current" | "all" }
 export default function SchedulePage() {
   const { league } = useLeague();
@@ -187,8 +187,12 @@ function Panel({ week, where, selected, base, onClose, onDone }: {
   return <ResultForm key={`${m.id}-${selected.action}`} match={m} bestOf={week.bestOf} action={selected.action} base={base} onClose={onClose} onDone={onDone} />;
 }
 
-function ResultForm({ match: m, bestOf, action, base, onClose, onDone }: {
-  match: ScheduleMatch; bestOf: number; action: Action; base: string; onClose: () => void; onDone: () => void;
+/** What the form needs from a match: regular (ScheduleMatch) or play-in / playoff (BracketMatch, then `bracket`). */
+export interface FormMatch { id: string; a: SchedulePlayer; b: SchedulePlayer | null; result: ScheduleMatch["result"] }
+
+// `bracket`: a play-in or playoff match, which needs a winner (no draws, no double forfeit).
+export function ResultForm({ match: m, bestOf, action, base, onClose, onDone, bracket = false }: {
+  match: FormMatch; bestOf: number; action: Action; base: string; onClose: () => void; onDone: () => void; bracket?: boolean;
 }) {
   const r = m.result;
   const majority = Math.floor(bestOf / 2) + 1;
@@ -217,7 +221,8 @@ function ResultForm({ match: m, bestOf, action, base, onClose, onDone }: {
       setBusy(false);
     }
   };
-  const valid = forfeit !== "" || ((a > 0 || b > 0) && a <= majority && b <= majority && !(a === majority && b === majority) && a + b <= bestOf);
+  const valid = forfeit !== "" || ((a > 0 || b > 0) && a <= majority && b <= majority && !(a === majority && b === majority) && a + b <= bestOf
+    && !(bracket && a === b));
   const outcome = forfeit ? "" : a === b ? `a draw (${a}–${b})` : `${a > b ? m.a.name : m.b!.name} wins ${Math.max(a, b)}–${Math.min(a, b)}`;
   const options = Array.from({ length: majority + 1 }, (_, i) => i);
 
@@ -243,10 +248,10 @@ function ResultForm({ match: m, bestOf, action, base, onClose, onDone }: {
   return (
     <div className="panel result-form">
       <p><strong>{action === "enter" ? (r ? "Correct the result" : "Enter the result") : "Report the result"}</strong>
-        <span className="muted"> · best of {bestOf}; leave tied games out (level games is a draw)</span></p>
+        <span className="muted"> · best of {bestOf}; leave tied games out{bracket ? "" : " (level games is a draw)"}</span></p>
       {action === "enter" && (
         <div className="forfeit-choice">
-          {(["", "A", "B", "BOTH"] as const).map((f) => (
+          {(bracket ? (["", "A", "B"] as const) : (["", "A", "B", "BOTH"] as const)).map((f) => (
             <label key={f} className="check-inline">
               <input type="radio" name={`forfeit-${m.id}`} checked={forfeit === f} onChange={() => setForfeit(f)} />{" "}
               {f === "" ? "Games" : f === "BOTH" ? "Both forfeit" : `${f === "A" ? m.a.name : m.b!.name} forfeits`}
@@ -262,7 +267,8 @@ function ResultForm({ match: m, bestOf, action, base, onClose, onDone }: {
             <label><select value={b} onChange={(e) => setB(Number(e.target.value))}>{options.map((n) => <option key={n} value={n}>{n}</option>)}</select> {m.b!.name}</label>
           </div>
           <p className={valid || (a === 0 && b === 0) ? "muted" : "bad"}>
-            {valid ? `That's ${outcome}.` : a === 0 && b === 0 ? "Pick the games each player won." : `That doesn't fit a best of ${bestOf} (first to ${majority}).`}
+            {valid ? `That's ${outcome}.` : a === 0 && b === 0 ? "Pick the games each player won."
+              : bracket && a === b ? "A playoff match needs a winner." : `That doesn't fit a best of ${bestOf} (first to ${majority}).`}
           </p>
           <div className="game-rows">
             <span className="muted game-rows-head">Replays and notes, per game (optional)</span>
@@ -293,7 +299,7 @@ function ResultForm({ match: m, bestOf, action, base, onClose, onDone }: {
 
 // The games' replay links and notes on a match tile: a one-line summary that opens into a row per
 // game ("Game 1 · ▶ Replay · note"). `open` starts it expanded (the confirm panel).
-function GameLinks({ games, open = false }: { games: { game: number; replay: string | null; note: string | null }[]; open?: boolean }) {
+export function GameLinks({ games, open = false }: { games: { game: number; replay: string | null; note: string | null }[]; open?: boolean }) {
   const replays = games.filter((g) => g.replay).length;
   const notes = games.filter((g) => g.note).length;
   const summary = [replays > 0 && `${replays} replay${replays === 1 ? "" : "s"}`, notes > 0 && `${notes} note${notes === 1 ? "" : "s"}`]
@@ -325,7 +331,7 @@ function Byes({ week }: { week: ScheduleWeek }) {
   return <> · {byes.map((m) => (m.a.you ? "you have" : `${m.a.name} has`)).join(", ")} a bye</>;
 }
 
-function Player({ p }: { p: SchedulePlayer }) {
+export function Player({ p }: { p: SchedulePlayer }) {
   return (
     <span className="matchup-player">
       <Link to={`../rosters/${p.memberId}`}>{p.name}</Link>

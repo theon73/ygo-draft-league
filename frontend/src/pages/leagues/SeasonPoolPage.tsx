@@ -15,6 +15,7 @@ import PoolFilters from "./PoolFilters";
 import PoolGrid from "./PoolGrid";
 import { activeFilterCount, poolQueryString } from "./poolQuery";
 import { usePoolParams } from "./usePoolParams";
+import { currentWeekNote } from "./currentWeek";
 import { seasonCardPath } from "./RostersPage";
 
 type Show = "ALL" | "EXCEPTIONS" | "FLAGGED" | "BAN_LIST" | "REMOVED";
@@ -164,7 +165,7 @@ export default function SeasonPoolPage() {
             <input type="number" className="narrow-num" min={s.minEffectiveWeek} value={week || s.minEffectiveWeek}
                    onChange={(e) => setWeek(e.target.value)} />
           </label>{" "}
-          <span className="muted">The season has started: earlier weeks keep the pool they had.</span>
+          <span className="muted">{currentWeekNote(s.minEffectiveWeek)} The season has started: earlier weeks keep the pool they had.</span>
         </p>
       )}
       {error && <p className="bad">{error}</p>}
