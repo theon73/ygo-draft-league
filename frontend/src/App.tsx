@@ -38,7 +38,7 @@ export default function App() {
     <>
       <header className="topbar">
         <div className="wrap">
-          <Link to="/" className="brand"><span className="brand-mark" aria-hidden="true" />YGO Draft League</Link>
+          <Link to="/" className="brand"><span className="brand-mark" aria-hidden="true" />YGO Draft Duel</Link>
           <nav className="topnav" aria-label="Main">
             {NAV.map((n) => (
               <NavLink key={n.to} to={n.to} end={n.to === "/"}>

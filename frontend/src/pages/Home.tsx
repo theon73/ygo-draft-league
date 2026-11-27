@@ -1,7 +1,7 @@
 import { Link, useSearchParams } from "react-router-dom";
 import { useSession } from "../auth/session";
 
-// The landing page. YGO-30 turns it into a dashboard of what needs you across your leagues.
+// The landing page. YGO-31 turns it into a dashboard of what needs you across your leagues.
 export default function Home() {
   const { session } = useSession();
   const [params] = useSearchParams();
