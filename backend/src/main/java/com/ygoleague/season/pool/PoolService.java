@@ -348,6 +348,23 @@ public class PoolService {
                 .query(Long.class).single();
     }
 
+    /** Whether one card is available (see {@link #availableCondition}): draftable now, or claimable once the draft is over. */
+    public boolean isAvailable(Season season, long cardId) {
+        return jdbc.sql("""
+                        select exists (select 1 from pool_card p left join ban_list_entry b on b.revision_id = :rev and b.card_id = p.card_id
+                        where p.season_id = :s and p.card_id = :c and """ + " " + availableCondition(season) + ")")
+                .param("s", season.getId()).param("c", cardId).param("rev", banListRevision(season), java.sql.Types.BIGINT)
+                .query(Boolean.class).single();
+    }
+
+    /** One pool card's row (removed ones too), or empty if it was never in the pool. */
+    public java.util.Optional<PoolCardView> poolCard(Season season, long cardId) {
+        return jdbc.sql(CARD_SELECT + " where p.season_id = :s and p.card_id = :c")
+                .param("s", season.getId()).param("c", cardId).param("rev", banListRevision(season), java.sql.Types.BIGINT)
+                .query((rs, n) -> cardRow(rs))
+                .optional();
+    }
+
     /** SQL conditions joined with "and", and their bound values. */
     private static final class Conditions {
         final List<String> sql = new java.util.ArrayList<>();

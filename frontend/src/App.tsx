@@ -20,6 +20,7 @@ import RostersPage from "./pages/leagues/RostersPage";
 import RosterPage from "./pages/leagues/RosterPage";
 import FreeAgentsPage from "./pages/leagues/FreeAgentsPage";
 import SeasonCardPage from "./pages/leagues/SeasonCardPage";
+import TransactionsPage from "./pages/leagues/TransactionsPage";
 import InvitePage, { PendingInviteRedirect } from "./pages/InvitePage";
 
 const NAV = [
@@ -65,7 +66,7 @@ export default function App() {
               <Route path="rosters/:memberId" element={<RosterPage />} />
               <Route path="cards/:cardId" element={<SeasonCardPage />} />
               <Route path="standings" element={<Placeholder title="Standings" phase={4} />} />
-              <Route path="transactions" element={<Placeholder title="Transactions" phase={4} />} />
+              <Route path="transactions" element={<TransactionsPage />} />
             </Route>
           </Route>
           <Route path="/explore" element={<Explore />} />

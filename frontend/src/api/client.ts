@@ -290,6 +290,7 @@ export interface BanListOption {
 
 export interface SeasonRules {
   version: number | null; // null until first saved
+  transactions: { freeAgencyPerWeek: number | null }; // null = unlimited
   effectiveFromWeek: number;
   canManage: boolean;
   started: boolean; // season left setup: changes need effectiveFromWeek
@@ -370,6 +371,8 @@ export interface PoolCard {
 
 // Rosters (YGO-22): who holds what. Only the draft moves cards so far; free agency and trades join it.
 
+export type OwnershipSource = "DRAFT" | "FREE_AGENCY";
+
 export type RosterGroup = "MONSTER" | "EXTRA" | "SPELL" | "TRAP"; // main-deck monsters, extra deck, spells, traps
 
 export interface RosterCard {
@@ -378,7 +381,7 @@ export interface RosterCard {
   quantity: number; // copies held (1 with exclusive ownership)
   acquiredAt: string;
   acquiredWeek: number; // 0 = the draft
-  source: "DRAFT";
+  source: OwnershipSource;
   draftPick: number | null;
 }
 
@@ -401,10 +404,10 @@ export interface Rosters {
 export interface OwnershipChange {
   at: string;
   week: number;
-  source: "DRAFT";
-  fromMemberId: string | null; // null: from the draft (or, later, free agency)
+  source: OwnershipSource;
+  fromMemberId: string | null; // null: from the draft or a free-agent claim
   from: string | null;
-  toMemberId: string | null; // null: dropped to free agency (later)
+  toMemberId: string | null; // null: dropped to free agency
   to: string | null;
   quantity: number;
   draftPick: number | null;
@@ -416,6 +419,43 @@ export interface SeasonCard {
   card: PoolCard;
   owners: { memberId: string; displayName: string; quantity: number; since: string; week: number }[];
   history: OwnershipChange[]; // oldest first
+}
+
+// Free agency (YGO-23): a claim picks up a free agent and drops a card, as one transaction.
+
+export interface Allowance {
+  memberId: string;
+  displayName: string;
+  you: boolean;
+  limit: number | null; // claims per week; null = unlimited
+  used: number;
+  left: number | null;
+}
+
+export interface FreeAgency {
+  open: boolean;
+  closedReason: string | null;
+  week: number; // 0 = before week 1
+  budgetWeek: number; // the week claims count toward now (week 0 counts as week 1)
+  limit: number | null;
+  players: Allowance[]; // whom the caller can claim for: themselves, or everyone for a commissioner
+}
+
+export interface CardRef {
+  cardId: number;
+  name: string;
+  passcode: number;
+}
+
+export interface SeasonTransaction {
+  kind: "FREE_AGENCY";
+  week: number;
+  at: string;
+  memberId: string;
+  player: string;
+  added: CardRef[];
+  dropped: CardRef[];
+  onBehalfBy: string | null; // the commissioner who made it for the player
 }
 
 export interface PoolCardPage {
@@ -580,7 +620,7 @@ export interface OnTheClock {
 
 // Notifications (league owner only)
 
-export type NotificationEvent = "DRAFT_PICKS" | "DRAFT_ON_THE_CLOCK";
+export type NotificationEvent = "DRAFT_PICKS" | "DRAFT_ON_THE_CLOCK" | "TRANSACTIONS";
 
 export interface MyPings {
   discordUserId: string | null; // the member's Discord user id, for all their leagues

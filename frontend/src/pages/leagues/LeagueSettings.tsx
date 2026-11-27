@@ -134,6 +134,7 @@ function MyDiscordPings({ leagueId }: { leagueId: string }) {
 const EVENTS: { value: NotificationEvent; label: string; hint: string }[] = [
   { value: "DRAFT_PICKS", label: "Draft news", hint: "start and finish, every pick (auto-picks, skips, make-ups), undos, pauses, timer changes" },
   { value: "DRAFT_ON_THE_CLOCK", label: "On the clock", hint: "who's up next, with a countdown Discord shows in everyone's own time zone" },
+  { value: "TRANSACTIONS", label: "Transactions", hint: "free-agent claims and what was dropped (trades too, once they exist)" },
 ];
 
 // The league's Discord webhook. The saved URL never comes back from the server (anyone holding it
@@ -170,7 +171,7 @@ function DiscordSettings({ leagueId }: { leagueId: string }) {
     <>
       <h4>Discord</h4>
       <p className="muted">
-        Post draft news to a Discord channel. In Discord: Server Settings → Integrations → Webhooks → New Webhook, pick the
+        Post draft news and transactions to a Discord channel. In Discord: Server Settings → Integrations → Webhooks → New Webhook, pick the
         channel, then Copy Webhook URL and paste it here.
       </p>
       <p>

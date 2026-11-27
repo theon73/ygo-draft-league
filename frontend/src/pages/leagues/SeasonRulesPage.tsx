@@ -28,9 +28,10 @@ function RulesForm({ rules, banLists, base, onSaved }: { rules: SeasonRules; ban
   const roundRobin = format === "ROUND_ROBIN";
   const [cutoff, setCutoff] = useState(rules.format.tcgCutoff ?? "");
   const [banList, setBanList] = useState(rules.format.banList?.revisionId.toString() ?? "");
+  const [faPerWeek, setFaPerWeek] = useState(rules.transactions.freeAgencyPerWeek?.toString() ?? "");
   const [fromWeek, setFromWeek] = useState(rules.minEffectiveWeek.toString());
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
-  useEffect(() => setMessage(null), [startDate, weeks, cutoff, banList, fromWeek, format, cycles]);
+  useEffect(() => setMessage(null), [startDate, weeks, cutoff, banList, fromWeek, format, cycles, faPerWeek]);
 
   const save = async () => {
     try {
@@ -41,6 +42,7 @@ function RulesForm({ rules, banLists, base, onSaved }: { rules: SeasonRules; ban
         roundRobinCycles: roundRobin && cycles ? Number(cycles) : null,
         tcgCutoff: cutoff || null,
         banListRevisionId: banList ? Number(banList) : null,
+        freeAgencyPerWeek: faPerWeek === "" ? null : Number(faPerWeek),
         ...(rules.started && { effectiveFromWeek: Number(fromWeek) }),
       });
       onSaved();
@@ -152,6 +154,18 @@ function RulesForm({ rules, banLists, base, onSaved }: { rules: SeasonRules; ban
         Cards released in the TCG on or before the cutoff make up the dated pool; you can add exceptions on top of it (coming with the card
         pool). A season keeps the exact ban list revision you pick, even if the list is updated later.
         {pinnedIsOld && pinned && ` A newer revision of ${pinned.name} (revision ${pinned.latestRevision}) exists; pick it from the list to switch.`}
+      </p>
+
+      <h4>Transactions</h4>
+      <div className="form-grid">
+        <label>Free-agent claims per week
+          <input type="number" min={0} max={50} value={faPerWeek} onChange={(e) => setFaPerWeek(e.target.value)} disabled={!edit}
+                 placeholder="Unlimited" />
+        </label>
+      </div>
+      <p className="muted">
+        A claim picks up a free agent and drops a card from the roster, so rosters keep their size. Blank means unlimited, 0 turns
+        claims off. Limits reset when each week starts; the time between the draft and week 1 counts as week 1.
       </p>
 
       {edit && (
