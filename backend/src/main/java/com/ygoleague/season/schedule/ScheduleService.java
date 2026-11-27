@@ -34,8 +34,8 @@ import org.springframework.web.server.ResponseStatusException;
  *       draw of the players, recorded like seat draws. One round-robin round a week, week = round.
  *       The layout is {@link RoundRobinSchedule}: every pair meets once per cycle, byes spread one per
  *       player per cycle, and nobody meets the same opponent (or sits out) in consecutive weeks.
- *   <li><b>Reshuffling:</b> a commissioner can draw again until week 1 begins (before any match can
- *       have been played); after that the schedule is fixed. Seasons that became active before
+ *   <li><b>Reshuffling:</b> a commissioner can draw again until week 1 begins or a result is reported
+ *       (an early match counts too); after that the schedule is fixed. Seasons that became active before
  *       YGO-25 have none yet, so a commissioner can generate one (the same draw).
  *   <li>Any member sees the whole schedule; the current week is marked ("this week's matchups").
  *   <li>Best-of comes from the rules in effect for each week.
@@ -48,8 +48,26 @@ public class ScheduleService {
 
     public record PlayerRef(String memberId, String name, String teamName, boolean you) {}
 
-    /** {@code b} is null for a bye ({@code a} sits the week out). */
-    public record MatchView(PlayerRef a, PlayerRef b, boolean mine) {}
+    /**
+     * The match's live result (YGO-26): games follow a / b; {@code forfeit} A, B or BOTH; status
+     * PENDING (waiting for the opponent), CONFIRMED (final) or DISPUTED.
+     *
+     * @param reportedBy the player who reported it, or null when a commissioner entered it
+     */
+    public record ResultView(int gamesA, int gamesB, String forfeit, String status, boolean autoConfirmed, boolean byCommissioner,
+                             String reportedBy, List<GameView> games, String disputeNote, Instant reportedAt) {}
+
+    /** One game's replay link and note (either may be null); only games with one or the other are listed. */
+    public record GameView(int game, String replay, String note) {}
+
+    /**
+     * {@code b} is null for a bye ({@code a} sits the week out).
+     *
+     * @param overdue    its week is over and it has no final result (it can still be played and reported)
+     * @param canReport  etc.: what the viewer can do now
+     */
+    public record MatchView(String id, PlayerRef a, PlayerRef b, boolean mine, ResultView result, boolean overdue,
+                            boolean canReport, boolean canConfirm, boolean canEnter) {}
 
     public record WeekView(int week, OffsetDateTime start, OffsetDateTime end, int bestOf, boolean current, List<MatchView> matches) {}
 
@@ -152,7 +170,12 @@ public class ScheduleService {
         if (season.getStatus() == SeasonStatus.COMPLETE) return "The season is over";
         String rulesProblem = schedulable(season);
         if (rulesProblem != null) return rulesProblem;
-        if (stageId(season).isPresent() && rules.currentWeek(season) >= 1) return "Week 1 has begun, so the schedule is fixed";
+        Optional<Long> stage = stageId(season);
+        if (stage.isPresent() && rules.currentWeek(season) >= 1) return "Week 1 has begun, so the schedule is fixed";
+        if (stage.isPresent() && jdbc.sql("select exists (select 1 from match_report r join season_match m on m.id = r.match_id where m.stage_id = :st)")
+                .param("st", stage.get()).query(Boolean.class).single()) {
+            return "A result has been reported, so the schedule is fixed";
+        }
         return null;
     }
 
@@ -186,18 +209,44 @@ public class ScheduleService {
                             rs.getString(4), rs.getLong(2) == myMemberId));
                 });
 
+        Map<Integer, SeasonRulesService.WeekView> dates = new LinkedHashMap<>();
+        for (SeasonRulesService.WeekView w : rules.weeks(season)) dates.put(w.number(), w);
+        Instant now = Instant.now();
+        boolean active = season.getStatus() == SeasonStatus.ACTIVE;
+
         Map<Integer, List<MatchView>> byWeek = new LinkedHashMap<>();
-        jdbc.sql("select week, player_a_id, player_b_id from season_match where stage_id = :st order by week, player_b_id is null, id")
+        jdbc.sql("""
+                        select m.week, m.player_a_id, m.player_b_id, m.id, r.games_a, r.games_b, r.forfeit, r.status, r.auto_confirmed,
+                               r.by_commissioner, r.reported_player, r.replays, r.dispute_note, r.reported_at, r.game_notes
+                        from season_match m left join match_report r on r.match_id = m.id and r.status <> 'SUPERSEDED'
+                        where m.stage_id = :st order by m.week, m.player_b_id is null, m.id""")
                 .param("st", stage.get())
                 .query(rs -> {
+                    int week = rs.getInt(1);
                     PlayerRef a = players.get(rs.getLong(2));
                     long bId = rs.getLong(3);
                     PlayerRef b = rs.wasNull() ? null : players.get(bId);
-                    byWeek.computeIfAbsent(rs.getInt(1), k -> new ArrayList<>()).add(new MatchView(a, b, a.you() || (b != null && b.you())));
+                    boolean mine = a.you() || (b != null && b.you());
+                    ResultView result = null;
+                    Long reportedPlayer = null;
+                    if (rs.getString(8) != null) {
+                        reportedPlayer = (Long) rs.getObject(11);
+                        PlayerRef reporter = reportedPlayer == null ? null : players.get(reportedPlayer);
+                        result = new ResultView(rs.getInt(5), rs.getInt(6), rs.getString(7), rs.getString(8), rs.getBoolean(9), rs.getBoolean(10),
+                                reporter == null ? null : reporter.name(),
+                                games((String[]) rs.getArray(12).getArray(), (String[]) rs.getArray(15).getArray()), rs.getString(13),
+                                rs.getTimestamp(14).toInstant());
+                    }
+                    String status = result == null ? null : result.status();
+                    boolean reportedByMe = reportedPlayer != null && players.get(reportedPlayer).you();
+                    SeasonRulesService.WeekView d = dates.get(week);
+                    boolean overdue = b != null && !"CONFIRMED".equals(status) && d != null && d.end().toInstant().isBefore(now);
+                    boolean canReport = active && b != null && mine && !"CONFIRMED".equals(status) && !("PENDING".equals(status) && !reportedByMe);
+                    boolean canConfirm = active && b != null && mine && "PENDING".equals(status) && !reportedByMe;
+                    byWeek.computeIfAbsent(week, k -> new ArrayList<>()).add(new MatchView(
+                            publicIds.encode(PublicIdType.MATCH, rs.getLong(4)), a, b, mine, result, overdue, canReport, canConfirm,
+                            commissioner && active && b != null));
                 });
-
-        Map<Integer, SeasonRulesService.WeekView> dates = new LinkedHashMap<>();
-        for (SeasonRulesService.WeekView w : rules.weeks(season)) dates.put(w.number(), w);
         List<WeekView> weeks = new ArrayList<>();
         // Week 0 (before week 1) shows week 1 as "this week's" matchups to come.
         int highlighted = Math.max(current, 1);
@@ -207,5 +256,16 @@ public class ScheduleService {
                     rules.inEffect(season, e.getKey()).competition().bestOf(), e.getKey() == highlighted, e.getValue()));
         }
         return new ScheduleView(true, commissioner, commissioner && why == null, why, current, draw.at(), draw.by(), draw.count(), weeks);
+    }
+
+    /** Replay links and notes by game (element 0 = game 1, '' = none), as the games that have either. */
+    private static List<GameView> games(String[] replays, String[] notes) {
+        List<GameView> out = new ArrayList<>();
+        for (int g = 0; g < Math.max(replays.length, notes.length); g++) {
+            String replay = g < replays.length && !replays[g].isBlank() ? replays[g] : null;
+            String note = g < notes.length && !notes[g].isBlank() ? notes[g] : null;
+            if (replay != null || note != null) out.add(new GameView(g + 1, replay, note));
+        }
+        return out;
     }
 }

@@ -2,7 +2,7 @@ package com.ygoleague.notify;
 
 /**
  * What a league can post to Discord (stored by name, so adding one needs no schema change).
- * Results join in Phase 4.
+ * Results joined in YGO-26.
  */
 public enum NotificationEvent {
     /** The draft starting and finishing, every pick (including auto-picks, skips and make-ups), undos, pauses and timer changes. */
@@ -10,5 +10,7 @@ public enum NotificationEvent {
     /** Who's on the clock whenever it moves, with the time left as a Discord countdown. */
     DRAFT_ON_THE_CLOCK,
     /** Executed transactions: free-agent claims (with their drops), and trades from YGO-24. */
-    TRANSACTIONS
+    TRANSACTIONS,
+    /** Final match results (confirmed, auto-confirmed, or entered by a commissioner) and disputes. */
+    RESULTS
 }

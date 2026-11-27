@@ -291,6 +291,7 @@ export interface BanListOption {
 export interface SeasonRules {
   version: number | null; // null until first saved
   transactions: TransactionRules;
+  results: { autoConfirmHours: number | null; confirmHours: number; tiebreakers: Tiebreaker[] };
   effectiveFromWeek: number;
   canManage: boolean;
   started: boolean; // season left setup: changes need effectiveFromWeek
@@ -489,7 +490,58 @@ export interface ScheduleWeek {
   end: string | null;
   bestOf: number; // from the rules in effect that week
   current: boolean; // this week's matchups (week 1 before the season starts)
-  matches: { a: SchedulePlayer; b: SchedulePlayer | null; mine: boolean }[]; // b null = a has a bye
+  matches: ScheduleMatch[]; // b null = a has a bye
+}
+
+// A match's live result (YGO-26). Games follow a / b; tied games are left out, so level games is a draw.
+export interface MatchResult {
+  gamesA: number;
+  gamesB: number;
+  forfeit: "A" | "B" | "BOTH" | null; // who forfeited (entered by a commissioner)
+  status: "PENDING" | "CONFIRMED" | "DISPUTED";
+  autoConfirmed: boolean;
+  byCommissioner: boolean;
+  reportedBy: string | null; // the player who reported it; null when a commissioner entered it
+  games: { game: number; replay: string | null; note: string | null }[]; // only games with a link or a note
+  disputeNote: string | null;
+  reportedAt: string;
+}
+
+export interface ScheduleMatch {
+  id: string;
+  a: SchedulePlayer;
+  b: SchedulePlayer | null;
+  mine: boolean;
+  result: MatchResult | null;
+  overdue: boolean; // its week is over without a final result (still reportable)
+  canReport: boolean;
+  canConfirm: boolean; // also: can dispute
+  canEnter: boolean; // commissioners: enter or correct the result
+}
+
+export type Tiebreaker = "GAME_DIFF" | "GAMES_WON" | "HEAD_TO_HEAD";
+
+export interface StandingsRow {
+  rank: number;
+  memberId: string;
+  name: string;
+  teamName: string | null;
+  you: boolean;
+  played: number;
+  wins: number;
+  losses: number;
+  draws: number;
+  gamesWon: number;
+  gamesLost: number;
+  gameDiff: number;
+}
+
+export interface SeasonStandings {
+  tiebreakers: Tiebreaker[];
+  showDraws: boolean; // a draw happened this season
+  remaining: number; // matches without a final result
+  waiting: number; // reported results not final yet
+  rows: StandingsRow[];
 }
 
 export interface Schedule {
@@ -722,7 +774,7 @@ export interface OnTheClock {
 
 // Notifications (league owner only)
 
-export type NotificationEvent = "DRAFT_PICKS" | "DRAFT_ON_THE_CLOCK" | "TRANSACTIONS";
+export type NotificationEvent = "DRAFT_PICKS" | "DRAFT_ON_THE_CLOCK" | "TRANSACTIONS" | "RESULTS";
 
 export interface MyPings {
   discordUserId: string | null; // the member's Discord user id, for all their leagues

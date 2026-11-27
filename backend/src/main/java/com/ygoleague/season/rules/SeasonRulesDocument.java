@@ -15,7 +15,7 @@ import java.util.List;
  * if the shape of existing sections changes.
  */
 public record SeasonRulesDocument(CalendarRules calendar, FormatRules format, CompetitionRules competition, DraftRules draft,
-                                  TransactionRules transactions) {
+                                  TransactionRules transactions, ResultRules results) {
 
     /** Shape of the JSON. Bump when an existing section changes shape (new sections don't need it). */
     public static final int SCHEMA_VERSION = 1;
@@ -26,13 +26,14 @@ public record SeasonRulesDocument(CalendarRules calendar, FormatRules format, Co
         competition = competition == null ? CompetitionRules.EMPTY : competition;
         draft = draft == null ? DraftRules.EMPTY : draft;
         transactions = transactions == null ? TransactionRules.EMPTY : transactions;
+        results = results == null ? ResultRules.EMPTY : results;
     }
 
-    public static final SeasonRulesDocument EMPTY = new SeasonRulesDocument(null, null, null, null, null);
+    public static final SeasonRulesDocument EMPTY = new SeasonRulesDocument(null, null, null, null, null, null);
 
-    public SeasonRulesDocument withCalendar(CalendarRules c) { return new SeasonRulesDocument(c, format, competition, draft, transactions); }
+    public SeasonRulesDocument withCalendar(CalendarRules c) { return new SeasonRulesDocument(c, format, competition, draft, transactions, results); }
 
-    public SeasonRulesDocument withDraft(DraftRules d) { return new SeasonRulesDocument(calendar, format, competition, d, transactions); }
+    public SeasonRulesDocument withDraft(DraftRules d) { return new SeasonRulesDocument(calendar, format, competition, d, transactions, results); }
 
     /**
      * When the season's weeks fall.
@@ -195,6 +196,30 @@ public record SeasonRulesDocument(CalendarRules calendar, FormatRules format, Co
         /** Rules saved before a field existed read it as missing (null): approval is then off. */
         public TransactionRules {
             commissionerApproval = Boolean.TRUE.equals(commissionerApproval);
+        }
+    }
+
+    /**
+     * Match results and standings (YGO-26). Unset fields (and seasons from before) read as the defaults.
+     *
+     * @param autoConfirmHours a reported result the opponent hasn't answered becomes final after this
+     *                         many hours; null = {@link #DEFAULT_AUTO_CONFIRM_HOURS}
+     * @param tiebreakers      after wins, in order; null or empty = {@link com.ygoleague.competition.Standings#DEFAULT_TIEBREAKERS}
+     */
+    public record ResultRules(Integer autoConfirmHours, List<com.ygoleague.competition.Standings.Tiebreaker> tiebreakers) {
+        public static final int DEFAULT_AUTO_CONFIRM_HOURS = 48;
+        public static final ResultRules EMPTY = new ResultRules(null, null);
+
+        public ResultRules {
+            tiebreakers = tiebreakers == null || tiebreakers.isEmpty() ? null : List.copyOf(tiebreakers);
+        }
+
+        public int confirmHours() {
+            return autoConfirmHours == null ? DEFAULT_AUTO_CONFIRM_HOURS : autoConfirmHours;
+        }
+
+        public List<com.ygoleague.competition.Standings.Tiebreaker> order() {
+            return tiebreakers == null ? com.ygoleague.competition.Standings.DEFAULT_TIEBREAKERS : tiebreakers;
         }
     }
 }

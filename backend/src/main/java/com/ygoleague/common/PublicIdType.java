@@ -10,7 +10,8 @@ public enum PublicIdType {
     LEAGUE(1),
     SEASON(2),
     LEAGUE_MEMBER(3),
-    TRADE_OFFER(4);
+    TRADE_OFFER(4),
+    MATCH(5);
 
     private final long tag;
 
