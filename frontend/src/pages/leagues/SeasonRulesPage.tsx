@@ -23,6 +23,7 @@ function RulesForm({ rules, banLists, base, onSaved }: { rules: SeasonRules; ban
   const [startDate, setStartDate] = useState(rules.calendar.startDate ?? "");
   const [format, setFormat] = useState(rules.competition.format ?? "");
   const [cycles, setCycles] = useState(rules.competition.roundRobinCycles?.toString() ?? "");
+  const [bestOf, setBestOf] = useState(rules.competition.matchBestOf?.toString() ?? "");
   // Only kept for formats with an explicit week count; a round-robin's weeks are derived.
   const [weeks, setWeeks] = useState(rules.calendar.weeksDerived ? "" : rules.calendar.regularWeeks?.toString() ?? "");
   const roundRobin = format === "ROUND_ROBIN";
@@ -34,7 +35,7 @@ function RulesForm({ rules, banLists, base, onSaved }: { rules: SeasonRules; ban
   const [approval, setApproval] = useState(rules.transactions.commissionerApproval);
   const [fromWeek, setFromWeek] = useState(rules.minEffectiveWeek.toString());
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
-  useEffect(() => setMessage(null), [startDate, weeks, cutoff, banList, fromWeek, format, cycles, faPerWeek, tradesPerWeek, deadline, approval]);
+  useEffect(() => setMessage(null), [startDate, weeks, cutoff, banList, fromWeek, format, cycles, bestOf, faPerWeek, tradesPerWeek, deadline, approval]);
 
   const save = async () => {
     try {
@@ -43,6 +44,7 @@ function RulesForm({ rules, banLists, base, onSaved }: { rules: SeasonRules; ban
         regularWeeks: !roundRobin && weeks ? Number(weeks) : null,
         competitionFormat: format || null,
         roundRobinCycles: roundRobin && cycles ? Number(cycles) : null,
+        matchBestOf: bestOf ? Number(bestOf) : null,
         tcgCutoff: cutoff || null,
         banListRevisionId: banList ? Number(banList) : null,
         freeAgencyPerWeek: faPerWeek === "" ? null : Number(faPerWeek),
@@ -89,6 +91,13 @@ function RulesForm({ rules, banLists, base, onSaved }: { rules: SeasonRules; ban
             </span>
           </label>
         )}
+        <label>Matches are best of
+          {/* Unlike the format, this can change mid-season (from the week you choose below). */}
+          <select value={bestOf} onChange={(e) => setBestOf(e.target.value)} disabled={!edit}>
+            <option value="">3 (default)</option>
+            {[1, 3, 5, 7, 9].map((n) => <option key={n} value={n}>{n}</option>)}
+          </select>
+        </label>
       </div>
       {rules.competition.format === "ROUND_ROBIN" && rules.competition.rounds !== null && (
         <p className="muted">

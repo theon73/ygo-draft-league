@@ -314,6 +314,8 @@ export interface SeasonRules {
     rounds: number | null;
     matchesPerPlayer: number | null;
     byes: boolean; // odd player count: one player sits out each round
+    matchBestOf: number | null; // as set; null = the default
+    bestOf: number; // what applies (default 3)
   };
   weeks: { number: number; start: string; end: string }[];
   currentWeek: number | null; // 0 = pre-season
@@ -470,6 +472,36 @@ export interface SeasonTransaction {
   dropped: CardRef[];
   allowances: { kind: AllowanceKind; quantity: number; week: number; fromMemberId: string; from: string; toMemberId: string; to: string }[];
   onBehalfBy: string | null; // a commissioner who made it for a player, or approved the trade
+}
+
+// Schedule (YGO-25): the regular season's matchups, one round a week.
+
+export interface SchedulePlayer {
+  memberId: string;
+  name: string;
+  teamName: string | null;
+  you: boolean;
+}
+
+export interface ScheduleWeek {
+  week: number;
+  start: string | null;
+  end: string | null;
+  bestOf: number; // from the rules in effect that week
+  current: boolean; // this week's matchups (week 1 before the season starts)
+  matches: { a: SchedulePlayer; b: SchedulePlayer | null; mine: boolean }[]; // b null = a has a bye
+}
+
+export interface Schedule {
+  generated: boolean;
+  canManage: boolean;
+  canGenerate: boolean; // draw it now (or again, before week 1)
+  why: string | null; // why it can't be drawn now (commissioners)
+  currentWeek: number; // 0 before week 1
+  drawnAt: string | null;
+  drawnBy: string | null; // null = automatically when the draft completed
+  draws: number;
+  weeks: ScheduleWeek[];
 }
 
 // Trades (YGO-24): one private conversation per pair of players.

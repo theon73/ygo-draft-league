@@ -61,7 +61,7 @@ public class SeasonRulesService {
      * @param roundRobinCycles how many times each pair of players meets
      */
     public record RulesUpdate(LocalDate startDate, Integer regularWeeks, LocalDate tcgCutoff, Long banListRevisionId,
-                              CompetitionFormat competitionFormat, Integer roundRobinCycles, Integer effectiveFromWeek,
+                              CompetitionFormat competitionFormat, Integer roundRobinCycles, Integer matchBestOf, Integer effectiveFromWeek,
                               Integer freeAgencyPerWeek, Integer tradesPerWeek, Integer tradeDeadlineWeek,
                               Boolean commissionerApproval) {}
 
@@ -83,9 +83,10 @@ public class SeasonRulesService {
      * @param rounds           round-robin: total rounds = weeks (one round a week); null otherwise
      * @param matchesPerPlayer round-robin: regular-season matches each player plays
      * @param byes             round-robin with an odd player count: one player sits out each round
+     * @param matchBestOf      as set (null = the default); {@code bestOf}: what applies
      */
     public record CompetitionView(CompetitionFormat format, Integer roundRobinCycles, int players, Integer rounds,
-                                  Integer matchesPerPlayer, boolean byes) {}
+                                  Integer matchesPerPlayer, boolean byes, Integer matchBestOf, int bestOf) {}
 
     /**
      * @param regularWeeks    the season's week count, whether set explicitly or derived from the format
@@ -149,7 +150,7 @@ public class SeasonRulesService {
 
         int effectiveFrom = 0;
         if (season.getStatus() != SeasonStatus.SETUP) {
-            if (!sameCalendar(proposed.calendar(), current.calendar(), competition) || !proposed.competition().equals(current.competition())) {
+            if (!sameCalendar(proposed.calendar(), current.calendar(), competition) || !proposed.competition().sameFormat(current.competition())) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT,
                         "The calendar and competition format can't change once the season has started");
             }
@@ -244,6 +245,17 @@ public class SeasonRulesService {
                 .map(this::parse).orElse(SeasonRulesDocument.EMPTY);
     }
 
+    /** The season's weeks with their start and end (empty until the calendar is complete). */
+    @Transactional(readOnly = true)
+    public List<WeekView> weeks(Season season) {
+        SeasonRulesDocument doc = latest(season);
+        int weekCount = weekCount(season, doc);
+        if (doc.calendar().startDate() == null || weekCount == 0) return List.of();
+        return new SeasonCalendar(boundary(doc, season.getLeague()), doc.calendar().startDate(), weekCount).weeks().stream()
+                .map(w -> new WeekView(w.number(), w.start().toOffsetDateTime(), w.end().toOffsetDateTime()))
+                .toList();
+    }
+
     /** The current week of the season (0 = pre-season, or no calendar yet). */
     @Transactional(readOnly = true)
     public int currentWeek(Season season) {
@@ -273,7 +285,7 @@ public class SeasonRulesService {
         CompetitionView competition = new CompetitionView(comp.format(), comp.roundRobinCycles(), playerCount,
                 rr ? RoundRobin.rounds(playerCount, comp.roundRobinCycles()) : null,
                 rr ? RoundRobin.matchesPerPlayer(playerCount, comp.roundRobinCycles()) : null,
-                rr && RoundRobin.hasByes(playerCount));
+                rr && RoundRobin.hasByes(playerCount), comp.matchBestOf(), comp.bestOf());
 
         List<WeekView> weeks = List.of();
         Integer currentWeek = null;
@@ -353,7 +365,9 @@ public class SeasonRulesService {
         } else if (cycles != null) {
             throw bad("Cycles only apply to a round-robin");
         }
-        return new CompetitionRules(update.competitionFormat(), update.competitionFormat() == null ? null : cycles);
+        Integer bestOf = update.matchBestOf();
+        if (bestOf != null && (bestOf < 1 || bestOf > 9 || bestOf % 2 == 0)) throw bad("A match is best of 1, 3, 5, 7 or 9");
+        return new CompetitionRules(update.competitionFormat(), update.competitionFormat() == null ? null : cycles, bestOf);
     }
 
     private static SeasonRulesDocument.CalendarRules calendar(RulesUpdate update, CompetitionRules competition,
