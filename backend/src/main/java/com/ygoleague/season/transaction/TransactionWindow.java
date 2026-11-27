@@ -8,12 +8,17 @@ final class TransactionWindow {
 
     private TransactionWindow() {}
 
-    /** Why transactions of this kind can't happen now, or null if they can (the season is active). */
-    static String closedReason(Season season, String what) {
+    /**
+     * Why transactions of this kind can't happen now, or null if they can: the season is active and
+     * the playoffs haven't started (they close trades and free agency, YGO-27).
+     */
+    static String closedReason(JdbcClient jdbc, Season season, String what) {
         return switch (season.getStatus()) {
             case SETUP, DRAFTING -> what + " opens when the draft is complete";
             case COMPLETE -> "The season is over";
-            case ACTIVE -> null;
+            case ACTIVE -> jdbc.sql("select exists (select 1 from stage where season_id = :s and kind = 'PLAYOFFS')")
+                    .param("s", season.getId()).query(Boolean.class).single()
+                    ? "Trades and free agency are closed for the playoffs" : null;
         };
     }
 

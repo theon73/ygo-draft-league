@@ -15,7 +15,7 @@ import java.util.List;
  * if the shape of existing sections changes.
  */
 public record SeasonRulesDocument(CalendarRules calendar, FormatRules format, CompetitionRules competition, DraftRules draft,
-                                  TransactionRules transactions, ResultRules results) {
+                                  TransactionRules transactions, ResultRules results, PlayoffRules playoffs) {
 
     /** Shape of the JSON. Bump when an existing section changes shape (new sections don't need it). */
     public static final int SCHEMA_VERSION = 1;
@@ -27,13 +27,14 @@ public record SeasonRulesDocument(CalendarRules calendar, FormatRules format, Co
         draft = draft == null ? DraftRules.EMPTY : draft;
         transactions = transactions == null ? TransactionRules.EMPTY : transactions;
         results = results == null ? ResultRules.EMPTY : results;
+        playoffs = playoffs == null ? PlayoffRules.EMPTY : playoffs;
     }
 
-    public static final SeasonRulesDocument EMPTY = new SeasonRulesDocument(null, null, null, null, null, null);
+    public static final SeasonRulesDocument EMPTY = new SeasonRulesDocument(null, null, null, null, null, null, null);
 
-    public SeasonRulesDocument withCalendar(CalendarRules c) { return new SeasonRulesDocument(c, format, competition, draft, transactions, results); }
+    public SeasonRulesDocument withCalendar(CalendarRules c) { return new SeasonRulesDocument(c, format, competition, draft, transactions, results, playoffs); }
 
-    public SeasonRulesDocument withDraft(DraftRules d) { return new SeasonRulesDocument(calendar, format, competition, d, transactions, results); }
+    public SeasonRulesDocument withDraft(DraftRules d) { return new SeasonRulesDocument(calendar, format, competition, d, transactions, results, playoffs); }
 
     /**
      * When the season's weeks fall.
@@ -220,6 +221,42 @@ public record SeasonRulesDocument(CalendarRules calendar, FormatRules format, Co
 
         public List<com.ygoleague.competition.Standings.Tiebreaker> order() {
             return tiebreakers == null ? com.ygoleague.competition.Standings.DEFAULT_TIEBREAKERS : tiebreakers;
+        }
+    }
+
+    /**
+     * Playoffs (YGO-27). Off unless set (also how seasons from before read): the regular season's
+     * standings then decide the champion.
+     *
+     * @param enabled          there are playoffs
+     * @param directQualifiers the top N in the standings go straight into the bracket
+     * @param playInTeams      the next 0, 2 or 4 play in: 2 = one match for one spot; 4 = NBA style,
+     *                         two spots (see {@code competition.Bracket})
+     * @param bestOf           playoff matches; null = the regular season's
+     * @param playInBestOf     play-in matches; null = the playoffs'
+     */
+    public record PlayoffRules(Boolean enabled, Integer directQualifiers, Integer playInTeams, Integer bestOf, Integer playInBestOf) {
+        public static final PlayoffRules EMPTY = new PlayoffRules(false, null, null, null, null);
+
+        public PlayoffRules {
+            enabled = Boolean.TRUE.equals(enabled);
+        }
+
+        public boolean on() {
+            return Boolean.TRUE.equals(enabled) && directQualifiers != null;
+        }
+
+        public int playIn() {
+            return playInTeams == null ? 0 : playInTeams;
+        }
+
+        /** Best-of for playoff matches, given the regular season's. */
+        public int playoffBestOf(int regular) {
+            return bestOf == null ? regular : bestOf;
+        }
+
+        public int playInBestOf(int regular) {
+            return playInBestOf == null ? playoffBestOf(regular) : playInBestOf;
         }
     }
 }

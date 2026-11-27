@@ -24,6 +24,7 @@ import TransactionsPage from "./pages/leagues/TransactionsPage";
 import TradesPage from "./pages/leagues/TradesPage";
 import SchedulePage from "./pages/leagues/SchedulePage";
 import StandingsPage from "./pages/leagues/StandingsPage";
+import PlayoffsPage from "./pages/leagues/PlayoffsPage";
 import InvitePage, { PendingInviteRedirect } from "./pages/InvitePage";
 
 const NAV = [
@@ -69,6 +70,7 @@ export default function App() {
               <Route path="rosters/:memberId" element={<RosterPage />} />
               <Route path="cards/:cardId" element={<SeasonCardPage />} />
               <Route path="standings" element={<StandingsPage />} />
+              <Route path="playoffs" element={<PlayoffsPage />} />
               <Route path="trades" element={<TradesPage />} />
               <Route path="schedule" element={<SchedulePage />} />
               <Route path="transactions" element={<TransactionsPage />} />

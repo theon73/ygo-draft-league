@@ -37,6 +37,7 @@ const TABS = [
   { to: "trades", label: "Trades" },
   { to: "schedule", label: "Schedule" },
   { to: "standings", label: "Standings" },
+  { to: "playoffs", label: "Playoffs" },
   { to: "transactions", label: "Transactions" },
 ];
 
