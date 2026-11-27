@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { apiPost, type InvitePreview } from "../api/client";
 import { useSession } from "../auth/session";
 import { useApi } from "../hooks/useApi";
+import { Loading } from "../components/Feedback";
 
 // Google sign-in leaves the app and comes back to "/", which would lose the invite. So before
 // sending someone to Google we remember the invite code in sessionStorage (per browser tab), and
@@ -50,7 +51,7 @@ export default function InvitePage() {
     );
   }
   if (preview.error) return <p className="bad">Couldn't load the invite ({preview.error})</p>;
-  if (!preview.data || !session) return <p className="muted">Loading…</p>;
+  if (!preview.data || !session) return <Loading />;
 
   const p = preview.data;
   const what = p.kind === "CLAIM" ? `claim the seat "${p.seatName}" in` : "join";
@@ -93,7 +94,7 @@ export default function InvitePage() {
       ) : (
         <>
           <p>Accept to {what} {p.leagueName}, as {user.displayName}.</p>
-          <button onClick={() => void accept()} disabled={joining}>Accept invite</button>
+          <button className="primary" onClick={() => void accept()} disabled={joining}>Accept invite</button>
         </>
       )}
       {error && <p className="bad">{error}</p>}

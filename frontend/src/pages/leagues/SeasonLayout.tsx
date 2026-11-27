@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState } from "react";
-import { Link, NavLink, Outlet, useMatch, useNavigate, useParams } from "react-router-dom";
-import type { DraftChanged, SeasonDetail } from "../../api/client";
+import { Link, Navigate, NavLink, Outlet, useLocation, useMatch, useNavigate, useParams } from "react-router-dom";
+import type { DraftChanged, SeasonDetail, SeasonStatus } from "../../api/client";
+import { Loading } from "../../components/Feedback";
 import { useApi } from "../../hooks/useApi";
 import { useLeague } from "./LeagueLayout";
 import { seasonStatusLabel } from "./seasonStatus";
@@ -28,18 +29,29 @@ export function useSeason(): SeasonContext {
   return ctx;
 }
 
-const TABS = [
-  { to: "", label: "Setup", end: true },
-  { to: "rules", label: "Rules" },
-  { to: "pool", label: "Pool" },
-  { to: "draft", label: "Draft" },
-  { to: "rosters", label: "Rosters" },
-  { to: "trades", label: "Trades" },
-  { to: "schedule", label: "Schedule" },
-  { to: "standings", label: "Standings" },
-  { to: "playoffs", label: "Playoffs" },
-  { to: "transactions", label: "Transactions" },
-];
+const TAB_LABEL = {
+  players: "Players", rules: "Rules", pool: "Pool", draft: "Draft", rosters: "Rosters", trades: "Trades",
+  schedule: "Schedule", standings: "Standings", transactions: "Transactions",
+} as const;
+type Tab = keyof typeof TAB_LABEL;
+
+// The tabs a season shows, most useful first, by its state: setup is about players, rules, pool and
+// the draft; a running season about matches. The other pages still open by URL (and then show
+// their tab), they're just not offered where they'd be empty.
+const TABS: Record<SeasonStatus, Tab[]> = {
+  SETUP: ["players", "rules", "pool", "draft"],
+  DRAFTING: ["draft", "rosters", "pool", "players", "rules"],
+  // Most used first; draft, players and rules are mostly history or for commissioners. The playoffs
+  // are a section of the Schedule tab.
+  ACTIVE: ["schedule", "rosters", "pool", "standings", "trades", "transactions", "draft", "players", "rules"],
+  COMPLETE: ["schedule", "rosters", "pool", "standings", "trades", "transactions", "draft", "players", "rules"],
+};
+
+/** /leagues/:id/seasons/:id opens the season on its first tab for its state. */
+export function SeasonIndex() {
+  const { season } = useSeason();
+  return <Navigate to={TABS[season.status][0]} replace />;
+}
 
 export default function SeasonLayout() {
   const { league, reload: reloadLeague } = useLeague();
@@ -47,43 +59,53 @@ export default function SeasonLayout() {
   const navigate = useNavigate();
   const season = useApi<SeasonDetail>(`/leagues/${league.id}/seasons/${encodeURIComponent(seasonId)}`);
   const onDraftTab = useMatch("/leagues/:leagueId/seasons/:seasonId/draft") !== null;
+  const location = useLocation();
   const { draftVersion, draftLive } = useLiveDraft(league.id, season.data, onDraftTab, season.reload, reloadLeague);
   const myTurn = !!draftLive && draftLive.status === "IN_PROGRESS" && !draftLive.paused && draftLive.onTheClockSeat !== null
     && season.data?.participants.find((p) => p.you)?.seat === draftLive.onTheClockSeat;
   useTitlePrefix(myTurn ? "Your pick · " : "");
 
   if (season.status === 404) {
-    return <p>Season not found. <Link to="../seasons">All seasons</Link></p>;
+    return <p className="bad">Season not found. <Link to="../seasons">All seasons</Link></p>;
   }
   if (season.error) return <p className="bad">Couldn't load the season ({season.error})</p>;
-  if (!season.data) return <p className="muted">Loading…</p>;
+  if (!season.data) return <Loading what="the season" />;
 
   const s = season.data;
+  // The tab being viewed, e.g. "rosters" for …/rosters/free-agents; added to the row if the state hides it.
+  const here = location.pathname.split(`/seasons/${s.id}/`)[1]?.split("/")[0] as Tab | undefined;
+  // (…/playoffs only redirects to the Schedule tab, so it needs no tab of its own.)
+  const tabs = TABS[s.status];
+  const shown = here && here in TAB_LABEL && !tabs.includes(here) ? [...tabs, here] : tabs;
   return (
     <>
       <div className="season-head">
-        <h3>
-          {s.name} <span className="muted">· {seasonStatusLabel[s.status]}</span>
-        </h3>
+        <h2>{s.name}</h2>
+        <span className={`pill status-${s.status}`}>{seasonStatusLabel[s.status]}</span>
         {league.seasons.length > 1 && (
-          <select
-            aria-label="Switch season"
-            value={s.id}
-            onChange={(e) => navigate(`/leagues/${league.id}/seasons/${e.target.value}`)}
-          >
-            {league.seasons.map((x) => (
-              <option key={x.id} value={x.id}>{x.name}</option>
-            ))}
-          </select>
+          <label className="season-switch">
+            Season
+            <select
+              value={s.id}
+              onChange={(e) => navigate(`/leagues/${league.id}/seasons/${e.target.value}`)}
+            >
+              {league.seasons.map((x) => (
+                <option key={x.id} value={x.id}>{x.name}{x.id === league.currentSeasonId ? " (current)" : ""}</option>
+              ))}
+            </select>
+          </label>
         )}
       </div>
-      <nav className="tabs">
-        {TABS.map((t) => (
-          <NavLink key={t.label} to={t.to} end={t.end}>{t.label}</NavLink>
+      <nav className="tabs" aria-label="Season">
+        {shown.map((t) => (
+          <NavLink key={t} to={t}>{TAB_LABEL[t]}</NavLink>
         ))}
       </nav>
       {myTurn && !onDraftTab && (
-        <p className="on-clock mine"><strong>You're on the clock.</strong> <Link to="draft">Go to the draft</Link></p>
+        <div className="callout">
+          <span className="grow"><strong>You're on the clock.</strong> It's your pick in the draft.</span>
+          <Link className="button primary sm" to="draft">Go to the draft</Link>
+        </div>
       )}
       <SeasonCtx.Provider value={{ season: s, reload: season.reload, reloadLeague, draftVersion, draftLive }}>
         <Outlet />

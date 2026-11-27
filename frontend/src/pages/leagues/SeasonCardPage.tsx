@@ -8,6 +8,7 @@ import { statusLabel } from "../explore/banStatus";
 import { useLeague } from "./LeagueLayout";
 import { playable } from "./RostersPage";
 import { useSeason } from "./SeasonLayout";
+import { Loading } from "../../components/Feedback";
 
 // A card as this season sees it: its pool flags, who holds it, and every change of hands. The
 // card's text comes from the catalog; prints and official ban lists stay on the Explorer page.
@@ -20,7 +21,7 @@ export default function SeasonCardPage() {
 
   if (info.status === 404) return <p>That card isn't in this season's pool. <Link to={`/explore/cards/${cardId}`}>See it in the Explorer</Link></p>;
   if (info.error) return <p className="bad">Couldn't load the card ({info.error})</p>;
-  if (!info.data) return <p className="muted">Loading…</p>;
+  if (!info.data) return <Loading />;
   const { card: c, owners, history } = info.data;
   const n = playable(c);
   const rosterLink = (memberId: string | null, name: string | null) =>

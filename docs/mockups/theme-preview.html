@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en" data-accent="gold">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Theme preview</title>
+<style>
+:root {
+  /* Theo's swatch */
+  --carbon-black: #172121; --charcoal-blue: #444554; --rosy-granite: #7f7b82; --lilac-ash: #bfacb5; --almond-silk: #e5d0cc;
+  /* Roles */
+  --bg: var(--carbon-black);
+  --surface: #1e2a2a;          /* panels, tiles: one step up from the background */
+  --surface-2: #263333;        /* hover, inputs, nested panels */
+  --border: var(--charcoal-blue);
+  --border-soft: #2f3b3c;
+  --text: var(--almond-silk);
+  --text-2: var(--lilac-ash);
+  --text-3: var(--rosy-granite); /* icons, placeholders, disabled only (3.9:1) */
+  --good: #7cc49a; --warn: #e0b45c; --bad: #e57373;
+  --monster: #c98d4f; --spell: #3fa38f; --trap: #b8628f;
+  --radius: 10px; --radius-sm: 6px;
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: var(--text); background: var(--bg);
+}
+[data-accent="gold"] { --accent: #d9b46a; --accent-strong: #e8c682; --accent-ink: #1b1608; --accent-wash: rgba(217,180,106,.12); }
+[data-accent="rose"] { --accent: #e0899f; --accent-strong: #eda3b6; --accent-ink: #2a0f17; --accent-wash: rgba(224,137,159,.12); }
+[data-accent="teal"] { --accent: #5cbfb0; --accent-strong: #7ad3c5; --accent-ink: #062320; --accent-wash: rgba(92,191,176,.12); }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); }
+.wrap { max-width: 1080px; margin: 0 auto; padding: 0 16px 48px; }
+.topbar { border-bottom: 1px solid var(--border-soft); background: rgba(0,0,0,.15); }
+.topbar .wrap { display: flex; align-items: center; gap: 28px; height: 56px; padding-bottom: 0; }
+.brand { font-weight: 700; letter-spacing: .02em; display: flex; align-items: center; gap: 10px; }
+.brand i { width: 22px; height: 30px; border-radius: 3px; background: linear-gradient(160deg, var(--accent), #8a6a2a00 140%), var(--surface-2); border: 1px solid var(--accent); display: inline-block; }
+.topnav { display: flex; gap: 20px; font-size: 14px; }
+.topnav a { color: var(--text-2); text-decoration: none; }
+.topnav a.on { color: var(--text); }
+.me { margin-left: auto; display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--text-2); }
+.avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--charcoal-blue); display: grid; place-items: center; color: var(--text); font-size: 12px; font-weight: 600; }
+
+.switcher { display: flex; gap: 8px; align-items: center; margin: 20px 0 8px; font-size: 13px; color: var(--text-2); flex-wrap: wrap; }
+.switcher button { font: inherit; padding: 4px 12px; border-radius: 999px; border: 1px solid var(--border); background: none; color: var(--text-2); cursor: pointer; }
+.switcher button.on { border-color: var(--accent); color: var(--accent); }
+
+.crumbs { font-size: 13px; color: var(--text-2); margin-top: 20px; }
+.crumbs a { color: var(--text-2); }
+.season-title { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 6px 0 0; }
+h1 { font-size: 28px; margin: 0; font-weight: 700; letter-spacing: -.01em; }
+h2 { font-size: 18px; margin: 0 0 12px; }
+h3 { font-size: 13px; margin: 0 0 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--text-2); font-weight: 600; }
+.pill { font-size: 12px; padding: 3px 10px; border-radius: 999px; background: var(--accent-wash); color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); white-space: nowrap; }
+.pill.neutral { background: var(--surface-2); color: var(--text-2); border-color: var(--border); }
+.pill.good { background: rgba(124,196,154,.12); color: var(--good); border-color: rgba(124,196,154,.35); }
+.pill.warn { background: rgba(224,180,92,.12); color: var(--warn); border-color: rgba(224,180,92,.35); }
+
+.tabs { display: flex; gap: 4px; margin: 18px 0 24px; border-bottom: 1px solid var(--border-soft); overflow-x: auto; }
+.tabs a { padding: 10px 14px; color: var(--text-2); text-decoration: none; font-size: 14px; border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; }
+.tabs a.on { color: var(--text); border-bottom-color: var(--accent); }
+
+.grid { display: grid; grid-template-columns: minmax(0,1.4fr) minmax(0,1fr); gap: 20px; align-items: start; }
+.panel { background: var(--surface); border: 1px solid var(--border-soft); border-radius: var(--radius); padding: 18px 20px; }
+.panel + .panel { margin-top: 20px; }
+.callout { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; padding: 14px 18px; border-radius: var(--radius); background: var(--accent-wash); border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); margin-bottom: 20px; }
+.callout strong { color: var(--accent-strong); }
+.callout .grow { flex: 1; }
+
+.btn { font: inherit; font-size: 14px; font-weight: 600; padding: 8px 16px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface-2); color: var(--text); cursor: pointer; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn.primary:hover { background: var(--accent-strong); }
+.btn.danger { background: none; border-color: rgba(229,115,115,.5); color: var(--bad); }
+.btn.ghost { background: none; border-color: transparent; color: var(--text-2); }
+.btn.sm { padding: 5px 11px; font-size: 13px; }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+
+.match { display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); align-items: center; gap: 12px; padding: 14px 16px; border-radius: var(--radius-sm); background: var(--surface-2); border: 1px solid var(--border-soft); }
+.match + .match { margin-top: 10px; }
+.match.mine { border-color: color-mix(in srgb, var(--accent) 55%, transparent); }
+.player { display: flex; flex-direction: column; }
+.player.right { text-align: right; }
+.player b { font-size: 15px; }
+.player span { font-size: 12px; color: var(--text-2); }
+.score { font-variant-numeric: tabular-nums; font-size: 20px; font-weight: 700; letter-spacing: .05em; }
+.score.pending { color: var(--text-3); font-size: 14px; font-weight: 500; }
+.match-foot { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; align-items: center; font-size: 12px; color: var(--text-2); border-top: 1px solid var(--border-soft); padding-top: 10px; margin-top: 2px; }
+
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--text-2); font-weight: 600; padding: 0 8px 8px; border-bottom: 1px solid var(--border); }
+td { padding: 9px 8px; border-bottom: 1px solid var(--border-soft); }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+tr.mine td { background: var(--accent-wash); }
+tr.mine td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+.rank { color: var(--text-3); width: 28px; }
+
+.cards { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 10px; align-items: start; }
+.cardtile { border-radius: var(--radius-sm); background: var(--surface-2); border: 1px solid var(--border-soft); padding: 8px; font-size: 13px; }
+.cardart { aspect-ratio: 59/86; max-height: 150px; width: auto; margin-left: auto; margin-right: auto; border-radius: 4px; margin-bottom: 8px; }
+.cardart.monster { background: linear-gradient(160deg, #5a4128, #2b2118); border: 1px solid var(--monster); }
+.cardart.spell { background: linear-gradient(160deg, #1d4a42, #12241f); border: 1px solid var(--spell); }
+.cardart.trap { background: linear-gradient(160deg, #4f2440, #22121c); border: 1px solid var(--trap); }
+.cardtile b { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cardtile span { color: var(--text-2); font-size: 12px; }
+.type { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; }
+
+label.field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--text-2); }
+input, select { font: inherit; font-size: 14px; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 10px; }
+input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
+input::placeholder { color: var(--text-3); }
+.hint { font-size: 12px; color: var(--text-2); }
+.fields { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+
+/* Wizard sketch */
+.wizard { display: grid; grid-template-columns: 230px minmax(0,1fr); gap: 24px; margin-top: 40px; }
+.steps { list-style: none; margin: 0; padding: 0; counter-reset: s; }
+.steps li { counter-increment: s; display: grid; grid-template-columns: 28px 1fr; align-items: start; gap: 10px; padding: 10px 0; color: var(--text-2); font-size: 14px; position: relative; }
+.steps li::before { content: counter(s); width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700; border: 1px solid var(--border); color: var(--text-3); }
+.steps li.done::before { content: "✓"; background: var(--surface-2); color: var(--good); border-color: rgba(124,196,154,.5); }
+.steps li.now { color: var(--text); font-weight: 600; }
+.steps li.now::before { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.steps small { display: block; font-weight: 400; color: var(--text-2); font-size: 12px; margin-top: 2px; }
+.wiz-foot { display: flex; justify-content: space-between; margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--border-soft); }
+.live { margin-top: 16px; padding: 12px 14px; border-radius: var(--radius-sm); background: var(--surface-2); font-size: 13px; color: var(--text-2); }
+.live b { color: var(--text); }
+
+@media (max-width: 760px) {
+  .steps { display: flex; overflow-x: auto; gap: 14px; } .steps li { flex: 0 0 auto; } .steps small { display: none; }
+  .switcher { flex-wrap: wrap; }
+  .grid, .wizard { grid-template-columns: 1fr; }
+  .fields { grid-template-columns: 1fr; }
+  .topnav { display: none; }
+  h1 { font-size: 22px; }
+}
+</style>
+</head>
+<body>
+<div class="topbar"><div class="wrap">
+  <div class="brand"><i></i>Draft League</div>
+  <nav class="topnav"><a class="on" href="#">Home</a><a href="#">Leagues</a><a href="#">Explorer</a></nav>
+  <div class="me"><span>Theo</span><div class="avatar">TN</div></div>
+</div></div>
+
+<div class="wrap">
+  <div class="switcher">Accent:
+    <button data-a="gold" class="on">Gold #d9b46a</button>
+    <button data-a="rose">Dusty rose #e0899f</button>
+    <button data-a="teal">Teal #5cbfb0</button>
+  </div>
+
+  <div class="crumbs"><a href="#">Classic League</a> · Season 3</div>
+  <div class="season-title"><h1>Season 3: March 2008</h1><span class="pill">Week 4 of 9</span><span class="pill neutral">Commissioner</span></div>
+  <nav class="tabs"><a class="on" href="#">Overview</a><a href="#">Schedule</a><a href="#">Standings</a><a href="#">Rosters</a><a href="#">Trades</a><a href="#">Free agents</a><a href="#">Draft</a><a href="#">Rules</a></nav>
+
+  <div class="callout"><div class="grow"><strong>Your match this week</strong> · Carol has reported 2-1 for her. Confirm or dispute by Thu 8:00 PM.</div><button class="btn primary sm">Review result</button></div>
+
+  <div class="grid">
+    <div>
+      <div class="panel">
+        <h3>Week 4 · Mon Dec 28 – Sun Jan 3 · Best of 3</h3>
+        <div class="match mine">
+          <div class="player"><b>Theo</b><span>Chaos Control</span></div>
+          <div class="score pending">awaiting</div>
+          <div class="player right"><b>Carol</b><span>Zombie Rush</span></div>
+          <div class="match-foot"><span><span class="pill warn">Needs your confirmation</span></span><span class="row"><button class="btn ghost sm">Dispute</button><button class="btn primary sm">Confirm 1-2</button></span></div>
+        </div>
+        <div class="match">
+          <div class="player"><b>Bob</b><span>Burn Notice</span></div>
+          <div class="score">2 – 0</div>
+          <div class="player right"><b>Dave</b><span>Dave's Deck</span></div>
+          <div class="match-foot"><span><span class="pill good">Final</span></span><span>2 replays · 1 note</span></div>
+        </div>
+      </div>
+      <div class="panel">
+        <h3>Recent pickups</h3>
+        <div class="cards">
+          <div class="cardtile"><div class="cardart monster"></div><b>Breaker the Magical Warrior</b><span><i class="type" style="background:var(--monster)"></i>Bob · FA claim</span></div>
+          <div class="cardtile"><div class="cardart spell"></div><b>Premature Burial</b><span><i class="type" style="background:var(--spell)"></i>Carol · Trade</span></div>
+          <div class="cardtile"><div class="cardart trap"></div><b>Torrential Tribute</b><span><i class="type" style="background:var(--trap)"></i>Theo · FA claim</span></div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="panel">
+        <h3>Standings</h3>
+        <table>
+          <thead><tr><th></th><th>Player</th><th class="num">W–L</th><th class="num">GD</th></tr></thead>
+          <tbody>
+            <tr><td class="rank">1</td><td>Bob</td><td class="num">3–0</td><td class="num">+5</td></tr>
+            <tr class="mine"><td class="rank">2</td><td>Theo</td><td class="num">2–1</td><td class="num">+2</td></tr>
+            <tr><td class="rank">3</td><td>Carol</td><td class="num">2–1</td><td class="num">+1</td></tr>
+            <tr><td class="rank">4</td><td>Dave</td><td class="num">0–3</td><td class="num">−8</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="panel">
+        <h3>Buttons &amp; states</h3>
+        <div class="row"><button class="btn primary">Start draft</button><button class="btn">Save</button><button class="btn danger">Remove</button><button class="btn ghost">Cancel</button><button class="btn" disabled>Disabled</button></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Season setup wizard sketch -->
+  <div class="wizard">
+    <ol class="steps">
+      <li class="done"><span>Start from<small>Copy of Season 2</small></span></li>
+      <li class="done"><span>Players<small>8 players · seats drawn</small></span></li>
+      <li class="now"><span>Card pool<small>Format date, ban list, exceptions</small></span></li>
+      <li><span>Draft<small>Rounds, timer, start time</small></span></li>
+      <li><span>Season<small>Schedule, trades, playoffs</small></span></li>
+      <li><span>Review<small>Check everything, then finish</small></span></li>
+    </ol>
+    <div class="panel">
+      <h2>Card pool</h2>
+      <p class="hint" style="margin-top:-6px">Cards released on or before the cutoff are in the pool. Carried over from Season 2; change anything that's different this time.</p>
+      <div class="fields">
+        <label class="field">TCG cutoff<input value="2008-03-01"></label>
+        <label class="field">Ban list<select><option>TCG March 2008 (rev. 1)</option></select></label>
+        <label class="field">Copies per card<select><option>1 (singleton)</option></select></label>
+      </div>
+      <div class="live"><b>1,842 cards</b> in the pool · 34 forbidden · 3 added by hand · <a href="#" style="color:var(--accent)">Browse the pool</a></div>
+      <div class="wiz-foot"><button class="btn ghost">← Players</button><div class="row"><button class="btn">Save &amp; exit</button><button class="btn primary">Next: Draft →</button></div></div>
+    </div>
+  </div>
+</div>
+<script>
+document.querySelectorAll(".switcher button").forEach((b) => b.addEventListener("click", () => {
+  document.documentElement.dataset.accent = b.dataset.a;
+  document.querySelectorAll(".switcher button").forEach((x) => x.classList.toggle("on", x === b));
+}));
+</script>
+</body>
+</html>

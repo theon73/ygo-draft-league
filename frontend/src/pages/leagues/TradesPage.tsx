@@ -10,6 +10,7 @@ import { useApi } from "../../hooks/useApi";
 import { useLeague } from "./LeagueLayout";
 import { GROUPS, seasonCardPath, useRosters } from "./RostersPage";
 import { useSeason } from "./SeasonLayout";
+import { useConfirm, Loading } from "../../components/Feedback";
 
 // The Trades tab (YGO-24): one private conversation per pair of players, with offers,
 // counteroffers and messages. Who you're talking to is in the URL (?with=…), and, for a
@@ -47,13 +48,12 @@ export default function TradesPage() {
   });
 
   if (overview.error) return <p className="bad">Couldn't load trades ({overview.error})</p>;
-  if (!overview.data) return <p className="muted">Loading…</p>;
+  if (!overview.data) return <Loading />;
   const o = overview.data;
   const r = o.rules;
 
   return (
     <>
-      <h4>Trades</h4>
       <p className="muted">
         {r.tradesPerWeek === null ? "Unlimited trades" : `${r.tradesPerWeek} trade${r.tradesPerWeek === 1 ? "" : "s"} a week`} (each counts for both players)
         {r.tradeDeadlineWeek !== null && ` · deadline: week ${r.tradeDeadlineWeek}`}
@@ -177,8 +177,8 @@ function Approvals({ base, offers, onDone }: { base: string; offers: TradeOffer[
       {offers.map((o) => (
         <OfferBox key={o.id} offer={o}>
           <p>
-            <button onClick={() => void decide(o, "approve")}>Approve</button>{" "}
-            <button onClick={() => void decide(o, "reject")}>Reject</button>
+            <button className="primary sm" onClick={() => void decide(o, "approve")}>Approve</button>{" "}
+            <button className="danger sm" onClick={() => void decide(o, "reject")}>Reject</button>
           </p>
         </OfferBox>
       ))}
@@ -196,16 +196,17 @@ function Thread({ base, as, withId, open, rules, onChange }: {
   const [composing, setComposing] = useState<{ counterOf: string | null; give: number[]; get: number[] } | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const confirm = useConfirm();
   const reload = () => { setVersion((v) => v + 1); onChange(); };
 
   if (thread.error) return <p className="bad">Couldn't load the conversation ({thread.error})</p>;
-  if (!thread.data) return <p className="muted">Loading…</p>;
+  if (!thread.data) return <Loading />;
   const t = thread.data;
   const myRoster = rosters.data?.players.find((p) => p.memberId === as) ?? rosters.data?.players.find((p) => p.you) ?? null;
   const theirRoster = rosters.data?.players.find((p) => p.memberId === withId) ?? null;
 
   const act = async (o: TradeOffer, action: "accept" | "decline" | "withdraw") => {
-    if (action === "decline" && !window.confirm("Decline this offer? It disappears for both of you.")) return;
+    if (action === "decline" && !(await confirm({ title: "Decline this offer?", message: "It disappears for both of you.", confirmLabel: "Decline", danger: true }))) return;
     setError(null);
     try {
       await apiPost(`${base}/offers/${o.id}/${action}`, { as: as || null });
@@ -248,9 +249,9 @@ function Thread({ base, as, withId, open, rules, onChange }: {
           <OfferBox key={item.offer.id} offer={item.offer}>
             {(item.offer.canAccept || item.offer.canWithdraw || (open && item.offer.status === "OPEN")) && (
               <p>
-                {item.offer.canAccept && <button onClick={() => void act(item.offer!, "accept")}>Accept</button>}{" "}
-                {item.offer.canDecline && <button onClick={() => void act(item.offer!, "decline")}>Decline</button>}{" "}
-                {item.offer.canWithdraw && <button onClick={() => void act(item.offer!, "withdraw")}>Withdraw</button>}{" "}
+                {item.offer.canAccept && <button className="primary" onClick={() => void act(item.offer!, "accept")}>Accept</button>}{" "}
+                {item.offer.canDecline && <button className="danger" onClick={() => void act(item.offer!, "decline")}>Decline</button>}{" "}
+                {item.offer.canWithdraw && <button className="ghost" onClick={() => void act(item.offer!, "withdraw")}>Withdraw</button>}{" "}
                 {open && item.offer.status === "OPEN" && <button onClick={() => counter(item.offer!)}>Counter</button>}
               </p>
             )}
@@ -370,8 +371,8 @@ function OfferBuilder({ base, as, withId, withName, initial, mine, theirs, rules
         {kinds.length > 0 && <p className="muted">Allowances are this week's; the trade itself still uses one trade for each of you.</p>}
         <div className="builder-send">
           <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Add a message (optional)" maxLength={1000} aria-label="Message with the offer" />
-          <button onClick={() => void submit()} disabled={busy || !even || empty}>Send offer</button>
-          <button onClick={onCancel} disabled={busy}>Cancel</button>
+          <button className="primary" onClick={() => void submit()} disabled={busy || !even || empty}>Send offer</button>
+          <button className="ghost" onClick={onCancel} disabled={busy}>Cancel</button>
         </div>
         {error && <p className="bad">{error}</p>}
       </div>
@@ -394,7 +395,7 @@ function CardPicker({ title, roster, chosen, onChange, children }: {
         <input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Filter by name" aria-label={`Filter: ${title}`} />
       </div>
       <div className="picker-list">
-        {!roster && <p className="muted">Loading…</p>}
+        {!roster && <Loading />}
         {GROUPS.map(({ group, label }) => {
           const cards = roster?.cards.filter((c) => c.group === group && (match(c) || chosen.includes(c.card.cardId))) ?? [];
           if (cards.length === 0) return null;

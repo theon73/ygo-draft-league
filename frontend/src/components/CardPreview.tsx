@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { apiGet, type CardDetail } from "../api/client";
 import CardImage from "./CardImage";
 import { cardStats } from "./cardStats";
+import { Loading } from "./Feedback";
 
 // Hover (or tap, on touch screens) to see a card's full image and text in a popover. The details
 // come from the catalog endpoint, fetched on first preview and then kept for the page's lifetime,
@@ -99,7 +100,7 @@ function Popover({ cardId, anchor, onClose }: { cardId: number; anchor: HTMLElem
       {failed ? (
         <p className="muted">Couldn't load this card.</p>
       ) : !card ? (
-        <p className="muted">Loading…</p>
+        <Loading />
       ) : (
         <>
           <CardImage passcode={card.passcodes[0]} size="full" alt={card.name} />

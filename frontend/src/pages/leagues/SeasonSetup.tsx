@@ -2,6 +2,7 @@ import { useState } from "react";
 import { apiPatch, apiPost, apiPut } from "../../api/client";
 import { useLeague } from "./LeagueLayout";
 import { useSeason } from "./SeasonLayout";
+import { useConfirm } from "../../components/Feedback";
 
 // A member's roles in this season. Commissioner and player are independent, so a person can be
 // both; "none" means they're in the league and just follow the season.
@@ -32,6 +33,7 @@ export default function SeasonSetup() {
   const { league } = useLeague();
   const { season, reload } = useSeason();
   const [error, setError] = useState<string | null>(null);
+  const confirm = useConfirm();
   const base = `/leagues/${league.id}/seasons/${season.id}`;
   const manage = season.canManage;
 
@@ -90,9 +92,13 @@ export default function SeasonSetup() {
     void act(() => apiPut(`${base}/seats`, { memberIds: order }));
   };
 
-  const randomize = () => {
-    const again = season.lastDraw ? " This replaces the current order; every draw is recorded and visible to the league." : "";
-    if (!window.confirm(`Randomly draw the seat order for ${players.length} players?${again}`)) return;
+  const randomize = async () => {
+    const again = season.lastDraw ? " This replaces the current order." : "";
+    if (!(await confirm({
+      title: "Draw the seat order at random?",
+      message: `A random order for ${players.length} players.${again} Every draw is recorded and visible to the league.`,
+      confirmLabel: "Draw seats",
+    }))) return;
     void act(() => apiPost(`${base}/seats/randomize`));
   };
 
@@ -127,6 +133,7 @@ export default function SeasonSetup() {
       {rows.length === 0 ? (
         <p className="muted">No one has a role in this season yet.</p>
       ) : (
+        <div className="table-scroll">
         <table>
           <thead>
             <tr><th>Seat</th><th>Member</th><th>Role</th><th>Team name</th>{manage && season.editable && <th />}</tr>
@@ -175,10 +182,11 @@ export default function SeasonSetup() {
             })}
           </tbody>
         </table>
+        </div>
       )}
 
       {manage && season.editable && (
-        <p><button onClick={randomize} disabled={players.length < 2}>Randomize seats</button></p>
+        <p><button onClick={() => void randomize()} disabled={players.length < 2}>Randomize seats</button></p>
       )}
       {season.lastDraw && (
         <p className="muted">
@@ -205,8 +213,8 @@ function TeamName({ name, canEdit, onSave }: { name: string | null; canEdit: boo
   return (
     <form className="inline" onSubmit={(e) => { e.preventDefault(); void onSave(value).then(() => setEditing(false)); }}>
       <input value={value} onChange={(e) => setValue(e.target.value)} maxLength={40} placeholder="Team name (blank to clear)" autoFocus />
-      <button type="submit">Save</button>
-      <button type="button" onClick={() => setEditing(false)}>Cancel</button>
+      <button type="submit" className="primary sm">Save</button>
+      <button type="button" className="ghost sm" onClick={() => setEditing(false)}>Cancel</button>
     </form>
   );
 }

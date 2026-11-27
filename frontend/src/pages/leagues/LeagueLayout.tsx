@@ -4,6 +4,7 @@ import type { LeagueDetail } from "../../api/client";
 import { useSession } from "../../auth/session";
 import { useApi } from "../../hooks/useApi";
 import { roleLabel } from "./roles";
+import { EmptyState, Loading } from "../../components/Feedback";
 
 // The shell for everything under /leagues/:leagueId. It loads the league once and renders the
 // league-level tabs; the pages below it get the loaded league, plus a reload() to call after
@@ -35,33 +36,37 @@ export default function LeagueLayout() {
   const user = session?.user;
   const league = useApi<LeagueDetail>(user && leagueId ? `/leagues/${encodeURIComponent(leagueId)}` : null, user?.identity);
 
-  if (!session) return <p className="muted">Loading…</p>;
-  if (!user) return <p>Sign in to see this league.</p>;
+  if (!session) return <Loading />;
+  if (!user) {
+    return <EmptyState title="Sign in to see this league"><p>Leagues are private to their members.</p></EmptyState>;
+  }
   if (league.status === 404) {
     return (
-      <section>
-        <h2>League not found</h2>
-        <p>It doesn't exist, or you're not a member. <Link to="/leagues">Back to my leagues</Link></p>
-      </section>
+      <EmptyState title="League not found" actions={<Link className="button" to="/leagues">Back to my leagues</Link>}>
+        <p>It doesn't exist, or you're not a member.</p>
+      </EmptyState>
     );
   }
   if (league.error) return <p className="bad">Couldn't load the league ({league.error})</p>;
-  if (!league.data) return <p className="muted">Loading…</p>;
+  if (!league.data) return <Loading what="the league" />;
 
   const l = league.data;
-  const current = l.seasons.find((s) => s.id === l.currentSeasonId);
+  // The league's name leads back to its current season; its own pages sit on the right.
   return (
     <section>
-      <p className="muted"><Link to="/leagues">My leagues</Link> / {l.name}</p>
-      <h2>
-        {l.name} <span className="badge">{roleLabel[l.myRole]}</span>
-      </h2>
-      <nav className="tabs">
-        {current && <NavLink to={`seasons/${current.id}`}>{current.name}</NavLink>}
-        <NavLink to="seasons" end>Seasons</NavLink>
-        <NavLink to="members">Members</NavLink>
-        <NavLink to="settings">Settings</NavLink>
-      </nav>
+      <div className="league-bar">
+        <div className="league-name">
+          <Link to="/leagues" className="crumb">Leagues</Link>
+          <span className="sep" aria-hidden="true">/</span>
+          <h1><Link to={`/leagues/${l.id}`}>{l.name}</Link></h1>
+          <span className="badge neutral">{roleLabel[l.myRole]}</span>
+        </div>
+        <nav className="league-nav" aria-label="League">
+          <NavLink to="seasons" end>Seasons</NavLink>
+          <NavLink to="members">Members</NavLink>
+          <NavLink to="settings">Settings</NavLink>
+        </nav>
+      </div>
       <LeagueCtx.Provider value={{ league: l, reload: league.reload }}>
         <Outlet />
       </LeagueCtx.Provider>

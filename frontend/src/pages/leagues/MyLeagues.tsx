@@ -4,6 +4,7 @@ import { apiPost, type LeagueSummary } from "../../api/client";
 import { useSession } from "../../auth/session";
 import { useApi } from "../../hooks/useApi";
 import { roleLabel } from "./roles";
+import { EmptyState, Loading } from "../../components/Feedback";
 
 const MAX_NAME = 60; // matches LeagueService.MAX_NAME_LENGTH
 
@@ -17,14 +18,9 @@ export default function MyLeagues() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  if (!session) return <p className="muted">Loading…</p>;
+  if (!session) return <Loading />;
   if (!user) {
-    return (
-      <section>
-        <h2>My leagues</h2>
-        <p>Sign in to see your leagues or create one.</p>
-      </section>
-    );
+    return <EmptyState title="My leagues"><p>Sign in to see your leagues or create one.</p></EmptyState>;
   }
 
   const create = async (e: FormEvent) => {
@@ -44,26 +40,26 @@ export default function MyLeagues() {
 
   return (
     <section>
-      <h2>My leagues</h2>
+      <h1>My leagues</h1>
       {leagues.error && <p className="bad">Couldn't load your leagues ({leagues.error})</p>}
+      {leagues.loading && <Loading />}
       {leagues.data &&
         (leagues.data.length === 0 ? (
-          <p className="muted">You're not in any leagues yet. Create one below, or ask a league owner for an invite.</p>
+          <EmptyState title="No leagues yet">
+            <p>Create one below, or ask a league owner for an invite link.</p>
+          </EmptyState>
         ) : (
-          <table>
-            <thead>
-              <tr><th>League</th><th>Your role</th><th>Members</th></tr>
-            </thead>
-            <tbody>
-              {leagues.data.map((l) => (
-                <tr key={l.id}>
-                  <td><Link to={`/leagues/${l.id}`}>{l.name}</Link></td>
-                  <td>{roleLabel[l.myRole]}</td>
-                  <td>{l.memberCount}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <ul className="league-cards">
+            {leagues.data.map((l) => (
+              <li key={l.id}>
+                <Link to={`/leagues/${l.id}`}>
+                  <strong>{l.name}</strong>
+                  <span className="badge neutral">{roleLabel[l.myRole]}</span>
+                  <span className="muted">{l.memberCount} member{l.memberCount === 1 ? "" : "s"}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
         ))}
 
       <h3>Create a league</h3>
@@ -76,7 +72,7 @@ export default function MyLeagues() {
           maxLength={MAX_NAME}
           required
         />
-        <button type="submit" disabled={saving || !name.trim()}>Create</button>
+        <button type="submit" className="primary" disabled={saving || !name.trim()}>Create league</button>
       </form>
       {error && <p className="bad">{error}</p>}
     </section>

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { apiPatch, apiPost, apiPut, type MyPings, type NotificationEvent, type NotificationSettings, type Weekday } from "../../api/client";
 import { useApi } from "../../hooks/useApi";
 import { useLeague } from "./LeagueLayout";
+import { useConfirm, useToast } from "../../components/Feedback";
 
 // Every IANA zone the browser knows, e.g. "America/Chicago".
 const ZONES: string[] = Intl.supportedValuesOf("timeZone");
@@ -14,6 +15,7 @@ export default function LeagueSettings() {
   const [day, setDay] = useState<Weekday>(league.weekStartsOn);
   const [time, setTime] = useState(league.weekStartsAt);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const toast = useToast();
 
   // Every member gets their own Discord pings; the league settings are the owner's.
   if (league.myRole !== "OWNER") {
@@ -32,7 +34,7 @@ export default function LeagueSettings() {
     try {
       await apiPatch(`/leagues/${league.id}`, { timeZone: zone, weekStartsOn: day, weekStartsAt: time });
       reload();
-      setMessage({ ok: true, text: "Saved." });
+      toast("Settings saved.");
     } catch (e) {
       setMessage({ ok: false, text: (e as Error).message });
     }
@@ -70,7 +72,7 @@ export default function LeagueSettings() {
         This week (as saved): {fmt(league.currentWeek.start)} → {fmt(league.currentWeek.end)} ({league.timeZone.replaceAll("_", " ")}).
       </p>
 
-      <p><button onClick={() => void save()} disabled={!changed || !time}>Save settings</button></p>
+      <p><button className="primary" onClick={() => void save()} disabled={!changed || !time}>Save settings</button></p>
       {message && <p className={message.ok ? "good" : "bad"}>{message.text}</p>}
 
       <DiscordSettings leagueId={league.id} />
@@ -87,6 +89,7 @@ function MyDiscordPings({ leagueId }: { leagueId: string }) {
   const mine = useApi<MyPings>(base);
   const [id, setId] = useState<string | null>(null);   // null = not edited yet: show the saved id
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const toast = useToast();
   if (!mine.data) return mine.error ? <p className="bad">Couldn't load your Discord settings ({mine.error})</p> : null;
   const m = mine.data;
   const shown = id ?? m.discordUserId ?? "";
@@ -96,7 +99,7 @@ function MyDiscordPings({ leagueId }: { leagueId: string }) {
     try {
       await apiPut(base, body);
       setId(null);
-      setMessage({ ok: true, text: done });
+      toast(done);
     } catch (e) {
       setMessage({ ok: false, text: (e as Error).message });
     } finally {
@@ -146,6 +149,8 @@ function DiscordSettings({ leagueId }: { leagueId: string }) {
   const [url, setUrl] = useState("");
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const confirm = useConfirm();
+  const toast = useToast();
   if (!settings.data) return settings.error ? <p className="bad">Couldn't load notification settings ({settings.error})</p> : null;
   const s = settings.data;
 
@@ -154,7 +159,7 @@ function DiscordSettings({ leagueId }: { leagueId: string }) {
     setMessage(null);
     try {
       await change();
-      setMessage({ ok: true, text: done });
+      toast(done);
       setUrl("");
     } catch (e) {
       setMessage({ ok: false, text: (e as Error).message });
@@ -172,7 +177,7 @@ function DiscordSettings({ leagueId }: { leagueId: string }) {
     <>
       <h4>Discord</h4>
       <p className="muted">
-        Post draft news and transactions to a Discord channel. In Discord: Server Settings → Integrations → Webhooks → New Webhook, pick the
+        Post draft news, transactions and results to a Discord channel. In Discord: Server Settings → Integrations → Webhooks → New Webhook, pick the
         channel, then Copy Webhook URL and paste it here.
       </p>
       <p>
@@ -197,11 +202,14 @@ function DiscordSettings({ leagueId }: { leagueId: string }) {
           <p>
             <button disabled={busy} onClick={() => void act(() => apiPost(`${base}/test`), "Test message sent. Check the channel.")}>Send test message</button>{" "}
             <button className="link" disabled={busy}
-                    onClick={() => { if (window.confirm("Remove the webhook? Nothing will be posted to Discord.")) void act(() => apiPut(base, { webhookUrl: "" }), "Webhook removed."); }}>
+                    onClick={async () => {
+                      if (await confirm({ title: "Remove the webhook?", message: "Nothing will be posted to Discord until you add one again.", confirmLabel: "Remove webhook", danger: true })) {
+                        void act(() => apiPut(base, { webhookUrl: "" }), "Webhook removed.");
+                      }
+                    }}>
               remove webhook
             </button>
           </p>
-          <p className="muted">Trades, free agency and results will be added here when those features arrive.</p>
         </>
       )}
       {message && <p className={message.ok ? "good" : "bad"}>{message.text}</p>}

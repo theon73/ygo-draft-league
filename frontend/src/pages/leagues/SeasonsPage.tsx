@@ -54,7 +54,7 @@ export default function SeasonsPage() {
           <p className="muted">Each season has its own commissioners, players, card pool, draft and rules. Members and history carry over. You commission every season; you can add co-commissioners per season.</p>
           <form onSubmit={create}>
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Season 1: March 2008" maxLength={60} required />
-            <button type="submit" disabled={!name.trim()}>Create season</button>
+            <button type="submit" className="primary" disabled={!name.trim()}>Create season</button>
           </form>
           {error && <p className="bad">{error}</p>}
         </>

@@ -1,4 +1,4 @@
-import { NavLink, Route, Routes } from "react-router-dom";
+import { Link, NavLink, Route, Routes } from "react-router-dom";
 import Home from "./pages/Home";
 import Placeholder from "./pages/Placeholder";
 import AccountMenu from "./auth/AccountMenu";
@@ -11,7 +11,7 @@ import LeagueHome from "./pages/leagues/LeagueHome";
 import MembersPage from "./pages/leagues/MembersPage";
 import SeasonsPage from "./pages/leagues/SeasonsPage";
 import LeagueSettings from "./pages/leagues/LeagueSettings";
-import SeasonLayout from "./pages/leagues/SeasonLayout";
+import SeasonLayout, { SeasonIndex } from "./pages/leagues/SeasonLayout";
 import SeasonSetup from "./pages/leagues/SeasonSetup";
 import SeasonRulesPage from "./pages/leagues/SeasonRulesPage";
 import SeasonPoolPage from "./pages/leagues/SeasonPoolPage";
@@ -24,7 +24,7 @@ import TransactionsPage from "./pages/leagues/TransactionsPage";
 import TradesPage from "./pages/leagues/TradesPage";
 import SchedulePage from "./pages/leagues/SchedulePage";
 import StandingsPage from "./pages/leagues/StandingsPage";
-import PlayoffsPage from "./pages/leagues/PlayoffsPage";
+import PlayoffsRedirect from "./pages/leagues/PlayoffsPage";
 import InvitePage, { PendingInviteRedirect } from "./pages/InvitePage";
 
 const NAV = [
@@ -35,19 +35,21 @@ const NAV = [
 
 export default function App() {
   return (
-    <div className="layout">
-      <header>
-        <h1>YGO Draft League</h1>
-        <nav>
-          {NAV.map((n) => (
-            <NavLink key={n.to} to={n.to} end={n.to === "/"}>
-              {n.label}
-            </NavLink>
-          ))}
-        </nav>
-        <AccountMenu />
+    <>
+      <header className="topbar">
+        <div className="wrap">
+          <Link to="/" className="brand"><span className="brand-mark" aria-hidden="true" />YGO Draft Duel</Link>
+          <nav className="topnav" aria-label="Main">
+            {NAV.map((n) => (
+              <NavLink key={n.to} to={n.to} end={n.to === "/"}>
+                {n.label}
+              </NavLink>
+            ))}
+          </nav>
+          <AccountMenu />
+        </div>
       </header>
-      <main>
+      <main className="wrap">
         <PendingInviteRedirect />
         <Routes>
           <Route path="/" element={<Home />} />
@@ -58,9 +60,10 @@ export default function App() {
             <Route path="members" element={<MembersPage />} />
             <Route path="seasons" element={<SeasonsPage />} />
             <Route path="settings" element={<LeagueSettings />} />
-            {/* A season's own pages (setup, and later draft, rosters, standings, transactions). */}
+            {/* A season's own pages. The index opens the tab that fits the season's state (see SeasonIndex). */}
             <Route path="seasons/:seasonId" element={<SeasonLayout />}>
-              <Route index element={<SeasonSetup />} />
+              <Route index element={<SeasonIndex />} />
+              <Route path="players" element={<SeasonSetup />} />
               <Route path="rules" element={<SeasonRulesPage />} />
               <Route path="pool" element={<SeasonPoolPage />} />
               <Route path="draft" element={<SeasonDraftPage />} />
@@ -70,7 +73,7 @@ export default function App() {
               <Route path="rosters/:memberId" element={<RosterPage />} />
               <Route path="cards/:cardId" element={<SeasonCardPage />} />
               <Route path="standings" element={<StandingsPage />} />
-              <Route path="playoffs" element={<PlayoffsPage />} />
+              <Route path="playoffs" element={<PlayoffsRedirect />} />
               <Route path="trades" element={<TradesPage />} />
               <Route path="schedule" element={<SchedulePage />} />
               <Route path="transactions" element={<TransactionsPage />} />
@@ -83,6 +86,6 @@ export default function App() {
           <Route path="*" element={<Placeholder title="Not found" />} />
         </Routes>
       </main>
-    </div>
+    </>
   );
 }

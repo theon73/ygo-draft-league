@@ -2,6 +2,7 @@ import { Link, useParams } from "react-router-dom";
 import type { BanListDetail, BanStatus } from "../../api/client";
 import { useApi } from "../../hooks/useApi";
 import { statusLabel } from "./banStatus";
+import { Loading } from "../../components/Feedback";
 
 const ORDER: BanStatus[] = ["FORBIDDEN", "LIMITED", "SEMI_LIMITED"];
 
@@ -10,7 +11,7 @@ export default function BanListView() {
   const { data: b, error } = useApi<BanListDetail>(`/explore/banlists/${id}`);
 
   if (error) return <p className="bad">Couldn't load ban list ({error})</p>;
-  if (!b) return <p className="muted">Loading…</p>;
+  if (!b) return <Loading />;
 
   return (
     <section>

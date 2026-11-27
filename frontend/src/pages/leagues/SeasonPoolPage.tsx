@@ -17,6 +17,7 @@ import { activeFilterCount, poolQueryString } from "./poolQuery";
 import { usePoolParams } from "./usePoolParams";
 import { currentWeekNote } from "./currentWeek";
 import { seasonCardPath } from "./RostersPage";
+import { useConfirm, Loading } from "../../components/Feedback";
 
 type Show = "ALL" | "EXCEPTIONS" | "FLAGGED" | "BAN_LIST" | "REMOVED";
 const SHOWS: { value: Show; label: string }[] = [
@@ -68,6 +69,7 @@ export default function SeasonPoolPage() {
   const show = (params.get("show") ?? "ALL") as Show;
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const confirm = useConfirm();
   // Mid-season, every change takes effect from a week (never earlier than now).
   const [week, setWeek] = useState<string>("");
 
@@ -79,7 +81,7 @@ export default function SeasonPoolPage() {
   const cards = useApi<PoolCardPage>(summary.data?.generatedAt ? `${base}/cards?${poolQueryString(params, page, pageSize)}` : null);
 
   if (summary.error) return <p className="bad">Couldn't load the pool ({summary.error})</p>;
-  if (!summary.data) return <p className="muted">Loading…</p>;
+  if (!summary.data) return <Loading />;
   const s = summary.data;
   const manage = s.canManage;
   const effective: { effectiveFromWeek?: number } = s.started ? { effectiveFromWeek: Number(week || s.minEffectiveWeek) } : {};
@@ -112,14 +114,14 @@ export default function SeasonPoolPage() {
   const generate = () => act(() => apiPost(`${base}/generate`));
   const setFlags = (c: PoolCard, flags: Partial<Pick<PoolCard, "softBanned" | "requiresOwnership">> & { maxPlayable?: number; clearMaxPlayable?: boolean }) =>
     act(() => apiPatch(`${base}/cards/${c.cardId}`, { ...flags, ...effective }));
-  const remove = (c: PoolCard) => {
-    if (!window.confirm(`Remove ${c.name} from the pool?`)) return;
+  const remove = async (c: PoolCard) => {
+    if (!(await confirm({ title: `Remove ${c.name} from the pool?`, confirmLabel: "Remove", danger: true }))) return;
     void act(() => apiDelete(`${base}/cards/${c.cardId}`, effective));
   };
   // Re-adding goes through the normal add: within the cutoff it's a dated card again, past it an exception.
-  const readd = (c: PoolCard) => {
+  const readd = async (c: PoolCard) => {
     const when = s.started ? ` from week ${effective.effectiveFromWeek}` : "";
-    if (!window.confirm(`Put ${c.name} back in the pool${when}?`)) return;
+    if (!(await confirm({ title: `Put ${c.name} back in the pool${when}?`, confirmLabel: "Put back" }))) return;
     void act(() => apiPost(`${base}/cards`, { cardId: c.cardId, reason: c.reason, ...effective }));
   };
 
@@ -129,7 +131,6 @@ export default function SeasonPoolPage() {
 
   return (
     <>
-      <h4>Card pool</h4>
       {s.generatedAt === null ? (
         <p className="muted">
           {s.rulesCutoff
@@ -153,7 +154,7 @@ export default function SeasonPoolPage() {
       {stale && <p className="bad">The rules' cutoff is now {s.rulesCutoff}, but the pool was generated from {s.generatedCutoff}. Regenerate to match.</p>}
       {manage && !s.started && s.rulesCutoff && (
         <p>
-          <button onClick={() => void generate()} disabled={busy}>{s.generatedAt ? "Regenerate from the rules" : "Generate pool"}</button>{" "}
+          <button className={s.generatedAt ? undefined : "primary"} onClick={() => void generate()} disabled={busy}>{s.generatedAt ? "Regenerate from the rules" : "Generate pool"}</button>{" "}
           <span className="muted">
             {s.generatedAt ? "Exceptions and cards you removed are kept. " : ""}Thumbnails are fetched in the background afterwards.
           </span>
@@ -245,7 +246,7 @@ export default function SeasonPoolPage() {
                               {[3, 2, 1, 0].map((n) => <option key={n} value={n}>{n} (league rule)</option>)}
                             </select>
                           </td>
-                          <td className="actions"><button onClick={() => remove(c)} disabled={busy}>Remove</button></td>
+                          <td className="actions"><button className="danger sm" onClick={() => void remove(c)} disabled={busy}>Remove</button></td>
                         </>
                       ) : (
                         <>
@@ -253,7 +254,7 @@ export default function SeasonPoolPage() {
                           <td>{c.requiresOwnership ? "Yes" : ""}</td>
                           <td>{c.effectiveMax}{c.maxPlayable !== null && <span className="muted"> (league rule)</span>}</td>
                           {manage && (
-                            <td className="actions"><button onClick={() => readd(c)} disabled={busy}>Re-add</button></td>
+                            <td className="actions"><button className="sm" onClick={() => void readd(c)} disabled={busy}>Re-add</button></td>
                           )}
                         </>
                       )}
@@ -336,8 +337,9 @@ function ArchetypeFlags({ base, effective, onDone }: { base: string; effective: 
   const archetypes = useApi<{ archetype: string; cards: number }[]>(`${base}/archetypes`);
   const [archetype, setArchetype] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const confirm = useConfirm();
   const apply = async (flags: object, what: string) => {
-    if (!archetype || !window.confirm(`${what} every ${archetype} card in the pool?`)) return;
+    if (!archetype || !(await confirm({ title: `${what} every ${archetype} card in the pool?`, confirmLabel: what }))) return;
     setError(null);
     try {
       await apiPatch(`${base}/archetypes/${encodeURIComponent(archetype)}`, { ...flags, ...effective });

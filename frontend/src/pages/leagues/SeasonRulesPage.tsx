@@ -4,6 +4,7 @@ import { useApi } from "../../hooks/useApi";
 import { currentWeekNote } from "./currentWeek";
 import { useLeague } from "./LeagueLayout";
 import { useSeason } from "./SeasonLayout";
+import { Loading } from "../../components/Feedback";
 
 const dayLabel = (d: string) => d.charAt(0) + d.slice(1).toLowerCase();
 // The same description the server gives (PlayoffService.shape), live while editing.
@@ -16,12 +17,15 @@ function playoffShape(direct: number, playIn: number): string {
   const byes = size - bracket;
   let s = direct === 1 ? "Seed 1 qualifies directly" : `Seeds 1-${direct} qualify directly`;
   if (playIn === 2) s += `; ${direct + 1} v ${direct + 2} play in for 1 spot`;
-  if (playIn === 4) s += `; ${direct + 1}-${direct + 4} play in for 2 spots (NBA style: the winner of ${direct + 1} v ${direct + 2} is in, its loser plays the winner of ${direct + 3} v ${direct + 4} for the last spot)`;
+  if (playIn === 4) s += `; ${direct + 1}-${direct + 4} play in for 2 spots (the winner of ${direct + 1} v ${direct + 2} is in, its loser plays the winner of ${direct + 3} v ${direct + 4} for the last spot)`;
   s += `; ${bracket} in the bracket`;
   if (byes === 1) s += ", seed 1 has a bye";
   else if (byes > 1) s += `, seeds 1${byes === 2 ? " and 2" : `-${byes}`} have byes`;
   return s + ".";
 }
+
+/** Today's date (YYYY-MM-DD) in a time zone. */
+const today = (zone: string) => new Intl.DateTimeFormat("en-CA", { timeZone: zone }).format(new Date());
 
 const TIEBREAKERS: Record<Tiebreaker, string> = { GAME_DIFF: "Game difference", GAMES_WON: "Games won", HEAD_TO_HEAD: "Head-to-head" };
 
@@ -33,16 +37,18 @@ export default function SeasonRulesPage() {
   const banLists = useApi<BanListOption[]>(`/leagues/${league.id}/ban-lists`);
 
   if (rules.error) return <p className="bad">Couldn't load the rules ({rules.error})</p>;
-  if (!rules.data) return <p className="muted">Loading…</p>;
+  if (!rules.data) return <Loading />;
   return <RulesForm key={rules.data.version ?? 0} rules={rules.data} banLists={banLists.data ?? []} base={base} onSaved={rules.reload} />;
 }
 
 function RulesForm({ rules, banLists, base, onSaved }: { rules: SeasonRules; banLists: BanListOption[]; base: string; onSaved: () => void }) {
   const edit = rules.canManage;
   const [startDate, setStartDate] = useState(rules.calendar.startDate ?? "");
-  const [format, setFormat] = useState(rules.competition.format ?? "");
-  const [cycles, setCycles] = useState(rules.competition.roundRobinCycles?.toString() ?? "");
-  const [bestOf, setBestOf] = useState(rules.competition.matchBestOf?.toString() ?? "");
+  // A new season starts from sensible defaults (round-robin, each pair once, best of 3), so saving
+  // the form gives a playable season; the format is only prefilled before the season starts.
+  const [format, setFormat] = useState(rules.competition.format ?? (rules.started ? "" : "ROUND_ROBIN"));
+  const [cycles, setCycles] = useState(rules.competition.roundRobinCycles?.toString() ?? (rules.started ? "" : "1"));
+  const [bestOf, setBestOf] = useState(String(rules.competition.matchBestOf ?? rules.competition.bestOf));
   // Only kept for formats with an explicit week count; a round-robin's weeks are derived.
   const [weeks, setWeeks] = useState(rules.calendar.weeksDerived ? "" : rules.calendar.regularWeeks?.toString() ?? "");
   const roundRobin = format === "ROUND_ROBIN";
@@ -52,7 +58,7 @@ function RulesForm({ rules, banLists, base, onSaved }: { rules: SeasonRules; ban
   const [tradesPerWeek, setTradesPerWeek] = useState(rules.transactions.tradesPerWeek?.toString() ?? "");
   const [deadline, setDeadline] = useState(rules.transactions.tradeDeadlineWeek?.toString() ?? "");
   const [approval, setApproval] = useState(rules.transactions.commissionerApproval);
-  const [confirmHours, setConfirmHours] = useState(rules.results.autoConfirmHours?.toString() ?? "");
+  const [confirmHours, setConfirmHours] = useState(String(rules.results.autoConfirmHours ?? rules.results.confirmHours));
   const [tiebreakers, setTiebreakers] = useState<Tiebreaker[]>(rules.results.tiebreakers);
   const po = rules.playoffs;
   const [poOn, setPoOn] = useState(po.enabled);
@@ -74,8 +80,9 @@ function RulesForm({ rules, banLists, base, onSaved }: { rules: SeasonRules; ban
         regularWeeks: !roundRobin && weeks ? Number(weeks) : null,
         competitionFormat: format || null,
         roundRobinCycles: roundRobin && cycles ? Number(cycles) : null,
-        matchBestOf: bestOf ? Number(bestOf) : null,
-        tcgCutoff: cutoff || null,
+        matchBestOf: Number(bestOf),
+        // An empty cutoff means "today" (in the league's zone): every card released so far.
+        tcgCutoff: cutoff || today(rules.calendar.timeZone),
         banListRevisionId: banList ? Number(banList) : null,
         freeAgencyPerWeek: faPerWeek === "" ? null : Number(faPerWeek),
         tradesPerWeek: tradesPerWeek === "" ? null : Number(tradesPerWeek),
@@ -131,7 +138,6 @@ function RulesForm({ rules, banLists, base, onSaved }: { rules: SeasonRules; ban
         <label>Matches are best of
           {/* Unlike the format, this can change mid-season (from the week you choose below). */}
           <select value={bestOf} onChange={(e) => setBestOf(e.target.value)} disabled={!edit}>
-            <option value="">3 (default)</option>
             {[1, 3, 5, 7, 9].map((n) => <option key={n} value={n}>{n}</option>)}
           </select>
         </label>
@@ -139,7 +145,7 @@ function RulesForm({ rules, banLists, base, onSaved }: { rules: SeasonRules; ban
       {rules.competition.format === "ROUND_ROBIN" && rules.competition.rounds !== null && (
         <p className="muted">
           {rules.competition.players < 2
-            ? "Add at least two players on the Setup tab to lay out the rounds."
+            ? "Add at least two players on the Players tab to lay out the rounds."
             : `${rules.competition.players} players: ${rules.competition.rounds} rounds, one per week, so ${rules.competition.matchesPerPlayer} matches each` +
               (rules.competition.byes ? ". With an odd number of players, one player has a bye each round." : ".") +
               (rules.started ? "" : " This follows the player list until the season starts.")}
@@ -203,8 +209,8 @@ function RulesForm({ rules, banLists, base, onSaved }: { rules: SeasonRules; ban
         </label>
       </div>
       <p className="muted">
-        Cards released in the TCG on or before the cutoff make up the dated pool; you can add exceptions on top of it (coming with the card
-        pool). A season keeps the exact ban list revision you pick, even if the list is updated later.
+        Cards released in the TCG on or before the cutoff make up the dated pool; you can add exceptions on top of it on the Pool tab.
+        Left empty, the cutoff is set to today when you save. A season keeps the exact ban list revision you pick, even if the list is updated later.
         {pinnedIsOld && pinned && ` A newer revision of ${pinned.name} (revision ${pinned.latestRevision}) exists; pick it from the list to switch.`}
       </p>
 
@@ -236,7 +242,7 @@ function RulesForm({ rules, banLists, base, onSaved }: { rules: SeasonRules; ban
       <div className="form-grid">
         <label>Unanswered reports confirm after (hours)
           <input type="number" min={1} max={336} value={confirmHours} onChange={(e) => setConfirmHours(e.target.value)} disabled={!edit}
-                 placeholder={`${rules.results.confirmHours} (default)`} />
+                 placeholder="48" />
         </label>
       </div>
       <p className="muted">Either player reports a match and the other confirms it; a report nobody answers becomes final after this delay.</p>
@@ -244,7 +250,7 @@ function RulesForm({ rules, banLists, base, onSaved }: { rules: SeasonRules; ban
       <ol className="tiebreakers">
         {tiebreakers.map((t, i) => (
           <li key={t}>
-            {TIEBREAKERS[t]}
+            <span className="tiebreaker-name">{TIEBREAKERS[t]}</span>
             {edit && (
               <span className="tiebreaker-moves">
                 <button type="button" aria-label={`Move ${TIEBREAKERS[t]} up`} disabled={i === 0}
@@ -273,7 +279,7 @@ function RulesForm({ rules, banLists, base, onSaved }: { rules: SeasonRules; ban
               <select value={playIn} onChange={(e) => setPlayIn(e.target.value)} disabled={!edit || rules.playoffsStarted}>
                 <option value="0">None</option>
                 <option value="2">2 teams: one match for one spot</option>
-                <option value="4">4 teams (NBA style): two spots</option>
+                <option value="4">4 teams: two spots</option>
               </select>
             </label>
           </div>
@@ -311,7 +317,7 @@ function RulesForm({ rules, banLists, base, onSaved }: { rules: SeasonRules; ban
             </label>
           )}{" "}
           {rules.started && <span className="muted">{currentWeekNote(rules.currentWeek, rules.calendar.regularWeeks)}</span>}{" "}
-          <button onClick={() => void save()}>Save rules</button>
+          <button className="primary" onClick={() => void save()}>Save rules</button>
         </p>
       )}
       {message && <p className={message.ok ? "good" : "bad"}>{message.text}</p>}

@@ -1,33 +1,38 @@
 import { useState } from "react";
+import { Navigate } from "react-router-dom";
 import { apiPost, type BracketMatch, type Playoffs, type SchedulePlayer } from "../../api/client";
-import { useApi } from "../../hooks/useApi";
-import { useLeague } from "./LeagueLayout";
 import { GameLinks, Player, ResultForm, type Action } from "./SchedulePage";
 import { useSeason } from "./SeasonLayout";
+import { useConfirm, type ConfirmOptions } from "../../components/Feedback";
 
-// The Playoffs tab (YGO-27): the seeding (a preview from the standings until a commissioner starts
-// the playoffs), the bracket by round, and the champion. Results are reported, confirmed and entered
-// here like regular matches. Each match has a week from when both its players are known.
-export default function PlayoffsPage() {
-  const { league } = useLeague();
+// The playoffs (YGO-27), shown as a section of the Schedule tab (YGO-28): the seeding (a preview
+// from the standings until a commissioner starts the playoffs), the bracket by round, and the
+// champion. Results are reported, confirmed and entered here like regular matches. Each match has
+// a week from when both its players are known. Without playoffs, it holds the champion and the
+// commissioners' "Complete the season".
+
+/** The old Playoffs tab's URL, kept working: the playoffs now live on the Schedule tab. */
+export default function PlayoffsRedirect() {
+  return <Navigate to="../schedule#playoffs" replace />;
+}
+
+/** Whether the schedule shows a playoffs section at all: playoffs on, or a season to complete or completed. */
+export const hasPlayoffsSection = (p: Playoffs) => p.enabled || p.complete || p.canComplete;
+
+export function PlayoffsSection({ playoffs: p, base, onChanged }: { playoffs: Playoffs; base: string; onChanged: () => void }) {
   const { season, reload: reloadSeason } = useSeason();
-  const base = `/leagues/${league.id}/seasons/${season.id}`;
-  const playoffs = useApi<Playoffs>(`${base}/playoffs`);
   const [selected, setSelected] = useState<{ id: string; action: Action } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const confirm = useConfirm();
 
-  if (playoffs.error) return <p className="bad">Couldn't load the playoffs ({playoffs.error})</p>;
-  if (!playoffs.data) return <p className="muted">Loading…</p>;
-  const p = playoffs.data;
-
-  const act = async (path: string, confirm: string) => {
-    if (!window.confirm(confirm)) return;
+  const act = async (path: string, ask: ConfirmOptions) => {
+    if (!(await confirm(ask))) return;
     setBusy(true);
     setError(null);
     try {
       await apiPost(`${base}/playoffs/${path}`);
-      playoffs.reload();
+      onChanged();
       reloadSeason();
     } catch (e) {
       setError((e as Error).message);
@@ -52,7 +57,6 @@ export default function PlayoffsPage() {
 
   return (
     <>
-      <h4>Playoffs</h4>
       {p.champion && (
         <p className="panel champion">
           🏆 <strong>{p.champion.you ? "You" : p.champion.name}</strong> {p.enabled ? "won the final" : "topped the standings"} and{" "}
@@ -62,9 +66,9 @@ export default function PlayoffsPage() {
 
       {!p.enabled ? (
         <>
-          <p className="muted">No playoffs this season: the regular-season standings decide the champion. (Playoffs are set up on the Rules tab.)</p>
+          {!p.complete && <p className="muted">No playoffs this season: the regular-season standings decide the champion.</p>}
           {!p.complete && p.canComplete && (
-            <p><button disabled={busy} onClick={() => void act("complete", "Complete the season? The top of the standings becomes champion, and results are locked.")}>Complete the season</button></p>
+            <p><button className="primary" disabled={busy} onClick={() => void act("complete", { title: "Complete the season?", message: "The top of the standings becomes champion, and results are locked.", confirmLabel: "Complete the season" })}>Complete the season</button></p>
           )}
           {!p.complete && !p.canComplete && p.why && <p className="muted">{p.why}.</p>}
         </>
@@ -79,7 +83,7 @@ export default function PlayoffsPage() {
             <>
               {p.canStart ? (
                 <p>
-                  <button disabled={busy} onClick={() => void act("start", "Start the playoffs? Seeding is fixed from the standings now, and trades and free agency close.")}>
+                  <button className="primary" disabled={busy} onClick={() => void act("start", { title: "Start the playoffs?", message: "Seeding is fixed from the standings now, and trades and free agency close.", confirmLabel: "Start the playoffs" })}>
                     Start the playoffs
                   </button>{" "}
                   <span className="muted">Seeding is fixed from the standings, and trades and free agency close.</span>
@@ -117,7 +121,7 @@ export default function PlayoffsPage() {
           {chosen && chosen.a && chosen.b && selected && (
             <ResultForm key={`${chosen.id}-${selected.action}`} match={{ id: chosen.id, a: chosen.a, b: chosen.b, result: chosen.result }}
                         bestOf={chosen.bestOf} action={selected.action} base={base} bracket onClose={() => setSelected(null)}
-                        onDone={() => { setSelected(null); playoffs.reload(); reloadSeason(); }} />
+                        onDone={() => { setSelected(null); onChanged(); reloadSeason(); }} />
           )}
         </>
       )}
@@ -144,7 +148,7 @@ function MatchCard({ m, selected, onSelect }: { m: BracketMatch; selected: boole
       <div className="matchup-status">
         <BracketStatus m={m} />
         <span className="matchup-actions">
-          {m.canConfirm && <button onClick={() => onSelect("confirm")}>Confirm…</button>}
+          {m.canConfirm && <button className="primary" onClick={() => onSelect("confirm")}>Confirm…</button>}
           {m.canReport && !m.canConfirm && <button onClick={() => onSelect("report")}>{r?.status === "PENDING" ? "Change report" : "Report"}</button>}
           {m.canEnter && (!m.mine || final || r?.status === "DISPUTED") && <button onClick={() => onSelect("enter")}>{r ? "Correct" : "Enter result"}</button>}
         </span>
