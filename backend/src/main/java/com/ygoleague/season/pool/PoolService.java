@@ -113,8 +113,11 @@ public class PoolService {
 
     // ---- Reading ------------------------------------------------------------------------------
 
-    /** Pool card columns, with the ban list status from the revision bound as :rev (null = no list). */
-    private static final String CARD_SELECT = """
+    /**
+     * Pool card columns, with the ban list status from the revision bound as :rev (null = no list).
+     * Read rows with {@link #cardRow}; the rosters ({@code season.roster}) list cards the same way.
+     */
+    public static final String CARD_SELECT = """
             select c.id, c.name, c.card_type, c.archetype, c.tcg_date, c.passcodes[1] as passcode, p.source,
                    p.soft_banned, p.requires_ownership, p.max_playable, p.reason, p.added_in_week, p.removed_in_week, b.status,
                    c.race, c.attribute, c.level, c.rank, c.link_rating, c.atk, c.def,
@@ -125,7 +128,7 @@ public class PoolService {
             left join ban_list_entry b on b.revision_id = :rev and b.card_id = p.card_id
             """;
 
-    private static PoolCardView cardRow(java.sql.ResultSet rs) throws java.sql.SQLException {
+    public static PoolCardView cardRow(java.sql.ResultSet rs) throws java.sql.SQLException {
         Integer override = (Integer) rs.getObject(10);
         String ban = rs.getString(14);
         int fromList = ban == null ? 3 : switch (ban) {
@@ -140,7 +143,8 @@ public class PoolService {
                 (Integer) rs.getObject(20), (Integer) rs.getObject(21), rs.getString(22));
     }
 
-    private Long banListRevision(Season season) {
+    /** The ban list revision in the season's rules, to bind as :rev in {@link #CARD_SELECT}. */
+    public Long banListRevision(Season season) {
         return rules.latest(season).format().banListRevisionId();
     }
 
@@ -244,10 +248,7 @@ public class PoolService {
             case REMOVED -> "p.removed_in_week is not null";
         });
 
-        if (Boolean.TRUE.equals(query.available())) {
-            where.add("p.removed_in_week is null and not p.soft_banned and p.copies > " + PoolOwnership.HELD_COPIES);
-            if (!rules.latest(season).draft().forbiddenDraftable()) where.add("b.status is distinct from 'FORBIDDEN'");
-        }
+        if (Boolean.TRUE.equals(query.available())) where.add(availableCondition(season));
 
         // Kinds: the ones chosen, or the ones the other filters imply. Each kind can carry its own subtype choice.
         boolean monsterFilters = !empty(query.monsterType()) || !empty(query.deck()) || !empty(query.summon()) || !empty(query.text())
@@ -326,6 +327,25 @@ public class PoolService {
         long total = count.query(Long.class).single();
         List<PoolCardView> items = list.param("limit", size).param("offset", (long) page * size).query((rs, n) -> cardRow(rs)).list();
         return new CardPage(total, page, size, items);
+    }
+
+    /**
+     * "Available": in the pool, not soft-banned, not Forbidden (unless the draft allows it), with a
+     * copy nobody holds. During the draft these are the draftable cards; after it, the free agents.
+     * SQL over pool_card p and its ban list entry b.
+     */
+    private String availableCondition(Season season) {
+        return "p.removed_in_week is null and not p.soft_banned and p.copies > " + PoolOwnership.HELD_COPIES
+                + (rules.latest(season).draft().forbiddenDraftable() ? "" : " and b.status is distinct from 'FORBIDDEN'");
+    }
+
+    /** How many cards are available (see {@link #availableCondition}): the free agents once the draft is over. */
+    public long availableCount(Season season) {
+        return jdbc.sql("""
+                        select count(*) from pool_card p left join ban_list_entry b on b.revision_id = :rev and b.card_id = p.card_id
+                        where p.season_id = :s and """ + " " + availableCondition(season))
+                .param("s", season.getId()).param("rev", banListRevision(season), java.sql.Types.BIGINT)
+                .query(Long.class).single();
     }
 
     /** SQL conditions joined with "and", and their bound values. */

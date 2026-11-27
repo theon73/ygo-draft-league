@@ -138,3 +138,19 @@ ol.queue li.taken .queue-name { text-decoration: line-through; color: #888; }
 .on-clock.paused { background: #e8e4f8; }
 .timer-change { margin-top: 0.5rem; padding: 0.5rem 0.75rem; border-radius: 6px; background: #f3f1ec; }
 input.wide { width: min(36rem, 100%); }
+/* Rosters (YGO-22): side-by-side columns that scroll sideways inside their box, never the page. */
+nav.tabs.small a { border: 1px solid #ddd; border-radius: 4px; padding: 0.2rem 0.6rem; text-decoration: none; color: inherit; }
+nav.tabs.small a.active { background: #e8e4f8; border-color: #b9b0e6; }
+.roster-columns { display: flex; gap: 0.75rem; overflow-x: auto; padding-bottom: 0.5rem; align-items: flex-start; }
+.roster-column { flex: 0 0 13rem; border: 1px solid #e4e2dc; background: #fff; padding: 0.5rem 0.6rem; font-size: 0.85rem; }
+.roster-column.mine { border-color: #b9b0e6; }
+.roster-column h5 { margin: 0; font-size: 0.95rem; }
+.roster-column h6 { margin: 0.6rem 0 0.15rem; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.03em; color: #555; }
+.roster-team, .roster-counts { margin: 0.1rem 0 0; font-size: 0.8rem; }
+ul.roster-list { list-style: none; padding: 0; margin: 0; }
+ul.roster-list li { padding: 0.1rem 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+ul.roster-list li.unusable a { color: #999; text-decoration: line-through; }
+.season-card { display: flex; gap: 1.25rem; align-items: flex-start; flex-wrap: wrap; }
+.season-card > div { flex: 1 1 18rem; min-width: 0; }
+.season-card h5 { margin: 1rem 0 0.25rem; }
+@media (max-width: 480px) { .roster-column { flex-basis: 11rem; } .season-card .card-image-full { width: 100%; max-width: 260px; } }
