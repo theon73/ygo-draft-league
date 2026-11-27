@@ -1,3 +1,4 @@
+import InfoTip from "../../components/InfoTip";
 import { Link } from "react-router-dom";
 import type { SeasonStandings, Tiebreaker } from "../../api/client";
 import { useApi } from "../../hooks/useApi";
@@ -26,7 +27,8 @@ export default function StandingsPage() {
   return (
     <>
       <p className="muted">
-        Ranked by wins, then {s.tiebreakers.map((t) => TIEBREAKER[t]).join(", then ")}. Only final results count
+        Ranked by wins <InfoTip>Ties are broken by {s.tiebreakers.map((t) => TIEBREAKER[t]).join(", then ")}. Only confirmed (final) results count.</InfoTip>
+        {" "}· only final results count
         {s.waiting > 0 && <> ({s.waiting} reported result{s.waiting === 1 ? "" : "s"} still waiting for confirmation)</>}
         {s.remaining > 0 && <>; {s.remaining} match{s.remaining === 1 ? "" : "es"} to go</>}. Results are reported on the <Link to="../schedule">Schedule</Link> tab.
       </p>

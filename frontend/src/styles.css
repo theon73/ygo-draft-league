@@ -206,7 +206,7 @@ dialog.confirm { background: var(--surface); color: var(--text); border: 1px sol
 dialog.confirm .dialog-body { padding: 1.25rem 1.35rem 1rem; }
 dialog.confirm::backdrop { background: rgba(5, 10, 10, 0.65); }
 dialog.confirm h4 { margin: 0 0 0.5rem; font-size: 1.05rem; }
-dialog.confirm p { margin: 0 0 1rem; color: var(--text-2); font-size: 0.92rem; white-space: pre-line; }
+dialog.confirm p, dialog.confirm .dialog-message { margin: 0 0 1rem; color: var(--text-2); font-size: 0.92rem; white-space: pre-line; }
 dialog.confirm .dialog-actions { display: flex; justify-content: flex-end; gap: 0.5rem; flex-wrap: wrap; }
 
 /* Toasts */
@@ -379,20 +379,120 @@ table.board td.slot .picked { color: var(--text); }
 table.board td.slot .current { background: var(--accent-wash); color: var(--accent); font-weight: 700; border-radius: 3px; outline: 1px solid var(--accent-line); }
 table.board th.mine { background: var(--accent-wash); color: var(--accent); }
 table.board td.slot .skipped { color: var(--bad); font-style: italic; }
-.on-clock { padding: 0.65rem 0.9rem; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--border-soft); }
-.on-clock.mine { background: var(--accent-wash); border-color: var(--accent-line); }
-.on-clock.mine strong { color: var(--accent-strong); }
-.on-clock.paused { background: var(--surface-2); border-color: var(--border); }
-.countdown { font-weight: 700; font-variant-numeric: tabular-nums; }
-.countdown.overdue { color: var(--bad); }
-ol.queue { padding-left: 1.5rem; }
-ol.queue li { display: flex; align-items: center; gap: 0.4rem; margin: 0.2rem 0; }
+table.board td.slot.mine { background: rgba(217, 180, 106, 0.04); }
+table.board .seat-no { display: inline-grid; place-items: center; width: 1.2rem; height: 1.2rem; border-radius: 50%; background: var(--surface-3); font-size: 0.7rem; color: var(--text-2); margin-right: 0.15rem; }
+table.board th.mine .seat-no { background: var(--accent); color: var(--accent-ink); }
+table.board .seat-team { display: block; font-weight: 400; color: var(--text-2); font-size: 0.75rem; }
+table.board td.slot > div { padding: 0.1rem 0.15rem; }
+.board-pick { display: inline-flex; align-items: center; gap: 0.35rem; max-width: 10rem; vertical-align: middle; text-align: left; }
+.board-art.card-image-small { width: 18px; flex: 0 0 auto; border-radius: 2px; }
+.board-name { overflow: hidden; text-overflow: ellipsis; }
+.board-pick sup { font-size: 0.65rem; }
+ol.queue { padding-left: 1.4rem; margin: 0.5rem 0; }
+ol.queue li { display: flex; align-items: center; gap: 0.3rem; margin: 0.25rem 0; font-size: 0.85rem; }
+ol.queue button.icon { width: 1.6rem; height: 1.6rem; padding: 0; }
 ol.queue li.taken .queue-name { text-decoration: line-through; color: var(--text-3); }
 .queue-thumb.card-image-small, img.queue-thumb { width: 28px; }
 .queue-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.commish { margin: 0.75rem 0; display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
+.commish { margin: 0.75rem 0; display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; padding: 0.55rem 0.75rem;
+  border: 1px dashed var(--border); border-radius: var(--radius); }
+.commish-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-2); margin-right: 0.35rem; }
 .commish > p, .commish > div { flex-basis: 100%; }
 .timer-change { margin-top: 0.5rem; padding: 0.75rem 0.9rem; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--border-soft); }
+
+/* Draft room pass (YGO-29) */
+.clock-banner { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin: 0 0 1rem;
+  padding: 1rem 1.25rem; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--border); }
+.clock-banner.mine { background: linear-gradient(120deg, rgba(217, 180, 106, 0.2), var(--accent-wash) 60%); border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent-line); }
+.clock-banner.paused { background: var(--surface-2); border-style: dashed; }
+.clock-who { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
+.clock-eyebrow { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-2); }
+.clock-banner.mine .clock-eyebrow { color: var(--accent); }
+.clock-who strong { font-size: 1.5rem; line-height: 1.2; }
+.clock-banner.mine .clock-who strong { color: var(--accent-strong); }
+.clock-detail { color: var(--text-2); font-size: 0.88rem; }
+.clock-time { display: flex; flex-direction: column; align-items: flex-end; text-align: right; }
+.clock-left { font-size: 2.4rem; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.clock-left.small { font-size: 1.4rem; }
+.clock-banner.paused .clock-left { font-size: 1.5rem; color: var(--text-2); }
+.clock-caption { font-size: 0.78rem; color: var(--text-2); margin-top: 0.25rem; }
+.clock-time.overdue .clock-left { color: var(--bad); }
+@media (max-width: 480px) {
+  .clock-banner { padding: 0.85rem 1rem; }
+  .clock-time { align-items: flex-start; text-align: left; }
+  .clock-left { font-size: 2rem; }
+}
+.callout .info-tip { vertical-align: 0.05em; }
+.small { font-size: 0.85rem; }
+
+.stat-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr)); gap: 0.6rem; margin: 0 0 1rem; }
+.stat-tile { background: var(--surface); border: 1px solid var(--border-soft); border-radius: var(--radius); padding: 0.7rem 0.85rem; min-width: 0; }
+.stat-label { display: flex; align-items: center; gap: 0.3rem; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-2); }
+.stat-value { font-size: 1.2rem; font-weight: 700; margin-top: 0.2rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stat-of { font-weight: 500; color: var(--text-2); font-size: 0.95rem; }
+.stat-sub { font-size: 0.8rem; color: var(--text-2); margin-top: 0.1rem; }
+.progress { height: 4px; background: var(--surface-3); border-radius: 999px; overflow: hidden; margin-top: 0.5rem; }
+.progress > span { display: block; height: 100%; background: var(--accent); border-radius: inherit; transition: width 0.3s; }
+@media (max-width: 480px) { .stat-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } .stat-value { font-size: 1.05rem; } }
+
+/* ⓘ info tips */
+button.info-tip { display: inline-grid; place-items: center; width: 1.05rem; height: 1.05rem; padding: 0; margin: 0 0.15rem; border-radius: 50%;
+  border: 1px solid var(--text-3); background: transparent; color: var(--text-2); font: italic 700 0.68rem/1 Georgia, "Times New Roman", serif;
+  vertical-align: 0.1em; cursor: help; flex: 0 0 auto; text-transform: none; letter-spacing: 0; }
+button.info-tip:hover:not(:disabled), button.info-tip[aria-expanded="true"] { background: var(--accent-wash); border-color: var(--accent); color: var(--accent); }
+.info-tip-box { position: fixed; z-index: 60; background: var(--surface-3); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  box-shadow: var(--shadow); padding: 0.6rem 0.75rem; font-size: 0.83rem; line-height: 1.45; font-weight: 400; text-transform: none; letter-spacing: 0; }
+
+.recent-picks ol { list-style: none; margin: 0 0 1rem; padding: 0 0 0.25rem; display: flex; gap: 0.5rem; overflow-x: auto; align-items: stretch; }
+.recent-picks li { flex: 0 0 9.5rem; display: flex; gap: 0.5rem; align-items: center; padding: 0.45rem; background: var(--surface); border: 1px solid var(--border-soft); border-radius: var(--radius); min-width: 0; }
+.recent-picks li.last { flex-basis: 15rem; border-color: var(--accent-line); background: linear-gradient(120deg, var(--accent-wash), var(--surface) 70%); }
+.recent-picks .pick-art.card-image-small { width: 34px; flex: 0 0 auto; }
+.recent-picks li.last .pick-art.card-image-small { width: 52px; }
+.pick-text { display: flex; flex-direction: column; min-width: 0; font-size: 0.8rem; }
+.pick-eyebrow { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent); }
+.pick-no { color: var(--text-2); font-size: 0.75rem; font-variant-numeric: tabular-nums; }
+.pick-name { font-weight: 600; text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recent-picks li.last .pick-name { font-size: 0.95rem; }
+.pick-by { color: var(--text-2); display: flex; gap: 0.3rem; align-items: center; flex-wrap: wrap; }
+.pick-by .badge { font-size: 0.62rem; padding: 0 0.3rem; }
+
+.section-head { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin: 1.25rem 0 0.6rem; }
+.section-head h4 { margin: 0; }
+.section-head nav.tabs.small { margin: 0; }
+.section-head .button { margin-left: auto; }
+
+.draft-work { margin: 1rem 0; }
+.draft-work.with-queue { display: grid; gap: 0 1.5rem; }
+@media (min-width: 960px) {
+  .draft-work.with-queue { grid-template-columns: minmax(0, 1fr) 20rem; grid-template-areas: "picker queue"; align-items: start; }
+  .draft-work.with-queue .draft-picker { grid-area: picker; }
+  .draft-work.with-queue .draft-queue { grid-area: queue; position: sticky; top: 4.5rem; max-height: calc(100vh - 5.5rem); overflow-y: auto; }
+}
+.draft-queue { background: var(--surface); border: 1px solid var(--border-soft); border-radius: var(--radius); padding: 0.75rem 0.85rem; margin-bottom: 1rem; }
+.draft-queue h4 { margin-top: 0; }
+.draft-picker > h4:first-child { margin-top: 0; }
+.queue-head { display: flex; align-items: center; gap: 0.4rem; }
+.private { display: inline-flex; align-items: center; gap: 0.2rem; font-size: 0.68rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-2);
+  border: 1px solid var(--border); border-radius: 999px; padding: 0.05rem 0.4rem; }
+label.check.away { font-size: 0.88rem; }
+
+ul.my-picks { list-style: none; padding: 0; margin: 0.5rem 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr)); gap: 0.75rem; }
+ul.my-picks li { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.8rem; min-width: 0; }
+ul.my-picks .tile-name { text-decoration: none; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+ul.my-picks .card-image { width: 100%; }
+
+.readiness h4 { margin-top: 0; }
+.readiness-actions { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 0; }
+
+/* Confirm dialog with media (e.g. the card being drafted) */
+dialog.confirm .dialog-body.with-media { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0 1rem; }
+dialog.confirm .dialog-body.with-media .dialog-actions { grid-column: 1 / -1; }
+.dialog-media .confirm-art.card-image-small { width: 96px; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4); }
+.dialog-message { margin: 0 0 1rem; color: var(--text-2); font-size: 0.92rem; white-space: pre-line; }
+.dialog-message > span { display: block; margin-bottom: 0.3rem; }
+.confirm-stats { color: var(--text-2); font-size: 0.85rem; }
+.confirm-slot { color: var(--text); }
+.confirm-slot strong { color: var(--accent-strong); }
 
 /* Rosters (YGO-22): side-by-side columns that scroll sideways inside their box, never the page. */
 .roster-columns { display: flex; gap: 0.75rem; overflow-x: auto; padding-bottom: 0.5rem; align-items: flex-start; }
@@ -596,3 +696,10 @@ details.seeds ol { margin: 0.4rem 0; padding-left: 1.6rem; columns: 2 14rem; }
   .form-grid label { flex: 1 1 100%; }
   th, td { padding-left: 0.4rem; padding-right: 0.4rem; }
 }
+
+/* Info tips in form labels, and collapsed "How do I…?" steps (YGO-29) */
+.label-text { display: inline-flex; align-items: center; gap: 0.15rem; }
+h3 button.info-tip, h4 button.info-tip, h5 button.info-tip { vertical-align: 0.2em; }
+details.how-to { margin: 0.25rem 0 0.75rem; font-size: 0.88rem; }
+details.how-to ol { margin: 0.4rem 0 0; padding-left: 1.4rem; color: var(--text-2); }
+details.how-to li { margin: 0.15rem 0; }

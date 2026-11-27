@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import {
   apiPost, apiPut, type DraftQueueState, type DraftSlot, type DraftState, type PickableSlot, type PickTimer, type PoolCard, type PoolCardPage,
@@ -6,20 +6,28 @@ import {
 } from "../../api/client";
 import CardImage from "../../components/CardImage";
 import CardPreview from "../../components/CardPreview";
+import { cardStats } from "../../components/cardStats";
+import InfoTip from "../../components/InfoTip";
+import StatTile, { ProgressBar } from "../../components/StatTile";
 import { useApi } from "../../hooks/useApi";
 import { useLeague } from "./LeagueLayout";
 import PoolFilters from "./PoolFilters";
 import PoolGrid from "./PoolGrid";
 import { poolQueryString } from "./poolQuery";
+import { seasonCardPath } from "./RostersPage";
 import { useSeason } from "./SeasonLayout";
 import { usePoolParams } from "./usePoolParams";
 import { useConfirm, type ConfirmOptions, Loading } from "../../components/Feedback";
 
 // The draft room (the season's Draft tab). Before the start: settings, a board preview, the
-// readiness checklist and Start draft. During: who's on the clock, the board filling in, and the
-// available cards to pick from. After: the final board. It refetches whenever the live connection
-// (held by SeasonLayout) says the draft changed. Players also get their private queue and away
-// switch, before and during the draft.
+// readiness checklist and Start draft. During: who's on the clock, the latest picks, the board
+// filling in, and the available cards to pick from. After: the final board. It refetches whenever
+// the live connection (held by SeasonLayout) says the draft changed. Players also get their
+// private queue and away switch, before and during the draft.
+//
+// YGO-29 layout: a summary row of stat tiles replaces the old paragraph, the clock is a banner,
+// the latest picks show their card art, and when it's your pick the picker (with your queue
+// beside it on a wide screen) comes before the board instead of under 40 rounds of it.
 
 export default function SeasonDraftPage() {
   const { league, reload: reloadLeague } = useLeague();
@@ -53,6 +61,21 @@ export default function SeasonDraftPage() {
     }
   };
 
+  // Your own pick (on the clock, or a skipped one to make up) puts the picker before the board.
+  const myTurn = d.status === "IN_PROGRESS" && d.pickable.some((p) => p.seat === d.mySeat);
+  const showPicker = d.status === "IN_PROGRESS" || playing;
+  const work = showPicker && (
+    <div className={`draft-work${playing && queue.data ? " with-queue" : ""}`}>
+      {playing && queue.data && (
+        <aside className="draft-queue"><QueuePanel base={base} queue={queue.data} onChanged={() => { queue.reload(); draft.reload(); }} /></aside>
+      )}
+      <div className="draft-picker">
+        <Picker draft={d} base={base} queue={playing ? queue.data : null} onQueued={queue.reload} onPicked={() => draft.reload()} />
+      </div>
+    </div>
+  );
+  const board = <BoardSection draft={d} />;
+
   return (
     <>
       {d.status === "NOT_STARTED" ? (
@@ -62,37 +85,31 @@ export default function SeasonDraftPage() {
           ) : (
             <DraftSummary draft={d} />
           )}
-          <h4>Ready to start?</h4>
-          <ul className="checklist">
-            {d.readiness.map((c) => (
-              <li key={c.item} className={c.ok ? "good" : "bad"}>{c.ok ? "✓" : "✗"} {c.detail}</li>
-            ))}
-          </ul>
-          {d.canManage && (
-            <p>
-              <button className="primary" onClick={() => void start()} disabled={d.readiness.some((c) => !c.ok)}>Start draft</button>{" "}
-              <span className="muted">Picking opens as soon as it starts.</span>
-            </p>
-          )}
-          {error && <p className="bad">{error}</p>}
+          <section className="panel readiness">
+            <h4>Ready to start?</h4>
+            <ul className="checklist">
+              {d.readiness.map((c) => (
+                <li key={c.item} className={c.ok ? "good" : "bad"}>{c.ok ? "✓" : "✗"} {c.detail}</li>
+              ))}
+            </ul>
+            {d.canManage && (
+              <p className="readiness-actions">
+                <button className="primary" onClick={() => void start()} disabled={d.readiness.some((c) => !c.ok)}>Start draft</button>
+                <span className="muted">Picking opens as soon as it starts.</span>
+              </p>
+            )}
+            {error && <p className="bad">{error}</p>}
+          </section>
         </>
       ) : (
         <>
+          {d.status === "IN_PROGRESS" && <ClockBanner draft={d} />}
           <DraftSummary draft={d} />
-          <p className="muted">
-            Started{d.startedAt && ` ${new Date(d.startedAt).toLocaleString()}`}{d.startedBy && ` by ${d.startedBy}`}
-            {d.completedAt ? `; completed ${new Date(d.completedAt).toLocaleString()}. The season is under way.` : "."}
-            {" "}{d.picksMade} of {d.totalPicks} picks made.
-          </p>
+          <RecentPicks draft={d} />
           {d.status === "IN_PROGRESS" && d.canManage && <CommissionerControls draft={d} base={base} onDone={() => { draft.reload(); reloadSeason(); reloadLeague(); }} />}
-          {d.status === "IN_PROGRESS" && <Clock draft={d} />}
         </>
       )}
-      <Board draft={d} />
-      {playing && queue.data && <QueuePanel base={base} queue={queue.data} onChanged={() => { queue.reload(); draft.reload(); }} />}
-      {(d.status === "IN_PROGRESS" || playing) && (
-        <Picker draft={d} base={base} queue={playing ? queue.data : null} onQueued={queue.reload} onPicked={() => draft.reload()} />
-      )}
+      {myTurn ? <>{work}{board}</> : <>{board}{work}</>}
     </>
   );
 }
@@ -138,7 +155,7 @@ function CommissionerControls({ draft: d, base, onDone }: { draft: DraftState; b
     + (u?.kind === "AUTO" ? ` Their away mode turns off so it isn't picked again.` : "");
   return (
     <div className="commish">
-      <span className="muted">Commissioner:</span>{" "}
+      <span className="commish-label">Commissioner</span>
       {d.held
         ? <button onClick={() => void act("resume")} disabled={busy}>Resume draft</button>
         : <button onClick={() => void act("pause")} disabled={busy}>Pause draft</button>}{" "}
@@ -159,13 +176,12 @@ function CommissionerControls({ draft: d, base, onDone }: { draft: DraftState; b
         </button>
       )}
       {" "}<button onClick={() => setEditingTimer((v) => !v)} disabled={busy}>{editingTimer ? "Cancel timer change" : "Change timer"}</button>
-      {u && <span className="muted"> Last: {undoLabel}</span>}
       {editingTimer && (
         <div className="timer-change">
           <TimerFields value={timer} onChange={setTimer} timeZone={d.timeZone} />
           <p>
             <button className="primary" onClick={() => void saveTimer()} disabled={busy}>Save timer</button>{" "}
-            <span className="muted">The pick on the clock gets the full new time from now (from the resume, if paused).</span>
+            <InfoTip>The pick on the clock gets the full new time from now (from the resume, if the draft is paused).</InfoTip>
           </p>
         </div>
       )}
@@ -174,40 +190,65 @@ function CommissionerControls({ draft: d, base, onDone }: { draft: DraftState; b
   );
 }
 
-function Clock({ draft: d }: { draft: DraftState }) {
+// Who's on the clock, as a banner with a large countdown; gold when it's you.
+function ClockBanner({ draft: d }: { draft: DraftState }) {
   const c = d.onTheClock;
   if (!c) return null;
+  const turn = `Pick #${c.overallPick} · Round ${c.round}${c.picksInTurn > 1 ? ` · ${c.pickInTurn} of ${c.picksInTurn} this turn` : ""}`;
   if (d.held) {
     return (
-      <p className="on-clock paused">
-        <strong>The draft is paused</strong>{d.heldBy && ` by ${d.heldBy}`}{d.heldSince && ` since ${new Date(d.heldSince).toLocaleTimeString()}`}.
-        {" "}{c.displayName} is up next with pick #{c.overallPick}{d.timer && "; their timer is stopped"}.
-      </p>
+      <div className="clock-banner paused" role="status">
+        <div className="clock-who">
+          <span className="clock-eyebrow">Draft paused</span>
+          <strong>{d.heldBy ? `Paused by ${d.heldBy}` : "Paused"}</strong>
+          <span className="clock-detail">
+            {c.displayName} is up next · {turn}{d.heldSince && ` · since ${new Date(d.heldSince).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`}
+          </span>
+        </div>
+        <div className="clock-time"><span className="clock-left">❚❚</span>{d.timer && <span className="clock-caption">timer stopped</span>}</div>
+      </div>
     );
   }
   const mine = d.mySeat === c.seat;
   const myOwed = d.owed.filter((o) => o.seat === d.mySeat);
+  const othersOwed = d.owed.filter((o) => o.seat !== d.mySeat);
   return (
     <>
-      <p className={`on-clock${mine ? " mine" : ""}`}>
-        {mine ? <strong>You're on the clock</strong> : <><strong>{c.displayName}</strong> is on the clock</>}
-        {" "}with pick #{c.overallPick} (round {c.round}{c.picksInTurn > 1 && `, pick ${c.pickInTurn} of ${c.picksInTurn} this turn`}).
-        {d.timer && d.deadline && <> <Countdown draft={d} timer={d.timer} deadline={d.deadline} /></>}
-        {!mine && d.canManage && <span className="muted"> As a commissioner you can pick for them.</span>}
-      </p>
+      <div className={`clock-banner${mine ? " mine" : ""}`} role="status">
+        <div className="clock-who">
+          <span className="clock-eyebrow">On the clock</span>
+          <strong>{mine ? "You're up" : c.displayName}</strong>
+          <span className="clock-detail">
+            {turn}
+            {!mine && d.canManage && <> · you can pick for them <InfoTip>As a commissioner you can make any pick on a player's behalf; it's marked as yours in the log.</InfoTip></>}
+          </span>
+        </div>
+        {d.timer && d.deadline && <Countdown draft={d} timer={d.timer} deadline={d.deadline} />}
+      </div>
       {myOwed.length > 0 && (
-        <p className="on-clock">
-          You have {myOwed.length === 1 ? "a skipped pick" : `${myOwed.length} skipped picks`} to make up
-          ({myOwed.map((o) => `#${o.overallPick}`).join(", ")}). Choose it under "Picking for" below; it's yours until the draft ends.
+        <p className="callout">
+          <strong>You owe {myOwed.length === 1 ? "a skipped pick" : `${myOwed.length} skipped picks`}</strong>
+          <InfoTip>Your time ran out on these picks. Make them up whenever you like until the draft ends (choose one under "Picking for"); any still owed when the last pick is made are forfeited.</InfoTip>
+          {" "}<span className="muted">{pickList(myOwed.map((o) => o.overallPick))}</span>
         </p>
       )}
-      {d.canManage && d.owed.length > myOwed.length && (
-        <p className="muted">
-          Skipped picks still owed: {d.owed.filter((o) => o.seat !== d.mySeat).map((o) => `#${o.overallPick} ${o.displayName}`).join(", ")}.
+      {d.canManage && othersOwed.length > 0 && (
+        <p className="muted small">
+          Still owed:{" "}
+          {[...new Set(othersOwed.map((o) => o.displayName))].map((name) => {
+            const picks = othersOwed.filter((o) => o.displayName === name).map((o) => o.overallPick);
+            return `${name}: ${pickList(picks)}`;
+          }).join(" · ")}
         </p>
       )}
     </>
   );
+}
+
+/** "#10, #11, #14 and 29 more": a long list of pick numbers, shortened. */
+function pickList(picks: number[], show = 4): string {
+  const head = picks.slice(0, show).map((n) => `#${n}`).join(", ");
+  return picks.length > show ? `${head} and ${picks.length - show} more` : head;
 }
 
 const EXPIRY_LABEL: Record<TimerExpiry, string> = {
@@ -227,12 +268,27 @@ function Countdown({ draft: d, timer, deadline }: { draft: DraftState; timer: Pi
   }, [offset]);
   const left = Date.parse(deadline) - now;
   if (d.paused) {
-    return <span className="countdown">Paused overnight until {timer.pauseTo?.slice(0, 5)} ({d.timeZone.replaceAll("_", " ")}).</span>;
+    return (
+      <div className="clock-time">
+        <span className="clock-left small">Overnight</span>
+        <span className="clock-caption">paused until {timer.pauseTo?.slice(0, 5)} ({d.timeZone.replaceAll("_", " ")})</span>
+      </div>
+    );
   }
   if (left <= 0) {
-    return <span className="countdown overdue">Time's up{timer.onExpiry === "WAIT" ? ": waiting for the pick." : "…"}</span>;
+    return (
+      <div className="clock-time overdue">
+        <span className="clock-left">0:00</span>
+        <span className="clock-caption">{timer.onExpiry === "WAIT" ? "time's up: waiting for the pick" : "time's up…"}</span>
+      </div>
+    );
   }
-  return <span className={`countdown${left < 30_000 ? " overdue" : ""}`}>{formatLeft(left)} left.</span>;
+  return (
+    <div className={`clock-time${left < 30_000 ? " overdue" : ""}`}>
+      <span className="clock-left">{formatLeft(left)}</span>
+      <span className="clock-caption">left to pick</span>
+    </div>
+  );
 }
 
 function formatLeft(ms: number): string {
@@ -245,16 +301,30 @@ function formatLeft(ms: number): string {
   return `${m}:${String(s % 60).padStart(2, "0")}`;
 }
 
-function describeTimer(t: PickTimer | null): string {
-  if (!t) return "No pick timer.";
-  const pause = t.pauseFrom && t.pauseTo ? `, paused ${t.pauseFrom.slice(0, 5)} to ${t.pauseTo.slice(0, 5)}` : "";
-  return `${formatDuration(t.seconds)} per pick${pause}; when it runs out, ${EXPIRY_LABEL[t.onExpiry]}.`;
+const EXPIRY_SHORT: Record<TimerExpiry, string> = { WAIT: "waits", SKIP: "skips", AUTO_PICK: "auto-pick" };
+
+/** The timer's tile: "2 min" / "per pick · auto-pick", with the details in the tip. */
+function timerTile(d: DraftState): { value: string; sub: string; tip: ReactNode } {
+  const t = d.timer;
+  if (!t) return { value: "None", sub: "no time limit", tip: "Picks have no time limit: the draft waits for each player." };
+  const pause = t.pauseFrom && t.pauseTo;
+  return {
+    value: formatDuration(t.seconds, true),
+    sub: `per pick · ${EXPIRY_SHORT[t.onExpiry]}${pause ? " · overnight pause" : ""}`,
+    tip: (
+      <>
+        When the time runs out, {EXPIRY_LABEL[t.onExpiry]}.
+        {pause && <> The clock stops from {t.pauseFrom!.slice(0, 5)} to {t.pauseTo!.slice(0, 5)} ({d.timeZone.replaceAll("_", " ")}).</>}
+        {d.timerChangedBy && d.timerChangedAt && <> Changed by {d.timerChangedBy} at {new Date(d.timerChangedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}.</>}
+      </>
+    ),
+  };
 }
 
-function formatDuration(seconds: number): string {
-  if (seconds % 3600 === 0) return `${seconds / 3600} hour${seconds === 3600 ? "" : "s"}`;
-  if (seconds % 60 === 0) return `${seconds / 60} minute${seconds === 60 ? "" : "s"}`;
-  return `${seconds} seconds`;
+function formatDuration(seconds: number, short = false): string {
+  if (seconds % 3600 === 0) return short ? `${seconds / 3600} hr` : `${seconds / 3600} hour${seconds === 3600 ? "" : "s"}`;
+  if (seconds % 60 === 0) return short ? `${seconds / 60} min` : `${seconds / 60} minute${seconds === 60 ? "" : "s"}`;
+  return short ? `${seconds} sec` : `${seconds} seconds`;
 }
 
 // The player's private queue: reorder, remove, and the away switch.
@@ -283,15 +353,18 @@ function QueuePanel({ base, queue, onChanged }: { base: string; queue: DraftQueu
 
   return (
     <>
-      <h4>My queue <span className="muted">(only you see it)</span></h4>
-      <label className="check">
+      <h4 className="queue-head">
+        My queue <span className="private" title="Only you see your queue"><LockIcon /> private</span>
+        <InfoTip>Only you see your queue. If your timer runs out (or you're away), the first card in it that's still available is picked for you.</InfoTip>
+      </h4>
+      <label className="check away">
         <input type="checkbox" checked={queue.away} disabled={busy}
                onChange={(e) => void act(() => apiPut(`${base}/away`, { away: e.target.checked }))} />{" "}
-        Away: pick the first available card in my queue as soon as I'm on the clock{" "}
-        <span className="muted">(turns off when nothing in it is left)</span>
+        Away: auto-pick from my queue
+        <InfoTip>As soon as you're on the clock, the first available card in your queue is picked for you, without waiting for the timer. It turns off by itself when nothing in your queue is left.</InfoTip>
       </label>
       {queue.cards.length === 0 ? (
-        <p className="muted">Empty. Add cards with the Queue button on the cards below.</p>
+        <p className="muted small">Empty. Use Queue on a card to add it.</p>
       ) : (
         <ol className="queue">
           {queue.cards.map((c, i) => (
@@ -300,7 +373,7 @@ function QueuePanel({ base, queue, onChanged }: { base: string; queue: DraftQueu
               <span className="queue-name">{c.name}{!c.available && <span className="muted"> (no longer available)</span>}</span>
               <button onClick={() => move(i, -1)} disabled={busy || i === 0} aria-label={`Move ${c.name} up`}>↑</button>
               <button onClick={() => move(i, 1)} disabled={busy || i === ids.length - 1} aria-label={`Move ${c.name} down`}>↓</button>
-              <button className="link" onClick={() => void save(ids.filter((id) => id !== c.cardId))} disabled={busy}>remove</button>
+              <button className="icon" onClick={() => void save(ids.filter((id) => id !== c.cardId))} disabled={busy} aria-label={`Remove ${c.name}`} title="Remove">✕</button>
             </li>
           ))}
         </ol>
@@ -338,8 +411,20 @@ function Picker({ draft: d, base, queue, onQueued, onPicked }: {
   const pick = async (c: PoolCard) => {
     if (!slot) return;
     const forWhom = d.mySeat === slot.seat ? "" : ` for ${slot.displayName}`;
-    const what = slot.makeup ? `skipped pick #${slot.overallPick}` : `pick #${slot.overallPick}`;
-    if (!(await confirm({ title: `Draft ${c.name}${forWhom}?`, message: `With ${what}. Picks are final.`, confirmLabel: "Draft it" }))) return;
+    if (!(await confirm({
+      title: `Draft ${c.name}${forWhom}?`,
+      media: <CardImage passcode={c.passcode} size="small" alt="" className="confirm-art" />,
+      message: (
+        <>
+          <span className="confirm-stats">{/Spell|Trap/.test(c.cardType) ? cardStats(c) : `${c.cardType} · ${cardStats(c)}`}{c.banStatus ? ` · ${c.banStatus.replace("_", "-").toLowerCase()}` : ""}</span>
+          <span className="confirm-slot">
+            <strong>{slot.makeup ? "Make-up pick" : "Pick"} #{slot.overallPick}</strong> · Round {slot.round}
+          </span>
+          <span className="muted">Picks are final.</span>
+        </>
+      ),
+      confirmLabel: "Draft it",
+    }))) return;
     setBusy(true);
     setError(null);
     try {
@@ -410,19 +495,83 @@ function Picker({ draft: d, base, queue, onQueued, onPicked }: {
   );
 }
 
+// The draft at a glance: format, progress, timer, pool and start, as a row of stat tiles.
 function DraftSummary({ draft: d }: { draft: DraftState }) {
+  const timer = timerTile(d);
+  const multiPick = d.rounds.some((r) => r.picksPerTurn > 1);
+  const fmt = (instant: string) => new Date(instant).toLocaleString(undefined, { timeZone: d.timeZone, month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
   return (
-    <p>
-      {d.order === "SNAKE" ? "Snake" : "Linear"} draft
-      {d.roundCount > 0 ? `: ${d.roundCount} rounds, ${d.picksPerPlayer} picks each, ${d.totalPicks} in all` : " (rounds not set yet)"}.
-      {d.scheduledStart && <> Planned for {when(d.scheduledStart, d.timeZone)}.</>}
-      <br />
-      <span className="muted">
-        {d.draftableCards.toLocaleString()} draftable cards{d.forbiddenDraftable ? " (Forbidden cards can be drafted)" : " (Forbidden and soft-banned cards excluded)"}.
-        {" "}{describeTimer(d.timer)}
-        {d.timerChangedBy && d.timerChangedAt && ` (changed by ${d.timerChangedBy}, ${new Date(d.timerChangedAt).toLocaleTimeString()})`}
-      </span>
-    </p>
+    <div className="stat-tiles draft-summary">
+      <StatTile label="Format" value={d.order === "SNAKE" ? "Snake" : "Linear"}
+                sub={d.roundCount > 0 ? `${d.roundCount} rounds · ${d.picksPerPlayer} picks each` : "rounds not set yet"}
+                tip={<>
+                  {d.order === "SNAKE" ? "The order reverses every round, so the last seat picks twice in a row at the turn." : "The same order every round."}
+                  {multiPick && <> {d.rounds.map((r) => `rounds ${r.fromRound}–${r.toRound}: ${r.picksPerTurn} pick${r.picksPerTurn === 1 ? "" : "s"} per turn`).join("; ")}.</>}
+                </>} />
+      {d.status === "NOT_STARTED" ? (
+        <StatTile label="Picks" value={d.totalPicks.toLocaleString()} sub={`for ${d.seats.length} player${d.seats.length === 1 ? "" : "s"}`} />
+      ) : (
+        <StatTile label="Progress" value={<>{d.picksMade}<span className="stat-of"> / {d.totalPicks}</span></>}
+                  sub={d.status === "COMPLETE" ? "draft complete" : "picks made"}>
+          <ProgressBar done={d.picksMade} total={d.totalPicks} />
+        </StatTile>
+      )}
+      <StatTile label="Timer" value={timer.value} sub={timer.sub} tip={timer.tip} />
+      <StatTile label="Pool" value={(d.status === "NOT_STARTED" ? d.draftableCards : d.availableCards).toLocaleString()}
+                sub={d.status === "NOT_STARTED" ? "draftable cards" : `left of ${d.draftableCards.toLocaleString()} draftable`}
+                tip={d.forbiddenDraftable
+                  ? "Forbidden cards can be drafted this season."
+                  : "Forbidden and soft-banned cards are left out: with one owner per card, they'd be wasted picks."} />
+      {d.status === "NOT_STARTED" ? (
+        <StatTile label="Planned start" value={d.scheduledStart ? fmt(d.scheduledStart) : "Not set"}
+                  sub={d.scheduledStart ? d.timeZone.replaceAll("_", " ") : "a commissioner starts it"} />
+      ) : d.status === "COMPLETE" && d.completedAt ? (
+        <StatTile label="Completed" value={fmt(d.completedAt)} sub={d.startedAt ? `started ${fmt(d.startedAt)}` : undefined} />
+      ) : (
+        <StatTile label="Started" value={d.startedAt ? fmt(d.startedAt) : "—"} sub={d.startedBy ? `by ${d.startedBy}` : undefined} />
+      )}
+    </div>
+  );
+}
+
+// The latest picks, newest first, with their card art: the last one large, then a strip of the
+// few before it. Hover (or tap) a card for its full text, like the queue.
+function RecentPicks({ draft: d }: { draft: DraftState }) {
+  const { league } = useLeague();
+  const { season } = useSeason();
+  const names = new Map(d.seats.map((s) => [s.seat, s.displayName]));
+  const picks = d.board.filter((s) => s.pick).sort((a, b) => b.pick!.madeAt.localeCompare(a.pick!.madeAt)).slice(0, 7);
+  if (picks.length === 0) return null;
+  return (
+    <section className="recent-picks" aria-label="Latest picks">
+      <ol>
+        {picks.map((s, i) => (
+          <li key={s.overallPick} className={i === 0 ? "last" : undefined}>
+            <CardPreview cardId={s.pick!.cardId}>
+              <CardImage passcode={s.pick!.passcode} size="small" alt="" className="pick-art" />
+            </CardPreview>
+            <div className="pick-text">
+              {i === 0 && <span className="pick-eyebrow">Last pick</span>}
+              <span className="pick-no">#{s.overallPick}</span>
+              <Link className="pick-name" to={seasonCardPath(league.id, season.id, s.pick!.cardId)} title={s.pick!.name}>{s.pick!.name}</Link>
+              <span className="pick-by">
+                {names.get(s.seat)}
+                {s.pick!.auto && <span className="badge neutral">auto</span>}
+                {s.pick!.madeUp && <span className="badge neutral">made up</span>}
+              </span>
+            </div>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
+function LockIcon() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor">
+      <path d="M4 7V5a4 4 0 1 1 8 0v2h.5A1.5 1.5 0 0 1 14 8.5v6a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 14.5v-6A1.5 1.5 0 0 1 3.5 7H4Zm2 0h4V5a2 2 0 1 0-4 0v2Z" />
+    </svg>
   );
 }
 
@@ -476,8 +625,8 @@ function TimerFields({ value: f, onChange, timeZone }: { value: TimerForm; onCha
           <label className="check">
             <input type="checkbox" checked={f.pauseOn} onChange={(e) => set({ pauseOn: e.target.checked })} /> Pause overnight from{" "}
             <input type="time" value={f.pauseFrom} onChange={(e) => set({ pauseFrom: e.target.value })} disabled={!f.pauseOn} aria-label="Pause from" /> to{" "}
-            <input type="time" value={f.pauseTo} onChange={(e) => set({ pauseTo: e.target.value })} disabled={!f.pauseOn} aria-label="Pause until" />{" "}
-            <span className="muted">({timeZone.replaceAll("_", " ")}; the clock stops in between, for drafts that run over days)</span>
+            <input type="time" value={f.pauseTo} onChange={(e) => set({ pauseTo: e.target.value })} disabled={!f.pauseOn} aria-label="Pause until" />
+            <InfoTip>Times are in {timeZone.replaceAll("_", " ")}. The clock stops in between, for drafts that run over several days.</InfoTip>
           </label>
         </>
       )}
@@ -547,9 +696,9 @@ function DraftSettings({ draft: d, base, onSaved }: { draft: DraftState; base: s
           </select>
         </label>
       </div>
-      <p className="muted">
-        The planned start is shown to the league; a commissioner starts the draft.
-        {start && zone !== d.timeZone && ` That's ${when(zonedToInstant(start, zone), d.timeZone)} in the league's time zone.`}
+      <p className="muted small">
+        Shown to the league <InfoTip>The planned start is only an announcement: the draft opens when a commissioner presses Start draft.</InfoTip>
+        {start && zone !== d.timeZone && ` · that's ${when(zonedToInstant(start, zone), d.timeZone)} in the league's time zone.`}
       </p>
 
       <h5>Rounds</h5>
@@ -574,25 +723,74 @@ function DraftSettings({ draft: d, base, onSaved }: { draft: DraftState; base: s
       </p>
 
       <label className="check">
-        <input type="checkbox" checked={forbidden} onChange={(e) => setForbidden(e.target.checked)} /> Forbidden cards can be drafted{" "}
-        <span className="muted">(off by default: with one owner per card, a Forbidden card is a wasted pick)</span>
+        <input type="checkbox" checked={forbidden} onChange={(e) => setForbidden(e.target.checked)} /> Forbidden cards can be drafted
+        <InfoTip>Off by default: with one owner per card, a Forbidden card is a wasted pick.</InfoTip>
       </label>
 
-      <h5>Pick timer</h5>
+      <h5>Pick timer <InfoTip>
+        Short timers (seconds or minutes) suit a live draft; hours suit a slow one. Skipped picks can be made up until the
+        draft ends; any still owed when the last pick is made are forfeited. Commissioners can change the timer during the draft.
+      </InfoTip></h5>
       <TimerFields value={timer} onChange={setTimer} timeZone={d.timeZone} />
-      {timer.on && (
-        <p className="muted">
-          Short timers (seconds or minutes) suit a live draft; hours suit a slow one. Skipped picks can be made up until the
-          draft ends; any still owed when the last pick is made are forfeited. Commissioners can change the timer during the draft.
-        </p>
-      )}
       <p><button className="primary" onClick={() => void save()}>Save draft settings</button></p>
       {error && <p className="bad">{error}</p>}
     </>
   );
 }
 
-// Rounds down the side, seats across the top; each cell shows that seat's pick numbers in that round.
+// The board, or (for players) just their own picks as card tiles: the full board is 40-odd rows.
+function BoardSection({ draft: d }: { draft: DraftState }) {
+  const [view, setView] = useState<"board" | "mine">("board");
+  const mine = d.mySeat != null && d.status !== "NOT_STARTED";
+  return (
+    <section className="board-section">
+      <div className="section-head">
+        <h4>
+          {view === "mine" && mine ? "My picks" : "Draft board"}
+          <InfoTip>
+            Rounds run down the side and seats across the top. The order follows the seats on the Players tab
+            {d.status === "NOT_STARTED" ? ", where they can be set by hand or drawn at random." : "."}
+            {d.order === "SNAKE" && " In a snake draft every other round runs backwards."}
+          </InfoTip>
+        </h4>
+        {mine && (
+          <nav className="tabs small" aria-label="Board view">
+            <button className={view === "board" ? "active" : undefined} onClick={() => setView("board")}>Full board</button>
+            <button className={view === "mine" ? "active" : undefined} onClick={() => setView("mine")}>My picks</button>
+          </nav>
+        )}
+        {d.status === "NOT_STARTED" && <Link className="button sm" to="../players">Set the seats</Link>}
+      </div>
+      {view === "mine" && mine ? <MyPicks draft={d} /> : <Board draft={d} />}
+    </section>
+  );
+}
+
+function MyPicks({ draft: d }: { draft: DraftState }) {
+  const { league } = useLeague();
+  const { season } = useSeason();
+  const slots = d.board.filter((s) => s.seat === d.mySeat).sort((a, b) => a.overallPick - b.overallPick);
+  const made = slots.filter((s) => s.pick);
+  if (made.length === 0) return <p className="muted">No picks yet. Your first is #{slots[0]?.overallPick ?? "?"}.</p>;
+  const next = slots.find((s) => !s.pick && !s.skipped);
+  return (
+    <>
+      <p className="muted small">{made.length} of {slots.length} picks made{next && ` · next is #${next.overallPick} (round ${next.round})`}</p>
+      <ul className="my-picks">
+        {made.map((s) => (
+          <li key={s.overallPick}>
+            <CardPreview cardId={s.pick!.cardId}><CardImage passcode={s.pick!.passcode} size="small" alt="" className="tile-art" /></CardPreview>
+            <span className="pick-no">#{s.overallPick} · R{s.round}</span>
+            <Link className="tile-name" to={seasonCardPath(league.id, season.id, s.pick!.cardId)} title={s.pick!.name}>{s.pick!.name}</Link>
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
+// Rounds down the side, seats across the top; each cell shows that seat's pick(s) in that round,
+// with the card's art once it's picked.
 function Board({ draft: d }: { draft: DraftState }) {
   if (d.board.length === 0) return <p className="muted">The board appears once there are players and rounds.</p>;
   // A cell holds every slot that seat has in that round (several with multi-pick turns).
@@ -603,51 +801,47 @@ function Board({ draft: d }: { draft: DraftState }) {
   }
   const current = d.onTheClock?.overallPick;
   return (
-    <>
-      <h4>Draft board</h4>
-      <p className="muted">
-        Draft order follows the seats on the <Link to="../players">Players</Link> tab{d.status === "NOT_STARTED" && ", where they can be set by hand or drawn at random"}.
-      </p>
-      <div className="board-scroll">
-        <table className="board">
-          <thead>
-            <tr>
-              <th>Round</th>
+    <div className="board-scroll">
+      <table className="board">
+        <thead>
+          <tr>
+            <th>Rd</th>
+            {d.seats.map((s) => (
+              <th key={s.seat} className={s.seat === d.mySeat ? "mine" : undefined}>
+                <span className="seat-no">{s.seat}</span> {s.displayName}
+                {s.teamName && <span className="seat-team">{s.teamName}</span>}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {Array.from({ length: d.roundCount }, (_, i) => i + 1).map((round) => (
+            <tr key={round}>
+              <th>{round}</th>
               {d.seats.map((s) => (
-                <th key={s.seat} className={s.seat === d.mySeat ? "mine" : undefined}>
-                  {s.seat}. {s.displayName}
-                  {s.teamName && <span className="muted"><br />{s.teamName}</span>}
-                </th>
+                <td key={s.seat} className={`slot${s.seat === d.mySeat ? " mine" : ""}`}>
+                  {(cell.get(`${round}-${s.seat}`) ?? []).map((slot) => (
+                    <div key={slot.overallPick} className={slot.overallPick === current ? "current" : slot.pick ? "picked" : undefined}>
+                      {slot.pick ? (
+                        <CardPreview cardId={slot.pick.cardId}>
+                          <span className="board-pick" title={pickTitle(slot)}>
+                            <CardImage passcode={slot.pick.passcode} size="small" alt="" className="board-art" />
+                            <span className="board-name">{slot.pick.name}</span>
+                            {slot.pick.auto && <sup className="muted">auto</sup>}
+                            {slot.pick.madeUp && <sup className="muted">made up</sup>}
+                          </span>
+                        </CardPreview>
+                      ) : slot.skipped ? <span className="skipped" title={`#${slot.overallPick}: time ran out`}>skipped</span>
+                        : slot.overallPick === current ? <span>#{slot.overallPick} · now</span> : `#${slot.overallPick}`}
+                    </div>
+                  ))}
+                </td>
               ))}
             </tr>
-          </thead>
-          <tbody>
-            {Array.from({ length: d.roundCount }, (_, i) => i + 1).map((round) => (
-              <tr key={round}>
-                <th>{round}</th>
-                {d.seats.map((s) => (
-                  <td key={s.seat} className="slot">
-                    {(cell.get(`${round}-${s.seat}`) ?? []).map((slot) => (
-                      <div key={slot.overallPick} className={slot.overallPick === current ? "current" : slot.pick ? "picked" : undefined}>
-                        {slot.pick ? (
-                          <CardPreview cardId={slot.pick.cardId}>
-                            <span title={pickTitle(slot)}>
-                              {slot.pick.name}
-                              {slot.pick.auto && <sup className="muted"> auto</sup>}
-                              {slot.pick.madeUp && <sup className="muted"> made up</sup>}
-                            </span>
-                          </CardPreview>
-                        ) : slot.skipped ? <span className="skipped" title={`#${slot.overallPick}: time ran out`}>skipped</span> : `#${slot.overallPick}`}
-                      </div>
-                    ))}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 

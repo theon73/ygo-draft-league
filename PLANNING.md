@@ -608,6 +608,18 @@ With the league's backbone built (accounts through playoffs), the app works but 
         - Draft: "Away: auto-pick from my queue ⓘ", the Forbidden-cards hint, timer expiry and overnight pause, the planned-start note, and a lock icon for "only you see it".
         - Rules: each section's paragraph as a tip on its field (round-robin layout, week 1, TCG cutoff, the claim/trade limits paragraph, auto-confirm, playoff best-ofs).
         - Elsewhere: the role explanation on Players; placeholders and claim links on Members; time zone and week start in Settings; "until week 1 begins" and "leave tied games out" on Schedule; the ranking note on Standings; the trade rules line on Trades.
+    - **Built:**
+      - `components/InfoTip.tsx` (portalled, viewport-clamped; hover/focus/tap; Escape or a tap elsewhere closes; it works inside a `<label>` without toggling the checkbox) and `components/StatTile.tsx` (`StatTile`, `ProgressBar`, for YGO-31 too).
+      - `ConfirmOptions.media`: the confirm dialog can show art beside the text. The pick confirmation shows the card, its type and stats, and "Pick #74 · Round 37".
+      - Draft room:
+        - a clock banner with a large countdown (gold when it's you; dashed when paused);
+        - summary tiles (format, progress bar, timer, pool, start/completed) with the details in tips;
+        - the latest 7 picks with art (the last one large);
+        - art in board cells; a "Full board / My picks" toggle for players;
+        - when one of your picks is open, the picker and your queue come before the board, with the queue in a sticky sidebar at ≥960px;
+        - long owed-pick lists are shortened ("#10, #11, #14, #15 and 28 more").
+      - Tips replace paragraphs on Rules (format, start date, TCG cutoff, ban list, transactions, auto-confirm, playoffs), Players, Members, Settings (Discord steps as collapsed "How do I…?"), Schedule, Standings and Trades.
+      - No API change.
   - **YGO-30: Playoff bracket and roster avatars.**
     - **Bracket view** at the top of the Schedule tab's Playoffs section:
       - A read-only tree: rounds left to right, each match centred between its feeders, with CSS connector lines, seeds, scores, the winner in gold and "Winner of…" placeholders. Clicking a match jumps to its tile.

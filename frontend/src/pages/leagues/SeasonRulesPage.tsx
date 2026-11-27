@@ -1,3 +1,4 @@
+import InfoTip from "../../components/InfoTip";
 import { useEffect, useState } from "react";
 import { apiPut, type BanListOption, type SeasonRules, type Tiebreaker } from "../../api/client";
 import { useApi } from "../../hooks/useApi";
@@ -121,7 +122,10 @@ function RulesForm({ rules, banLists, base, onSaved }: { rules: SeasonRules; ban
 
       <h4>Competition</h4>
       <div className="form-grid">
-        <label>Format
+        <label><span className="label-text">Format <InfoTip>
+          Round-robin: every pair of players meets the chosen number of times, one round per week. The rounds follow the player
+          list until the season starts. Swiss, weekly head-to-head and ladder formats come later.
+        </InfoTip></span>
           <select value={format} onChange={(e) => setFormat(e.target.value)} disabled={!edit || rules.started}>
             <option value="">Not chosen</option>
             <option value="ROUND_ROBIN">Round-robin</option>
@@ -147,15 +151,16 @@ function RulesForm({ rules, banLists, base, onSaved }: { rules: SeasonRules; ban
           {rules.competition.players < 2
             ? "Add at least two players on the Players tab to lay out the rounds."
             : `${rules.competition.players} players: ${rules.competition.rounds} rounds, one per week, so ${rules.competition.matchesPerPlayer} matches each` +
-              (rules.competition.byes ? ". With an odd number of players, one player has a bye each round." : ".") +
-              (rules.started ? "" : " This follows the player list until the season starts.")}
+              (rules.competition.byes ? "; with an odd number, one player has a bye each round." : ".")}
         </p>
       )}
-      <p className="muted">Swiss, weekly head-to-head and ladder formats come later.</p>
 
       <h4>Calendar</h4>
       <div className="form-grid">
-        <label>Start date
+        <label><span className="label-text">Start date <InfoTip>
+          Week 1 begins at the first week start on or after this date. Weeks start {dayLabel(rules.calendar.weekStartsOn)} {rules.calendar.weekStartsAt}
+          {" "}({rules.calendar.timeZone.replaceAll("_", " ")}){rules.calendar.weekStartLocked ? ", locked in when the season began." : ", from the league settings; that's locked in when the season begins."}
+        </InfoTip></span>
           <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} disabled={!edit || rules.started} />
         </label>
         {roundRobin ? (
@@ -168,11 +173,6 @@ function RulesForm({ rules, banLists, base, onSaved }: { rules: SeasonRules; ban
           </label>
         )}
       </div>
-      <p className="muted">
-        Weeks start {dayLabel(rules.calendar.weekStartsOn)} {rules.calendar.weekStartsAt} ({rules.calendar.timeZone.replaceAll("_", " ")})
-        {rules.calendar.weekStartLocked ? ", locked in when the season began." : ", from the league settings (locked in when the season begins)."}
-        {" "}Week 1 begins at the first week start on or after the start date.
-      </p>
       {rules.weeks.length > 0 && (
         <details>
           <summary>
@@ -191,10 +191,13 @@ function RulesForm({ rules, banLists, base, onSaved }: { rules: SeasonRules; ban
 
       <h4>Format</h4>
       <div className="form-grid">
-        <label>TCG cutoff
+        <label><span className="label-text">TCG cutoff <InfoTip>
+          Cards released in the TCG on or before the cutoff make up the dated pool; add exceptions on top of it on the Pool tab.
+          Left empty, it's set to today when you save.
+        </InfoTip></span>
           <input type="date" value={cutoff} onChange={(e) => setCutoff(e.target.value)} disabled={!edit} />
         </label>
-        <label>Ban list
+        <label><span className="label-text">Ban list <InfoTip>A season keeps the exact revision you pick, even if the list is updated later.</InfoTip></span>
           <select value={banList} onChange={(e) => setBanList(e.target.value)} disabled={!edit}>
             <option value="">None</option>
             {pinnedIsOld && pinned && (
@@ -208,19 +211,24 @@ function RulesForm({ rules, banLists, base, onSaved }: { rules: SeasonRules; ban
           </select>
         </label>
       </div>
-      <p className="muted">
-        Cards released in the TCG on or before the cutoff make up the dated pool; you can add exceptions on top of it on the Pool tab.
-        Left empty, the cutoff is set to today when you save. A season keeps the exact ban list revision you pick, even if the list is updated later.
-        {pinnedIsOld && pinned && ` A newer revision of ${pinned.name} (revision ${pinned.latestRevision}) exists; pick it from the list to switch.`}
-      </p>
+      {pinnedIsOld && pinned && (
+        <p className="muted small">A newer revision of {pinned.name} (revision {pinned.latestRevision}) exists; pick it from the list to switch.</p>
+      )}
 
-      <h4>Transactions</h4>
+      <h4>Transactions <InfoTip>
+        Limits reset when each week starts; the time between the draft and week 1 counts as week 1. This week's claims and trades
+        can themselves be traded.
+      </InfoTip></h4>
       <div className="form-grid">
-        <label>Free-agent claims per week
+        <label><span className="label-text">Free-agent claims per week <InfoTip>
+          A claim picks up a free agent and drops a card from the roster, so rosters keep their size. Blank means unlimited; 0 turns claims off.
+        </InfoTip></span>
           <input type="number" min={0} max={50} value={faPerWeek} onChange={(e) => setFaPerWeek(e.target.value)} disabled={!edit}
                  placeholder="Unlimited" />
         </label>
-        <label>Trades per week
+        <label><span className="label-text">Trades per week <InfoTip>
+          A trade counts for both players, and must be even: the same number of cards each way. Blank means unlimited.
+        </InfoTip></span>
           <input type="number" min={0} max={50} value={tradesPerWeek} onChange={(e) => setTradesPerWeek(e.target.value)} disabled={!edit}
                  placeholder="Unlimited" />
         </label>
@@ -232,20 +240,16 @@ function RulesForm({ rules, banLists, base, onSaved }: { rules: SeasonRules; ban
         <input type="checkbox" checked={approval} onChange={(e) => setApproval(e.target.checked)} disabled={!edit} />{" "}
         Commissioners approve accepted trades
       </label>
-      <p className="muted">
-        A claim picks up a free agent and drops a card from the roster, so rosters keep their size. Blank means unlimited, 0 turns
-        claims off. A trade counts for both players, and must be even (the same number of cards each way). Limits reset when each week
-        starts; the time between the draft and week 1 counts as week 1. This week's claims and trades can themselves be traded.
-      </p>
 
       <h4>Results and standings</h4>
       <div className="form-grid">
-        <label>Unanswered reports confirm after (hours)
+        <label><span className="label-text">Unanswered reports confirm after (hours) <InfoTip>
+          Either player reports a match and the other confirms it; a report nobody answers becomes final after this delay.
+        </InfoTip></span>
           <input type="number" min={1} max={336} value={confirmHours} onChange={(e) => setConfirmHours(e.target.value)} disabled={!edit}
                  placeholder="48" />
         </label>
       </div>
-      <p className="muted">Either player reports a match and the other confirms it; a report nobody answers becomes final after this delay.</p>
       <p>Standings rank by wins, then:</p>
       <ol className="tiebreakers">
         {tiebreakers.map((t, i) => (
@@ -267,8 +271,8 @@ function RulesForm({ rules, banLists, base, onSaved }: { rules: SeasonRules; ban
       {rules.playoffsStarted && <p className="muted">The playoffs have started, so these settings are fixed.</p>}
       <label className="check">
         <input type="checkbox" checked={poOn} onChange={(e) => setPoOn(e.target.checked)} disabled={!edit || rules.playoffsStarted} /> This season has playoffs
+        <InfoTip>Without playoffs, the regular-season standings decide the champion.</InfoTip>
       </label>
-      {!poOn && <p className="muted">Without playoffs, the regular-season standings decide the champion.</p>}
       {poOn && (
         <>
           <div className="form-grid">

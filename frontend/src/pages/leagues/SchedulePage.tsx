@@ -1,3 +1,4 @@
+import InfoTip from "../../components/InfoTip";
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { apiPost, type Playoffs, type Schedule, type ScheduleMatch, type ScheduleWeek, type SchedulePlayer } from "../../api/client";
@@ -95,9 +96,9 @@ export default function SchedulePage() {
       {s.canManage && (s.canGenerate ? (
         <p>
           <button onClick={() => void draw()} disabled={busy}>{s.generated ? "Draw again" : "Draw the schedule"}</button>{" "}
-          <span className="muted">
+          <InfoTip>
             {s.generated ? "Until week 1 begins, you can draw new matchups; after that the schedule is fixed." : "A random draw of the players, recorded."}
-          </span>
+          </InfoTip>
         </p>
       ) : s.generated && s.why && <p className="muted">{s.why}.</p>)}
       {error && <p className="bad">{error}</p>}
@@ -279,7 +280,8 @@ export function ResultForm({ match: m, bestOf, action, base, onClose, onDone, br
   return (
     <div className="panel result-form">
       <p><strong>{action === "enter" ? (r ? "Correct the result" : "Enter the result") : "Report the result"}</strong>
-        <span className="muted"> · best of {bestOf}; leave tied games out{bracket ? "" : " (level games is a draw)"}</span></p>
+        <span className="muted"> · best of {bestOf}</span>
+        <InfoTip>Leave tied games out: enter only games someone won.{bracket ? "" : " Level games make the match a draw."}</InfoTip></p>
       {action === "enter" && (
         <div className="forfeit-choice">
           {(bracket ? (["", "A", "B"] as const) : (["", "A", "B", "BOTH"] as const)).map((f) => (

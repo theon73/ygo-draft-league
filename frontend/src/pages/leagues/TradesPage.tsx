@@ -1,3 +1,4 @@
+import InfoTip from "../../components/InfoTip";
 import { useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
@@ -57,8 +58,8 @@ export default function TradesPage() {
       <p className="muted">
         {r.tradesPerWeek === null ? "Unlimited trades" : `${r.tradesPerWeek} trade${r.tradesPerWeek === 1 ? "" : "s"} a week`} (each counts for both players)
         {r.tradeDeadlineWeek !== null && ` · deadline: week ${r.tradeDeadlineWeek}`}
-        {r.commissionerApproval && " · accepted trades need a commissioner's approval"}. Trades are even: both sides give the same number of cards.
-        Conversations are private to the two players.
+        {r.commissionerApproval && " · accepted trades need a commissioner's approval"}
+        <InfoTip>Trades are even: both sides give the same number of cards. Conversations are private to the two players.</InfoTip>
       </p>
       {!o.open && <p className="bad">{o.closedReason}.</p>}
 

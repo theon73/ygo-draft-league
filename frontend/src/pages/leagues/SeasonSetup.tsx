@@ -1,3 +1,4 @@
+import InfoTip from "../../components/InfoTip";
 import { useState } from "react";
 import { apiPatch, apiPost, apiPut } from "../../api/client";
 import { useLeague } from "./LeagueLayout";
@@ -118,12 +119,11 @@ export default function SeasonSetup() {
       {!season.editable && <p className="muted">This season has started, so who plays and the seat order are fixed. Commissioners can still change.</p>}
       {error && <p className="bad">{error}</p>}
 
-      <h4>Members</h4>
-      <p className="muted">
+      <h4>Members <InfoTip>
         {manage
           ? "Give each league member their role this season. Commissioners run the season (you don't have to play to be one); the league owner always is one. Anyone left at — still follows the season."
           : "Who's running and playing this season. Everyone else in the league can follow along."}
-      </p>
+      </InfoTip></h4>
       {following && (
         <p className="muted">
           You're not playing this season; you can follow along. Ask {season.commissioners.length === 1 ? "the commissioner" : "a commissioner"} if

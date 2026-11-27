@@ -1,3 +1,4 @@
+import InfoTip from "../../components/InfoTip";
 import { useState, type FormEvent } from "react";
 import { apiDelete, apiPost, type InviteView, type LeagueMember } from "../../api/client";
 import { useApi } from "../../hooks/useApi";
@@ -38,11 +39,9 @@ export default function MembersPage() {
 
   return (
     <>
-      <h3>Members ({league.members.length})</h3>
-      <p className="muted">
-        Everyone in the league. Each season's commissioners and players are picked from here, and any member can follow
-        every season.
-      </p>
+      <h3>Members ({league.members.length}) <InfoTip>
+        Everyone in the league. Each season's commissioners and players are picked from here, and any member can follow every season.
+      </InfoTip></h3>
       {error && <p className="bad">{error}</p>}
       <table>
         <thead>
@@ -71,10 +70,9 @@ export default function MembersPage() {
       {isOwner && (
         <>
           <AddPlaceholder leagueId={league.id} onAdded={reload} />
-          <h3>Invites</h3>
-          <p className="muted">
+          <h3>Invites <InfoTip>
             Send a link to anyone you want in the league. Claim links hand a placeholder seat to whoever opens them.
-          </p>
+          </InfoTip></h3>
           <CreateInvite leagueId={league.id} onCreated={invites.reload} />
           {invites.error && <p className="bad">Couldn't load invites ({invites.error})</p>}
           {invites.data && (
@@ -106,8 +104,9 @@ function AddPlaceholder({ leagueId, onAdded }: { leagueId: string; onAdded: () =
   };
   return (
     <>
-      <h4>Add a placeholder</h4>
-      <p className="muted">A named seat for someone without an account yet, so you can set up seasons now. Send them a claim link later.</p>
+      <h4>Add a placeholder <InfoTip>
+        A named seat for someone without an account yet, so you can set up seasons now. Send them a claim link later.
+      </InfoTip></h4>
       <form onSubmit={submit}>
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" maxLength={40} required />
         <button type="submit" disabled={!name.trim()}>Add</button>
