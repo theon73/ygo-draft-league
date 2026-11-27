@@ -13,6 +13,7 @@ export interface ConfirmOptions {
   confirmLabel?: string; // default "Confirm"
   cancelLabel?: string; // default "Cancel"
   danger?: boolean; // destructive: the confirm button is red
+  media?: ReactNode; // shown beside the text, e.g. the card being drafted (YGO-29)
 }
 
 type ToastKind = "good" | "bad";
@@ -76,9 +77,12 @@ function ConfirmDialog({ options, onClose }: { options: ConfirmOptions; onClose:
     <dialog ref={ref} className="confirm" onCancel={(e) => { e.preventDefault(); onClose(false); }}
             onClick={(e) => { if (e.target === ref.current) onClose(false); }} aria-labelledby="confirm-title">
       {/* The padding lives on this wrapper, so a click inside the box never counts as the backdrop. */}
-      <div className="dialog-body">
-        <h4 id="confirm-title">{options.title}</h4>
-        {options.message && <p>{options.message}</p>}
+      <div className={`dialog-body${options.media ? " with-media" : ""}`}>
+        {options.media && <div className="dialog-media">{options.media}</div>}
+        <div className="dialog-text">
+          <h4 id="confirm-title">{options.title}</h4>
+          {options.message && <div className="dialog-message">{options.message}</div>}
+        </div>
         <div className="dialog-actions">
           <button className="ghost" onClick={() => onClose(false)}>{options.cancelLabel ?? "Cancel"}</button>
           <button className={options.danger ? "danger" : "primary"} onClick={() => onClose(true)} autoFocus>

@@ -39,6 +39,9 @@ import tools.jackson.databind.node.ObjectNode;
  *       the card has TCG prints, its date falls back to the earliest dated set it was printed in.
  *       That's approximate (earliest set date != tcg_date for ~1,900 dated cards), so it's only
  *       used when the source gives nothing.
+ *   <li>The source lists a fake "???" Spell Card (no Konami id, TCG date 1990-01-01) that stands in
+ *       for unknown cards in its tournament deck profiles. It isn't a real card, so it's skipped
+ *       (V26 removed the copy earlier syncs imported).
  *   <li>The top-level {@code id} is just the first listed artwork, and artwork order differs between
  *       responses, so it's not used as identity. Every artwork id (= passcode) is kept, sorted, and
  *       the raw copy is normalized the same way so reordering doesn't look like a change.
@@ -51,6 +54,8 @@ public final class YgoProDeckCardParser {
     private static final Set<String> VOLATILE_MISC_FIELDS =
             Set.of("views", "viewsweek", "upvotes", "downvotes", "staple");
     private static final Set<String> SKIPPED_TYPES = Set.of("Skill Card");
+    /** The source's deck-profile placeholder; real cards always have a Konami id. */
+    static final String PLACEHOLDER_NAME = "???";
 
     private final ObjectMapper mapper;
     /** Reads one card at a time from a stream; the rest of the array is not "trailing garbage". */
@@ -79,6 +84,10 @@ public final class YgoProDeckCardParser {
             }
         }
         return ignored;
+    }
+
+    static boolean isPlaceholder(JsonNode card, JsonNode misc) {
+        return PLACEHOLDER_NAME.equals(card.path("name").asString()) && misc.path("konami_id").isMissingNode();
     }
 
     public List<SetRecord> parseSets(InputStream in) {
@@ -112,11 +121,12 @@ public final class YgoProDeckCardParser {
         return toRecord(card, Map.of());
     }
 
-    /** Empty when the card is not importable (OCG-only or a Skill Card). */
+    /** Empty when the card is not importable (OCG-only, a Skill Card, or the "???" placeholder). */
     public Optional<CardRecord> toRecord(JsonNode card, Map<String, LocalDate> setDates) {
         JsonNode misc = card.path("misc_info").path(0);
         String cardType = card.path("type").asString();
         if (SKIPPED_TYPES.contains(cardType)) return Optional.empty();
+        if (isPlaceholder(card, misc)) return Optional.empty();
         LocalDate tcgDate = date(misc.path("tcg_date"));
         if (tcgDate == null) tcgDate = earliestPrintDate(card, setDates);
         if (tcgDate == null) return Optional.empty();

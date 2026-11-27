@@ -1,3 +1,4 @@
+import InfoTip from "../../components/InfoTip";
 import { useState } from "react";
 import { apiPatch, apiPost, apiPut, type MyPings, type NotificationEvent, type NotificationSettings, type Weekday } from "../../api/client";
 import { useApi } from "../../hooks/useApi";
@@ -49,20 +50,19 @@ export default function LeagueSettings() {
     <>
       <h3>Settings</h3>
 
-      <h4>Time zone</h4>
-      <p className="muted">Weeks, deadlines and draft times are in this zone. It's currently {now} there.</p>
+      <h4>Time zone <InfoTip>Weeks, deadlines and draft times are in this zone.</InfoTip></h4>
+      <p className="muted small">It's currently {now} there.</p>
       <select value={zone} onChange={(e) => setZone(e.target.value)} aria-label="League time zone">
         {(ZONES.includes(league.timeZone) ? ZONES : [league.timeZone, ...ZONES]).map((z) => (
           <option key={z} value={z}>{z.replaceAll("_", " ")}</option>
         ))}
       </select>
 
-      <h4>Week starts</h4>
-      <p className="muted">
+      <h4>Week starts <InfoTip>
         Each league week (weekly trade and free-agent limits, match deadlines, "this week's matchups") runs from this moment to
-        the same moment a week later. Seasons will lock in the week start when they begin, so changing it later won't reshuffle
+        the same moment a week later. Seasons lock in the week start when they begin, so changing it later won't reshuffle
         a running season.
-      </p>
+      </InfoTip></h4>
       <select value={day} onChange={(e) => setDay(e.target.value as Weekday)} aria-label="Week starts on">
         {WEEKDAYS.map((d) => <option key={d} value={d}>{dayLabel(d)}</option>)}
       </select>{" "}
@@ -111,11 +111,18 @@ function MyDiscordPings({ leagueId }: { leagueId: string }) {
     <>
       <h4>My Discord pings</h4>
       <p className="muted">
-        Get @mentioned in this league's Discord when you're on the clock. Discord can only ping you by your user ID: turn on
-        Developer Mode (User Settings → Advanced), then right-click your name and choose Copy User ID. It's saved for all your
-        leagues; you choose per league whether to be pinged.
+        Get @mentioned in this league's Discord when you're on the clock. Your user ID is saved for all your leagues; you choose
+        per league whether to be pinged.
         {!m.leaguePostsOnTheClock && " This league doesn't post \"on the clock\" messages at the moment, so there's nothing to ping you with yet."}
       </p>
+      <details className="how-to">
+        <summary>How do I find my Discord user ID?</summary>
+        <ol>
+          <li>In Discord, open User Settings → Advanced and turn on Developer Mode.</li>
+          <li>Right-click your name (or tap and hold it) and choose Copy User ID.</li>
+          <li>Paste it below.</li>
+        </ol>
+      </details>
       <p>
         <input value={shown} onChange={(e) => setId(e.target.value)} inputMode="numeric" placeholder="e.g. 284104569123456789"
                aria-label="Your Discord user ID" />{" "}
@@ -176,10 +183,15 @@ function DiscordSettings({ leagueId }: { leagueId: string }) {
   return (
     <>
       <h4>Discord</h4>
-      <p className="muted">
-        Post draft news, transactions and results to a Discord channel. In Discord: Server Settings → Integrations → Webhooks → New Webhook, pick the
-        channel, then Copy Webhook URL and paste it here.
-      </p>
+      <p className="muted">Post draft news, transactions and results to a Discord channel.</p>
+      <details className="how-to">
+        <summary>How do I get a webhook URL?</summary>
+        <ol>
+          <li>In Discord, open Server Settings → Integrations → Webhooks → New Webhook.</li>
+          <li>Pick the channel to post in.</li>
+          <li>Choose Copy Webhook URL and paste it below.</li>
+        </ol>
+      </details>
       <p>
         {s.webhookSet ? <>A webhook is set (ending <code>{s.webhookHint}</code>).</> : "No webhook yet."}
       </p>

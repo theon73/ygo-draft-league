@@ -54,6 +54,21 @@ class YgoProDeckCardParserTest {
     }
 
     @Test
+    void skipsTheSourcesPlaceholderCard() {
+        // Shape of the real entry: a "???" Spell Card for unknown cards in deck profiles, with no Konami id.
+        JsonNode placeholder = MAPPER.readTree("""
+                {"id": 149694341, "name": "???", "type": "Spell Card", "frameType": "spell", "race": "Normal",
+                 "desc": "This card is used as a placeholder in tournament deck profiles.",
+                 "card_images": [{"id": 149694341}], "misc_info": [{"tcg_date": "1990-01-01"}]}
+                """);
+        assertTrue(PARSER.toRecord(placeholder).isEmpty());
+        // A real card can't be confused with it: it would have a Konami id.
+        ObjectNode named = (ObjectNode) placeholder.deepCopy();
+        ((ObjectNode) named.path("misc_info").path(0)).put("konami_id", 4007);
+        assertTrue(PARSER.toRecord(named).isPresent());
+    }
+
+    @Test
     void missingTcgDateFallsBackToEarliestPrintWhenTheCardHasTcgPrints() {
         // Real source bug: Change of Heart has no tcg_date, though it's a 2002 TCG card.
         CardRecord coh = cards.get("Change of Heart");
