@@ -61,7 +61,10 @@ public class SeasonRulesService {
      * @param roundRobinCycles how many times each pair of players meets
      */
     public record RulesUpdate(LocalDate startDate, Integer regularWeeks, LocalDate tcgCutoff, Long banListRevisionId,
-                              CompetitionFormat competitionFormat, Integer roundRobinCycles, Integer effectiveFromWeek) {}
+                              CompetitionFormat competitionFormat, Integer roundRobinCycles, Integer effectiveFromWeek,
+                              Integer freeAgencyPerWeek) {}
+
+    public static final int MAX_PER_WEEK = 50;
 
     /**
      * @param version           the rules version shown (null if none has been saved yet)
@@ -70,7 +73,8 @@ public class SeasonRulesService {
      * @param minEffectiveWeek  the earliest week a change can take effect from now
      */
     public record RulesView(Integer version, int effectiveFromWeek, boolean canManage, boolean started,
-                            CalendarView calendar, FormatView format, CompetitionView competition, List<WeekView> weeks,
+                            CalendarView calendar, FormatView format, CompetitionView competition,
+                            SeasonRulesDocument.TransactionRules transactions, List<WeekView> weeks,
                             Integer currentWeek, int minEffectiveWeek, List<VersionView> history) {}
 
     /**
@@ -137,14 +141,17 @@ public class SeasonRulesService {
         SeasonRulesDocument proposed = new SeasonRulesDocument(
                 calendar(update, competition, current.calendar().weekStart()),
                 new SeasonRulesDocument.FormatRules(validCutoff(update.tcgCutoff()), validBanList(update.banListRevisionId(), league)),
-                competition, current.draft());   // the draft section is edited on the Draft tab
+                competition, current.draft(),   // the draft section is edited on the Draft tab
+                new SeasonRulesDocument.TransactionRules(perWeek(update.freeAgencyPerWeek(), "Free-agent claims")));
 
         int effectiveFrom = 0;
         if (season.getStatus() != SeasonStatus.SETUP) {
-            if (!sameCalendar(proposed.calendar(), current.calendar()) || !proposed.competition().equals(current.competition())) {
+            if (!sameCalendar(proposed.calendar(), current.calendar(), competition) || !proposed.competition().equals(current.competition())) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT,
                         "The calendar and competition format can't change once the season has started");
             }
+            // Fixed from the start: keep it exactly as locked then (its week start, and a round-robin's weeks written out).
+            proposed = proposed.withCalendar(current.calendar());
             int min = minEffectiveWeek(season, latest, current);
             if (update.effectiveFromWeek() == null) throw bad("Choose the week this change takes effect from");
             int max = Math.max(min, weekCount(season, current));
@@ -224,6 +231,16 @@ public class SeasonRulesService {
         return rules.findFirstBySeasonIdOrderByVersionDesc(season.getId()).map(this::parse).orElse(SeasonRulesDocument.EMPTY);
     }
 
+    /**
+     * The rules in effect in a given week: the latest version that takes effect from that week or
+     * earlier. Mid-season changes are saved ahead of time, so the latest version may not apply yet.
+     */
+    @Transactional(readOnly = true)
+    public SeasonRulesDocument inEffect(Season season, int week) {
+        return rules.findFirstBySeasonIdAndEffectiveFromWeekLessThanEqualOrderByVersionDesc(season.getId(), week)
+                .map(this::parse).orElse(SeasonRulesDocument.EMPTY);
+    }
+
     /** The current week of the season (0 = pre-season, or no calendar yet). */
     @Transactional(readOnly = true)
     public int currentWeek(Season season) {
@@ -277,7 +294,7 @@ public class SeasonRulesService {
         return new RulesView(latest == null ? null : latest.getVersion(), latest == null ? 0 : latest.getEffectiveFromWeek(),
                 canManage, season.getStatus() != SeasonStatus.SETUP, calendar,
                 new FormatView(doc.format().tcgCutoff(), banListChoice(doc.format().banListRevisionId())),
-                competition, weeks, currentWeek, minEffectiveWeek(season, latest, doc), history);
+                competition, doc.transactions(), weeks, currentWeek, minEffectiveWeek(season, latest, doc), history);
     }
 
     /**
@@ -350,8 +367,20 @@ public class SeasonRulesService {
                 : SeasonRulesDocument.CalendarRules.of(start, weeks, weekStart);
     }
 
-    private static boolean sameCalendar(SeasonRulesDocument.CalendarRules a, SeasonRulesDocument.CalendarRules b) {
-        return Objects.equals(a.startDate(), b.startDate()) && a.weeks().equals(b.weeks());
+    /**
+     * Whether a save keeps the calendar as it is. A round-robin's weeks are derived, so the form sends
+     * none, while a started season has them written out (locked at the draft's start): no weeks sent
+     * for a derived format means "unchanged".
+     */
+    private static boolean sameCalendar(SeasonRulesDocument.CalendarRules proposed, SeasonRulesDocument.CalendarRules current,
+                                        CompetitionRules competition) {
+        boolean sameWeeks = proposed.weeks().equals(current.weeks()) || (proposed.weeks().isEmpty() && competition.derivesWeeks());
+        return Objects.equals(proposed.startDate(), current.startDate()) && sameWeeks;
+    }
+
+    private static Integer perWeek(Integer value, String what) {
+        if (value != null && (value < 0 || value > MAX_PER_WEEK)) throw bad(what + " per week: 0 to " + MAX_PER_WEEK + ", or blank for unlimited");
+        return value;
     }
 
     private static LocalDate validCutoff(LocalDate cutoff) {

@@ -83,7 +83,12 @@ export default function SeasonCardPage() {
 }
 
 function describe(h: OwnershipChange, who: (memberId: string | null, name: string | null) => ReactNode) {
-  // Only the draft moves cards so far; free-agent claims, drops and trades are added with them.
+  const by = h.onBehalfBy ? ` (by ${h.onBehalfBy})` : "";
+  if (h.source === "FREE_AGENCY") {
+    return h.to !== null
+      ? <>{who(h.toMemberId, h.to)} claimed it from free agency{by}</>
+      : <>{who(h.fromMemberId, h.from)} dropped it to free agency{by}</>;
+  }
   return (
     <>
       {who(h.toMemberId, h.to)} drafted it{h.draftPick != null && ` with pick ${h.draftPick}`}

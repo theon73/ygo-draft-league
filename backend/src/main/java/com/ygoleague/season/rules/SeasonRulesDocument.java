@@ -14,7 +14,8 @@ import java.util.List;
  * so far; the others are added as their features are built, under a new {@link #SCHEMA_VERSION}
  * if the shape of existing sections changes.
  */
-public record SeasonRulesDocument(CalendarRules calendar, FormatRules format, CompetitionRules competition, DraftRules draft) {
+public record SeasonRulesDocument(CalendarRules calendar, FormatRules format, CompetitionRules competition, DraftRules draft,
+                                  TransactionRules transactions) {
 
     /** Shape of the JSON. Bump when an existing section changes shape (new sections don't need it). */
     public static final int SCHEMA_VERSION = 1;
@@ -24,13 +25,14 @@ public record SeasonRulesDocument(CalendarRules calendar, FormatRules format, Co
         format = format == null ? FormatRules.EMPTY : format;
         competition = competition == null ? CompetitionRules.EMPTY : competition;
         draft = draft == null ? DraftRules.EMPTY : draft;
+        transactions = transactions == null ? TransactionRules.EMPTY : transactions;
     }
 
-    public static final SeasonRulesDocument EMPTY = new SeasonRulesDocument(null, null, null, null);
+    public static final SeasonRulesDocument EMPTY = new SeasonRulesDocument(null, null, null, null, null);
 
-    public SeasonRulesDocument withCalendar(CalendarRules c) { return new SeasonRulesDocument(c, format, competition, draft); }
+    public SeasonRulesDocument withCalendar(CalendarRules c) { return new SeasonRulesDocument(c, format, competition, draft, transactions); }
 
-    public SeasonRulesDocument withDraft(DraftRules d) { return new SeasonRulesDocument(calendar, format, competition, d); }
+    public SeasonRulesDocument withDraft(DraftRules d) { return new SeasonRulesDocument(calendar, format, competition, d, transactions); }
 
     /**
      * When the season's weeks fall.
@@ -162,4 +164,15 @@ public record SeasonRulesDocument(CalendarRules calendar, FormatRules format, Co
     public enum DraftOrder { SNAKE, LINEAR }
 
     public record RoundBlock(int fromRound, int toRound, int picksPerTurn) {}
+
+    /**
+     * Trades and free agency (YGO-23). Limits count per league week, and week 0 (between the draft
+     * and week 1) shares week 1's allowance: capacity resets when each week of matches ends.
+     *
+     * @param freeAgencyPerWeek free-agent claims (each a pick-up with its matching drop) a player may
+     *                          make per week; null = unlimited, 0 = none
+     */
+    public record TransactionRules(Integer freeAgencyPerWeek) {
+        public static final TransactionRules EMPTY = new TransactionRules(null);
+    }
 }

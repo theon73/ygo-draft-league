@@ -3,7 +3,7 @@ import PoolGrid from "./PoolGrid";
 import { countsLine, GROUPS, playable, RosterNav, useRosters } from "./RostersPage";
 
 // One player's roster with card art, grouped by deck. Under each card: how many copies they may
-// play (the league's copy limit, or the ban list's), and the pick it came from.
+// play (the league's copy limit, or the ban list's), and the pick or claim it came from.
 export default function RosterPage() {
   const { memberId = "" } = useParams();
   const rosters = useRosters();
@@ -37,11 +37,12 @@ export default function RosterPage() {
                   hideOwner
                   action={(c) => {
                     const n = playable(c);
-                    const pick = byCard.get(c.cardId)?.draftPick;
+                    const entry = byCard.get(c.cardId);
                     return (
                       <span className="muted">
                         {n === 0 ? "Can't be played" : `Play up to ${n}`}
-                        {pick != null && ` · pick ${pick}`}
+                        {entry?.source === "DRAFT" && entry.draftPick != null && ` · pick ${entry.draftPick}`}
+                        {entry?.source === "FREE_AGENCY" && ` · claimed ${entry.acquiredWeek === 0 ? "before week 1" : `week ${entry.acquiredWeek}`}`}
                       </span>
                     );
                   }}

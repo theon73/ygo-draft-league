@@ -21,8 +21,7 @@ import org.springframework.web.server.ResponseStatusException;
 /**
  * Who holds what (YGO-22), read-only: every player's roster, and one card's owners and ownership
  * history within a season. Both read the ownership projection ({@code card_holding}) and its
- * history ({@code card_ownership_event}), which only the draft writes so far; free agency and
- * trades join them in later tickets without changing this class. Any member of the league can see
+ * history ({@code card_ownership_event}): the draft, free agency, and trades from YGO-24. Any member of the league can see
  * every roster (members follow every season, §0).
  */
 @Service
@@ -37,7 +36,7 @@ public class RosterService {
      * @param quantity     copies held (always 1 with exclusive ownership)
      * @param acquiredAt   when the player got it (their latest acquisition of it)
      * @param acquiredWeek the league week of that (0 = the draft, before week 1)
-     * @param source       how: DRAFT so far (free agency and trades later)
+     * @param source       how: DRAFT or FREE_AGENCY (trades in YGO-24)
      * @param draftPick    the board slot, for drafted cards
      */
     public record RosterCard(PoolCardView card, Group group, int quantity, Instant acquiredAt, int acquiredWeek, String source,
@@ -55,8 +54,8 @@ public class RosterService {
     public record Owner(String memberId, String displayName, int quantity, Instant since, int week) {}
 
     /**
-     * One change of hands. {@code from} is null for the draft (and, later, a free-agent claim);
-     * {@code to} null would be a drop back to free agency.
+     * One change of hands. {@code from} is null for the draft or a free-agent claim; {@code to} is
+     * null for a drop back to free agency.
      *
      * @param auto       an auto-pick (timer or away mode), made by nobody
      * @param onBehalfBy the commissioner who made the pick for the player, or null if the player did
@@ -174,14 +173,15 @@ public class RosterService {
                 .query((rs, n) -> new Owner(memberId(rs.getLong(1)), rs.getString(2), rs.getInt(3), rs.getTimestamp(4).toInstant(), rs.getInt(5)))
                 .list();
 
-        // onBehalfBy: the person who clicked, when it isn't the receiving player's own account.
+        // onBehalfBy: the person who clicked, when it isn't the account of the player whose action it was.
         List<OwnershipChange> history = jdbc.sql("""
                         select e.at, e.week, e.source, fm.id, fm.display_name, tm.id, tm.display_name, e.quantity, e.draft_pick,
                                e.source = 'DRAFT' and e.made_by is null,
-                               case when e.made_by is distinct from tm.user_id then u.display_name end
+                               case when e.made_by is distinct from am.user_id then u.display_name end
                         from card_ownership_event e
                         left join season_player fp on fp.id = e.from_player_id left join league_member fm on fm.id = fp.league_member_id
                         left join season_player tp on tp.id = e.to_player_id left join league_member tm on tm.id = tp.league_member_id
+                        join season_player ap on ap.id = e.for_player_id join league_member am on am.id = ap.league_member_id
                         left join app_user u on u.id = e.made_by
                         where e.season_id = :s and e.card_id = :c
                         order by e.at, e.ordinal""")
