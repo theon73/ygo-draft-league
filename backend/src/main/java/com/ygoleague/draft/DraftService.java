@@ -1,6 +1,9 @@
 package com.ygoleague.draft;
 
 import com.ygoleague.auth.CurrentUser;
+import com.ygoleague.notify.DiscordText;
+import com.ygoleague.notify.DraftAnnouncer;
+import com.ygoleague.notify.LeagueNotifications;
 import com.ygoleague.draft.DraftProgress.OnTheClock;
 import com.ygoleague.draft.SnakeOrder.Slot;
 import com.ygoleague.season.Season;
@@ -197,10 +200,13 @@ public class DraftService {
     private final JdbcClient jdbc;
     private final ObjectMapper json;
     private final DraftEvents events;
+    private final DraftAnnouncer announcer;
+    private final LeagueNotifications notifications;
     private final TransactionTemplate tx;
 
     public DraftService(SeasonAccess access, SeasonRulesService rules, SeasonRepository seasons, SeasonPlayerRepository players,
-                        DraftQueue queue, JdbcClient jdbc, ObjectMapper json, DraftEvents events, PlatformTransactionManager txManager) {
+                        DraftQueue queue, JdbcClient jdbc, ObjectMapper json, DraftEvents events, DraftAnnouncer announcer,
+                        LeagueNotifications notifications, PlatformTransactionManager txManager) {
         this.access = access;
         this.rules = rules;
         this.seasons = seasons;
@@ -209,6 +215,8 @@ public class DraftService {
         this.jdbc = jdbc;
         this.json = json;
         this.events = events;
+        this.announcer = announcer;
+        this.notifications = notifications;
         this.tx = new TransactionTemplate(txManager);
     }
 
@@ -258,9 +266,12 @@ public class DraftService {
                 .param("s", season.getId()).param("t", draft.type().name())
                 .param("c", json.writeValueAsString(new DraftConfig(draft, seats, calendarBefore))).param("u", caller.userId()).update();
         season.setStatus(SeasonStatus.DRAFTING);
+        announcer.note(season, "🏁 The draft has started: " + seats.size() + " players, "
+                + draft.picksPerPlayer() * seats.size() + " picks." + (draft.pickTimer() == null ? "" : " " + timerText(draft.pickTimer())));
+        announcer.clockMoved(season);
         // Whoever is up first may be away already.
         advance(season);
-        events.publish(season.getId(), changeOf(season));
+        changed(season);
         return view(season, true, caller);
     }
 
@@ -301,7 +312,7 @@ public class DraftService {
         checkDraftable(season, d.config().draft(), req.cardId());
         record(season, target.overallPick(), player.getId(), "PICK", req.cardId(), caller.userId(), makeup);
         if (!makeup) advance(season);
-        events.publish(season.getId(), changeOf(season));
+        changed(season);
         return view(season, ref.commissioner(), caller);
     }
 
@@ -319,7 +330,7 @@ public class DraftService {
             case DRAFTING -> {
                 lockOpen(season);
                 setAwayFlag(me.getId(), req.away());
-                if (req.away() && advance(season)) events.publish(season.getId(), changeOf(season));
+                if (req.away() && advance(season)) changed(season);
             }
             default -> throw conflict("The draft is over");
         }
@@ -335,7 +346,8 @@ public class DraftService {
         Loaded d = lockOpen(season);
         if (d.pausedNow().isPresent()) throw conflict("The draft is already paused");
         jdbc.sql("insert into draft_pause (season_id, paused_by) values (:s, :u)").param("s", season.getId()).param("u", caller.userId()).update();
-        events.publish(season.getId(), changeOf(season));
+        announcer.note(season, "⏸️ " + DiscordText.escape(caller.displayName()) + " paused the draft.");
+        changed(season);
         return view(season, true, caller);
     }
 
@@ -347,8 +359,10 @@ public class DraftService {
         if (d.pausedNow().isEmpty()) throw conflict("The draft isn't paused");
         jdbc.sql("update draft_pause set resumed_at = now(), resumed_by = :u where season_id = :s and resumed_at is null")
                 .param("s", season.getId()).param("u", caller.userId()).update();
+        announcer.note(season, "▶️ " + DiscordText.escape(caller.displayName()) + " resumed the draft.");
+        announcer.clockMoved(season);
         advance(season);   // whoever is up may be away
-        events.publish(season.getId(), changeOf(season));
+        changed(season);
         return view(season, true, caller);
     }
 
@@ -368,7 +382,10 @@ public class DraftService {
         jdbc.sql("insert into draft_timer_change (season_id, pick_timer, changed_by) values (:s, cast(:t as jsonb), :u)")
                 .param("s", season.getId()).param("t", timer == null ? null : json.writeValueAsString(timer), java.sql.Types.VARCHAR)
                 .param("u", caller.userId()).update();
-        events.publish(season.getId(), changeOf(season));
+        announcer.note(season, "⏱️ " + DiscordText.escape(caller.displayName())
+                + (timer == null ? " turned the pick timer off." : " changed the pick timer: " + timerText(timer)));
+        announcer.clockMoved(season);
+        changed(season);
         return view(season, true, caller);
     }
 
@@ -397,7 +414,11 @@ public class DraftService {
                 .param("s", season.getId()).param("pick", last.overallPick()).param("player", last.seasonPlayerId())
                 .param("by", caller.userId()).param("undoes", last.sequence()).update();
         if (last.kind().equals("AUTO")) setAwayFlag(last.seasonPlayerId(), false);
-        events.publish(season.getId(), changeOf(season));
+        String undone = last.cardName() == null ? "skip" : DiscordText.escape(last.cardName());
+        announcer.note(season, "↩️ " + DiscordText.escape(caller.displayName()) + " undid #" + last.overallPick() + " ("
+                + DiscordText.escape(playerName(last.seasonPlayerId())) + "'s " + (last.makeup() ? "make-up: " : "") + undone + ").");
+        if (!last.makeup()) announcer.clockMoved(season);
+        changed(season);
         return view(season, true, caller);
     }
 
@@ -418,7 +439,8 @@ public class DraftService {
         jdbc.sql("delete from draft where season_id = :s").param("s", season.getId()).update();
         rules.unlockCalendarAfterUnstart(season, d.config().calendarBeforeStart(), d.startedAt(), caller);
         season.setStatus(SeasonStatus.SETUP);
-        events.publish(season.getId(), changeOf(season));
+        announcer.note(season, "🔙 " + DiscordText.escape(caller.displayName()) + " took the draft back to setup.");
+        changed(season);
         return view(season, true, caller);
     }
 
@@ -459,7 +481,7 @@ public class DraftService {
         if (card.isPresent()) record(season, clock.slot().overallPick(), player.getId(), "AUTO", card.get(), null, false);
         else record(season, clock.slot().overallPick(), player.getId(), "SKIP", null, null, false);
         advance(season);
-        events.publish(season.getId(), changeOf(season));
+        changed(season);
     }
 
     /**
@@ -501,6 +523,68 @@ public class DraftService {
                 .param("card", cardId, java.sql.Types.BIGINT).param("by", madeBy, java.sql.Types.BIGINT).param("makeup", makeup)
                 .update();
         if (cardId != null) queue.dropIfTaken(season, cardId);
+        announcer.note(season, pickLine(overallPick, seasonPlayerId, kind, cardId, madeBy, makeup));
+        if (!makeup) announcer.clockMoved(season);
+    }
+
+    /** A pick-log row as a line of Discord news. */
+    private String pickLine(int overallPick, long seasonPlayerId, String kind, Long cardId, Long madeBy, boolean makeup) {
+        var who = jdbc.sql("""
+                        select m.display_name, m.user_id, (select name from card where id = :c), (select display_name from app_user where id = :by)
+                        from season_player sp join league_member m on m.id = sp.league_member_id where sp.id = :p""")
+                .param("p", seasonPlayerId).param("c", cardId, java.sql.Types.BIGINT).param("by", madeBy, java.sql.Types.BIGINT)
+                .query((rs, n) -> new Object[] {rs.getString(1), rs.getObject(2), rs.getString(3), rs.getString(4)}).single();
+        String player = "**" + DiscordText.escape((String) who[0]) + "**";
+        String card = "**" + DiscordText.escape((String) who[2]) + "**";
+        String prefix = "#" + overallPick + " · ";
+        return switch (kind) {
+            case "SKIP" -> prefix + player + " ran out of time: skipped (they can make it up later).";
+            case "AUTO" -> prefix + player + " auto-drafted " + card + " from their queue.";
+            default -> {
+                boolean onBehalf = madeBy != null && !madeBy.equals(who[1] == null ? null : ((Number) who[1]).longValue());
+                String by = onBehalf ? " (picked by " + DiscordText.escape((String) who[3]) + ")" : "";
+                yield prefix + player + (makeup ? " made up a skipped pick: " : " drafted ") + card + by;
+            }
+        };
+    }
+
+    /** Publishes a change to live viewers and readies its Discord post (sent after commit). */
+    private void changed(Season season) {
+        announcer.prepare(season, () -> clockLine(season));
+        events.publish(season.getId(), changeOf(season));
+    }
+
+    /** Who's on the clock, as a Discord line, with the deadline as a countdown Discord shows in each reader's zone. */
+    private DraftAnnouncer.ClockLine clockLine(Season season) {
+        Loaded d = load(season, false).orElse(null);
+        if (d == null || d.completed() || d.clock() == null) return null;
+        Slot slot = d.clock().slot();
+        var member = playerAt(season, d.config(), slot.seat()).getMember();
+        String name = "**" + DiscordText.escape(member.getDisplayName()) + "**";
+        // A player who opted in is @mentioned (Discord pings them); everyone else is just named.
+        String ping = notifications.pingId(member.getId()).orElse(null);
+        String who = ping == null ? name : "<@" + ping + "> (" + name + ")";
+        String line = "⏰ " + who + " is on the clock: pick #" + slot.overallPick() + " (round " + slot.round() + ")";
+        if (d.pausedNow().isPresent()) return new DraftAnnouncer.ClockLine(line + ", once the draft resumes.", ping);
+        PickTimer timer = d.timer();
+        Instant deadline = timer == null ? null : deadline(d, timer, zone(season));
+        return new DraftAnnouncer.ClockLine(line + (deadline == null ? "." : ", time runs out <t:" + deadline.getEpochSecond() + ":R>."), ping);
+    }
+
+    private String playerName(long seasonPlayerId) {
+        return jdbc.sql("select m.display_name from season_player sp join league_member m on m.id = sp.league_member_id where sp.id = :p")
+                .param("p", seasonPlayerId).query(String.class).single();
+    }
+
+    private static String timerText(PickTimer t) {
+        int s = t.seconds();
+        String per = s % 3600 == 0 ? s / 3600 + " h" : s % 60 == 0 ? s / 60 + " min" : s + " s";
+        String then = switch (t.onExpiry()) {
+            case WAIT -> "the draft waits";
+            case SKIP -> "the pick is skipped";
+            case AUTO_PICK -> "it auto-picks from the queue";
+        };
+        return per + " per pick; when it runs out, " + then + ".";
     }
 
     private void setAwayFlag(long seasonPlayerId, boolean away) {
@@ -560,6 +644,7 @@ public class DraftService {
         jdbc.sql("update draft set completed_at = now(), result = cast(:r as jsonb) where season_id = :s")
                 .param("s", season.getId()).param("r", json.writeValueAsString(Map.of("board", board))).update();
         season.setStatus(SeasonStatus.ACTIVE);
+        announcer.note(season, "🏆 The draft is complete. Good luck this season!");
     }
 
     // ---- The draft as loaded ------------------------------------------------------------------

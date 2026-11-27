@@ -60,7 +60,7 @@ export default function LeagueLayout() {
         {current && <NavLink to={`seasons/${current.id}`}>{current.name}</NavLink>}
         <NavLink to="seasons" end>Seasons</NavLink>
         <NavLink to="members">Members</NavLink>
-        {l.myRole === "OWNER" && <NavLink to="settings">Settings</NavLink>}
+        <NavLink to="settings">Settings</NavLink>
       </nav>
       <LeagueCtx.Provider value={{ league: l, reload: league.reload }}>
         <Outlet />

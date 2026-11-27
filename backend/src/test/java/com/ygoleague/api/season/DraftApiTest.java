@@ -15,6 +15,7 @@ import com.jayway.jsonpath.JsonPath;
 import com.ygoleague.auth.CurrentUser;
 import com.ygoleague.draft.DraftService;
 import com.ygoleague.image.CardImageService;
+import com.ygoleague.notify.DiscordWebhook;
 import com.ygoleague.support.PostgresTestConfig;
 import com.ygoleague.user.AppUser;
 import com.ygoleague.user.AppUserRepository;
@@ -38,7 +39,7 @@ import org.springframework.test.web.servlet.ResultMatcher;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
-@SpringBootTest(properties = {"app.catalog.sync.scheduled=false", "app.banlists.import-on-startup=false", "app.draft.timer.enabled=false"})
+@SpringBootTest(properties = {"app.catalog.sync.scheduled=false", "app.banlists.import-on-startup=false", "app.draft.timer.enabled=false", "app.notifications.synchronous=true"})
 @AutoConfigureMockMvc
 @Import(PostgresTestConfig.class)
 class DraftApiTest {
@@ -50,13 +51,16 @@ class DraftApiTest {
     @Autowired JdbcTemplate jdbc;
     @Autowired DraftService drafts;
     @MockitoBean CardImageService images;
+    @MockitoBean DiscordWebhook discord;
+
+    static final String WEBHOOK = "https://discord.com/api/webhooks/123456789012345678/abcdefghijklmnopqrstuvwxyzABCD-_0123";
 
     AppUser yugi, kaiba;
     String league, season;
 
     @BeforeEach
     void reset() throws Exception {
-        jdbc.execute("truncate draft_timer_change, draft_pause, draft_queue, draft_pick, draft, pool_change, pool_card, season_seat_draw, season_commissioner, season_rules, season_player, season, "
+        jdbc.execute("truncate league_notification, draft_timer_change, draft_pause, draft_queue, draft_pick, draft, pool_change, pool_card, season_seat_draw, season_commissioner, season_rules, season_player, season, "
                 + "league_invite, league_member, ban_list_entry, ban_list_revision, ban_list, card_print, card_text_version, card, "
                 + "league, user_identity, app_user restart identity cascade");
         for (int i = 1; i <= 20; i++) card("Card " + i, "2002-03-08");
@@ -66,6 +70,12 @@ class DraftApiTest {
         String code = read(send(post(l("/invites")), yugi, "{}"), "$.code");
         mvc.perform(post("/api/invites/" + code + "/accept").with(csrf()).with(as(kaiba))).andExpect(status().isOk());
         season = read(send(post(l("/seasons")), yugi, "{\"name\":\"S1\"}"), "$.id");
+        stubDiscord(new DiscordWebhook.Delivery(true, 204, null));
+    }
+
+    private void stubDiscord(DiscordWebhook.Delivery result) {
+        org.mockito.Mockito.when(discord.post(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString())).thenReturn(result);
+        org.mockito.Mockito.when(discord.post(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any())).thenReturn(result);
     }
 
     @Test
@@ -588,6 +598,132 @@ class DraftApiTest {
         Assertions.assertEquals(0, jdbc.queryForObject("select count(*) from draft_timer_change", Integer.class));
     }
 
+    // ---- Discord notifications (YGO-21) ----
+
+    @Test
+    void onlyTheOwnerManagesTheWebhookAndItsUrlIsNeverShownAgain() throws Exception {
+        mvc.perform(get(l("/notifications")).with(as(kaiba))).andExpect(status().isForbidden());
+        send(put(l("/notifications")), yugi, "{\"webhookUrl\":\"https://example.com/hook\"}").andExpect(status().isBadRequest());
+        send(put(l("/notifications")), yugi, "{\"webhookUrl\":\"https://discord.com.evil.io/api/webhooks/1/x\"}").andExpect(status().isBadRequest());
+        String saved = send(put(l("/notifications")), yugi, "{\"webhookUrl\":\"" + WEBHOOK + "\",\"events\":[\"DRAFT_PICKS\"]}")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.webhookSet").value(true))
+                .andExpect(jsonPath("$.webhookHint").value("…0123"))
+                .andExpect(listAt("$.events", List.of("DRAFT_PICKS")))
+                .andReturn().getResponse().getContentAsString();
+        Assertions.assertFalse(saved.contains("abcdefghij"), "the webhook token must not come back");
+        // Changing only the events keeps the URL.
+        send(put(l("/notifications")), yugi, "{\"events\":[\"DRAFT_PICKS\",\"DRAFT_ON_THE_CLOCK\"]}")
+                .andExpect(jsonPath("$.webhookSet").value(true)).andExpect(jsonPath("$.events.length()").value(2));
+
+        send(post(l("/notifications/test")), kaiba, null).andExpect(status().isForbidden());
+        send(post(l("/notifications/test")), yugi, null).andExpect(status().isNoContent());
+        stubDiscord(new DiscordWebhook.Delivery(false, 404, "Unknown Webhook"));
+        send(post(l("/notifications/test")), yugi, null).andExpect(status().isBadGateway())
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("deleted or mistyped")));
+
+        send(put(l("/notifications")), yugi, "{\"webhookUrl\":\"\"}").andExpect(jsonPath("$.webhookSet").value(false));
+        send(post(l("/notifications/test")), yugi, null).andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void draftNewsIsPostedAfterEachChangeAndNothingForARefusedOne() throws Exception {
+        notifyOn("DRAFT_PICKS", "DRAFT_ON_THE_CLOCK");
+        ready(3);
+        send(post(draft("/start")), yugi, null).andExpect(status().isOk());
+        Assertions.assertEquals(List.of("""
+                **S1 draft**
+                🏁 The draft has started: 3 players, 6 picks.
+                ⏰ **P1** is on the clock: pick #1 (round 1)."""), posts());
+
+        pick(yugi, "Card 1", 1).andExpect(status().isOk());
+        pick(yugi, "Card 1", 2).andExpect(status().isConflict());   // refused: nothing posted
+        Assertions.assertEquals("""
+                **S1 draft**
+                #1 · **P1** drafted **Card 1** (picked by Yugi)
+                ⏰ **P2** is on the clock: pick #2 (round 1).""", posts().getLast());
+        Assertions.assertEquals(2, posts().size());
+        org.mockito.Mockito.verify(discord, org.mockito.Mockito.atLeastOnce())
+                .post(org.mockito.ArgumentMatchers.eq(WEBHOOK), org.mockito.ArgumentMatchers.eq("Battle City"), org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.eq(List.of()));
+
+        send(post(draft("/undo")), yugi, null).andExpect(status().isOk());
+        Assertions.assertTrue(posts().getLast().contains("↩️ Yugi undid #1 (P1's Card 1)."), posts().getLast());
+    }
+
+    @Test
+    void eachKindOfNewsCanBeTurnedOnAlone() throws Exception {
+        notifyOn("DRAFT_ON_THE_CLOCK");
+        ready(3);
+        timer(120, "SKIP", null, null);
+        send(post(draft("/start")), yugi, null).andExpect(status().isOk());
+        pick(yugi, "Card 1", 1).andExpect(status().isOk());
+        String last = posts().getLast();
+        Assertions.assertFalse(last.contains("drafted"), last);
+        Assertions.assertTrue(last.matches("(?s).*⏰ \\*\\*P2\\*\\* is on the clock: pick #2 \\(round 1\\), time runs out <t:\\d+:R>\\."), last);
+
+        notifyOn("DRAFT_PICKS");
+        int before = posts().size();
+        pick(yugi, "Card 2", 2).andExpect(status().isOk());
+        Assertions.assertEquals(before + 1, posts().size());
+        Assertions.assertFalse(posts().getLast().contains("on the clock"), posts().getLast());
+    }
+
+    @Test
+    void aBurstOfAutoPicksIsOneMessage() throws Exception {
+        notifyOn("DRAFT_PICKS", "DRAFT_ON_THE_CLOCK");
+        readyWithKaibaInSeat2();
+        queue(kaiba, "Card 5");
+        send(put(draft("/away")), kaiba, "{\"away\":true}").andExpect(status().isOk());
+        send(post(draft("/start")), yugi, null).andExpect(status().isOk());
+        int before = posts().size();
+        pick(yugi, "Card 1", 1).andExpect(status().isOk());
+        Assertions.assertEquals(before + 1, posts().size());
+        Assertions.assertEquals("""
+                **S1 draft**
+                #1 · **P1** drafted **Card 1** (picked by Yugi)
+                #2 · **Kaiba** auto-drafted **Card 5** from their queue.
+                ⏰ **P3** is on the clock: pick #3 (round 1).""", posts().getLast());
+    }
+
+    @Test
+    void aPlayerWhoOptsInIsPingedWhenOnTheClockAndNobodyElse() throws Exception {
+        notifyOn("DRAFT_PICKS", "DRAFT_ON_THE_CLOCK");
+        readyWithKaibaInSeat2();
+        mvc.perform(get(l("/notifications/me")).with(as(kaiba)))
+                .andExpect(jsonPath("$.discordUserId").doesNotExist())
+                .andExpect(jsonPath("$.ping").value(false))
+                .andExpect(jsonPath("$.leaguePostsOnTheClock").value(true));
+        send(put(l("/notifications/me")), kaiba, "{\"discordUserId\":\"@kaiba\"}").andExpect(status().isBadRequest());
+        send(put(l("/notifications/me")), kaiba, "{\"discordUserId\":\"284104569123456789\"}")
+                .andExpect(jsonPath("$.discordUserId").value("284104569123456789")).andExpect(jsonPath("$.ping").value(false));
+
+        // An id alone doesn't ping: the opt-in is per league.
+        send(post(draft("/start")), yugi, null).andExpect(status().isOk());
+        pick(yugi, "Card 1", 1).andExpect(status().isOk());
+        Assertions.assertTrue(posts().getLast().contains("⏰ **Kaiba** is on the clock"), posts().getLast());
+        Assertions.assertEquals(List.of(), pings().getLast());
+
+        send(post(draft("/undo")), yugi, null).andExpect(status().isOk());
+        send(put(l("/notifications/me")), kaiba, "{\"ping\":true}").andExpect(jsonPath("$.ping").value(true));
+        pick(yugi, "Card 1", 1).andExpect(status().isOk());
+        Assertions.assertTrue(posts().getLast().contains("⏰ <@284104569123456789> (**Kaiba**) is on the clock: pick #2"), posts().getLast());
+        Assertions.assertEquals(List.of("284104569123456789"), pings().getLast());
+
+        // P3 (no account) is plain text, and the message may ping no one.
+        pick(kaiba, "Card 2", 2).andExpect(status().isOk());
+        Assertions.assertTrue(posts().getLast().contains("⏰ **P3** is on the clock"), posts().getLast());
+        Assertions.assertEquals(List.of(), pings().getLast());
+        Assertions.assertTrue(posts().getLast().contains("#2 · **Kaiba** drafted **Card 2**"), "news names people, never pings");
+    }
+
+    @Test
+    void withoutAWebhookNothingIsPosted() throws Exception {
+        ready(3);
+        send(post(draft("/start")), yugi, null).andExpect(status().isOk());
+        pick(yugi, "Card 1", 1).andExpect(status().isOk());
+        org.mockito.Mockito.verifyNoInteractions(discord);
+    }
+
     // ---- helpers ----
 
     /** n players, rounds for 3 picks each... and everything else the checklist needs (20 cards, enough for 3 x 2). */
@@ -610,6 +746,28 @@ class DraftApiTest {
         settings("SNAKE", "[{\"fromRound\":1,\"toRound\":2,\"picksPerTurn\":1}]");
         rules("{\"startDate\":\"2030-01-07\",\"competitionFormat\":\"ROUND_ROBIN\",\"roundRobinCycles\":1,\"tcgCutoff\":\"2008-03-01\"}");
         send(post(pool("/generate")), yugi, null).andExpect(status().isOk());
+    }
+
+    private void notifyOn(String... events) throws Exception {
+        String list = String.join(",", java.util.Arrays.stream(events).map(e -> "\"" + e + "\"").toList());
+        send(put(l("/notifications")), yugi, "{\"webhookUrl\":\"" + WEBHOOK + "\",\"events\":[" + list + "]}").andExpect(status().isOk());
+    }
+
+    /** The Discord messages posted so far, in order. */
+    private List<String> posts() {
+        var captor = org.mockito.ArgumentCaptor.forClass(String.class);
+        org.mockito.Mockito.verify(discord, org.mockito.Mockito.atLeast(0))
+                .post(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any(), captor.capture(), org.mockito.ArgumentMatchers.any());
+        return captor.getAllValues();
+    }
+
+    /** The user ids each Discord message was allowed to ping, in order. */
+    @SuppressWarnings("unchecked")
+    private List<List<String>> pings() {
+        var captor = org.mockito.ArgumentCaptor.forClass(List.class);
+        org.mockito.Mockito.verify(discord, org.mockito.Mockito.atLeast(0))
+                .post(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString(), captor.capture());
+        return (List<List<String>>) (List<?>) captor.getAllValues();
     }
 
     private void queue(AppUser user, String card) throws Exception {

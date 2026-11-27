@@ -527,3 +527,19 @@ export interface OnTheClock {
   pickInTurn: number; // e.g. pick 1 of 2 in this turn
   picksInTurn: number;
 }
+
+// Notifications (league owner only)
+
+export type NotificationEvent = "DRAFT_PICKS" | "DRAFT_ON_THE_CLOCK";
+
+export interface MyPings {
+  discordUserId: string | null; // the member's Discord user id, for all their leagues
+  ping: boolean; // they want to be @mentioned in this league
+  leaguePostsOnTheClock: boolean; // pings only come with the league's "on the clock" messages
+}
+
+export interface NotificationSettings {
+  webhookSet: boolean;
+  webhookHint: string | null; // the end of the saved URL ("…AbCd"); the URL itself never comes back
+  events: NotificationEvent[];
+}
