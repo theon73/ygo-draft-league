@@ -4,6 +4,7 @@ import CardImage from "../../components/CardImage";
 import type { CardDetail } from "../../api/client";
 import { useApi } from "../../hooks/useApi";
 import { statusLabel } from "./banStatus";
+import { Loading } from "../../components/Feedback";
 
 export default function CardView() {
   const { id } = useParams();
@@ -11,7 +12,7 @@ export default function CardView() {
   const [art, setArt] = useState(0);
 
   if (error) return <p className="bad">Couldn't load card ({error})</p>;
-  if (!c) return <p className="muted">Loading…</p>;
+  if (!c) return <Loading />;
 
   const stats = [
     c.attribute,

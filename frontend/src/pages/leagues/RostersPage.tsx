@@ -5,6 +5,7 @@ import { useApi } from "../../hooks/useApi";
 import { statusLabel } from "../explore/banStatus";
 import { useLeague } from "./LeagueLayout";
 import { useSeason } from "./SeasonLayout";
+import { Loading } from "../../components/Feedback";
 
 // The Rosters tab: every player's cards side by side. One player's roster (with card art) is
 // RosterPage, the free agents FreeAgentsPage; all three share RosterNav at the top.
@@ -66,15 +67,14 @@ export default function RostersPage() {
   const rosters = useRosters();
 
   if (rosters.error) return <p className="bad">Couldn't load the rosters ({rosters.error})</p>;
-  if (!rosters.data) return <p className="muted">Loading…</p>;
+  if (!rosters.data) return <Loading />;
   const r = rosters.data;
 
   return (
     <>
-      <h4>Rosters</h4>
       <RosterNav rosters={r} />
       {r.players.length === 0 ? (
-        <p className="muted">Nobody is playing this season yet. Players are added on the Setup tab.</p>
+        <p className="muted">Nobody is playing this season yet. Players are added on the Players tab.</p>
       ) : (
         <>
           {season.status === "SETUP" && <p className="muted">Rosters fill up as the draft is made.</p>}

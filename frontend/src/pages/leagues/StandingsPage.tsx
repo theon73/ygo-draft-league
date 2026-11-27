@@ -3,6 +3,7 @@ import type { SeasonStandings, Tiebreaker } from "../../api/client";
 import { useApi } from "../../hooks/useApi";
 import { useLeague } from "./LeagueLayout";
 import { useSeason } from "./SeasonLayout";
+import { Loading } from "../../components/Feedback";
 
 // The Standings tab (YGO-26): the regular season's table from final results. A draws column
 // appears only once a match has been drawn.
@@ -18,13 +19,12 @@ export default function StandingsPage() {
   const standings = useApi<SeasonStandings>(`/leagues/${league.id}/seasons/${season.id}/standings`);
 
   if (standings.error) return <p className="bad">Couldn't load the standings ({standings.error})</p>;
-  if (!standings.data) return <p className="muted">Loading…</p>;
+  if (!standings.data) return <Loading />;
   const s = standings.data;
   const signed = (n: number) => (n > 0 ? `+${n}` : String(n));
 
   return (
     <>
-      <h4>Standings</h4>
       <p className="muted">
         Ranked by wins, then {s.tiebreakers.map((t) => TIEBREAKER[t]).join(", then ")}. Only final results count
         {s.waiting > 0 && <> ({s.waiting} reported result{s.waiting === 1 ? "" : "s"} still waiting for confirmation)</>}

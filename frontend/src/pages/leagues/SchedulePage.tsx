@@ -1,9 +1,11 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
-import { apiPost, type Schedule, type ScheduleMatch, type ScheduleWeek, type SchedulePlayer } from "../../api/client";
+import { useEffect, useState } from "react";
+import { Link, useLocation } from "react-router-dom";
+import { apiPost, type Playoffs, type Schedule, type ScheduleMatch, type ScheduleWeek, type SchedulePlayer } from "../../api/client";
 import { useApi } from "../../hooks/useApi";
 import { useLeague } from "./LeagueLayout";
 import { useSeason } from "./SeasonLayout";
+import { useConfirm, Loading } from "../../components/Feedback";
+import { hasPlayoffsSection, PlayoffsSection } from "./PlayoffsPage";
 
 // The Schedule tab (YGO-25): this week's matchups first, then every week. Drawn automatically when
 // the draft completes; commissioners can draw again until week 1 begins. Results (YGO-26) are
@@ -16,18 +18,28 @@ export default function SchedulePage() {
   const { season, draftVersion } = useSeason();
   const base = `/leagues/${league.id}/seasons/${season.id}/schedule`;
   const schedule = useApi<Schedule>(base, String(draftVersion));
+  const seasonBase = `/leagues/${league.id}/seasons/${season.id}`;
+  // The playoffs live on this tab too (YGO-28); there's nothing to show before the season is under way.
+  const playoffs = useApi<Playoffs>(season.status === "ACTIVE" || season.status === "COMPLETE" ? `${seasonBase}/playoffs` : null);
+  const location = useLocation();
   const [mineOnly, setMineOnly] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Selected | null>(null);
+  const confirm = useConfirm();
+  const po = playoffs.data && hasPlayoffsSection(playoffs.data) ? playoffs.data : null;
+  // Arriving from the old Playoffs tab (…/schedule#playoffs): scroll there once it has loaded.
+  useEffect(() => {
+    if (location.hash === "#playoffs" && po) document.getElementById("playoffs")?.scrollIntoView();
+  }, [location.hash, po]);
 
   if (schedule.error) return <p className="bad">Couldn't load the schedule ({schedule.error})</p>;
-  if (!schedule.data) return <p className="muted">Loading…</p>;
+  if (!schedule.data) return <Loading />;
   const s = schedule.data;
   const zone = league.timeZone;
 
   const draw = async () => {
-    if (s.generated && !window.confirm("Draw a new schedule? Every matchup changes.")) return;
+    if (s.generated && !(await confirm({ title: "Draw a new schedule?", message: "Every matchup changes.", confirmLabel: "Draw again" }))) return;
     setBusy(true);
     setError(null);
     try {
@@ -45,9 +57,26 @@ export default function SchedulePage() {
   const shown = s.weeks.map((w) => (mineOnly ? { ...w, matches: w.matches.filter((m) => m.mine) } : w));
   const over = s.weeks.length > 0 && s.currentWeek > s.weeks.length;
 
+  // Before the playoffs start, the regular season comes first and the playoffs (seeding preview,
+  // Start) follow; once they've started, or the season is over, the bracket and champion lead.
+  const playoffsFirst = !!po && (po.started || po.complete);
+  const playoffsBlock = po && (
+    <section id="playoffs" className="stage">
+      <h3 className="stage-head">{po.enabled ? "Playoffs" : "End of the season"}</h3>
+      <PlayoffsSection playoffs={po} base={seasonBase} onChanged={() => { playoffs.reload(); schedule.reload(); }} />
+    </section>
+  );
+
   return (
     <>
-      <h4>Schedule</h4>
+      {playoffsFirst && playoffsBlock}
+      <section className="stage">
+        {po && (
+          <div className="stage-head">
+            <h3>Regular season</h3>
+            {!playoffsFirst && po.enabled && <a href="#playoffs" className="muted">Playoffs ↓</a>}
+          </div>
+        )}
       {!s.generated ? (
         <p className="muted">
           {season.status === "SETUP" || season.status === "DRAFTING"
@@ -81,7 +110,7 @@ export default function SchedulePage() {
           </h5>
           <Matchups week={current} where="current" selected={selected} onSelect={setSelected} />
           <Panel week={current} where="current" selected={selected} base={base.replace(/\/schedule$/, "")} onClose={() => setSelected(null)}
-                 onDone={() => { setSelected(null); schedule.reload(); }} />
+                 onDone={() => { setSelected(null); schedule.reload(); playoffs.reload(); }} />
         </section>
       )}
       {over && <p className="muted">The regular season's weeks are over.</p>}
@@ -105,12 +134,14 @@ export default function SchedulePage() {
                 </div>
                 <Matchups week={w} compact where="all" selected={selected} onSelect={setSelected} />
                 <Panel week={w} where="all" selected={selected} base={base.replace(/\/schedule$/, "")} onClose={() => setSelected(null)}
-                       onDone={() => { setSelected(null); schedule.reload(); }} />
+                       onDone={() => { setSelected(null); schedule.reload(); playoffs.reload(); }} />
               </li>
             ))}
           </ol>
         </>
       )}
+      </section>
+      {!playoffsFirst && playoffsBlock}
     </>
   );
 }
@@ -141,7 +172,7 @@ function Matchups({ week, compact = false, where, selected, onSelect }: {
             <div className="matchup-status">
               <Status m={m} />
               <span className="matchup-actions">
-                {m.canConfirm && <button onClick={() => onSelect({ matchId: m.id, action: "confirm", where })}>Confirm…</button>}
+                {m.canConfirm && <button className="primary" onClick={() => onSelect({ matchId: m.id, action: "confirm", where })}>Confirm…</button>}
                 {m.canReport && !m.canConfirm && (
                   <button onClick={() => onSelect({ matchId: m.id, action: "report", where })}>{r?.status === "PENDING" ? "Change report" : "Report"}</button>
                 )}
@@ -232,13 +263,13 @@ export function ResultForm({ match: m, bestOf, action, base, onClose, onDone, br
         <p><strong>{r.reportedBy}</strong> reported <strong>{m.a.name} {r.gamesA} – {r.gamesB} {m.b!.name}</strong>. Is that right?</p>
         {r.games.length > 0 && <GameLinks games={r.games} open />}
         <p>
-          <button onClick={() => void send("confirm")} disabled={busy}>Yes, confirm</button>{" "}
-          <button onClick={onClose} disabled={busy}>Cancel</button>
+          <button className="primary" onClick={() => void send("confirm")} disabled={busy}>Yes, confirm</button>{" "}
+          <button className="ghost" onClick={onClose} disabled={busy}>Cancel</button>
         </p>
         <p className="muted">If it's wrong, dispute it and a commissioner will settle it:</p>
         <div className="builder-send">
           <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="What happened? (optional)" maxLength={500} aria-label="Dispute note" />
-          <button onClick={() => void send("dispute", { note: note || null })} disabled={busy}>Dispute</button>
+          <button className="danger" onClick={() => void send("dispute", { note: note || null })} disabled={busy}>Dispute</button>
         </div>
         {error && <p className="bad">{error}</p>}
       </div>
@@ -285,11 +316,11 @@ export function ResultForm({ match: m, bestOf, action, base, onClose, onDone, br
         </>
       )}
       <p>
-        <button onClick={() => void send(action === "enter" ? "result" : "report", action === "enter" && forfeit
+        <button className="primary" onClick={() => void send(action === "enter" ? "result" : "report", action === "enter" && forfeit
           ? { forfeit } : { gamesA: a, gamesB: b, replays: rows.map((x) => x.replay), notes: rows.map((x) => x.note) })} disabled={busy || !valid}>
           {action === "enter" ? "Save result" : r?.status === "PENDING" ? "Update report" : "Report"}
         </button>{" "}
-        <button onClick={onClose} disabled={busy}>Cancel</button>
+        <button className="ghost" onClick={onClose} disabled={busy}>Cancel</button>
       </p>
       {action === "report" && <p className="muted">Your opponent confirms it (or it confirms itself after the season's delay).</p>}
       {error && <p className="bad">{error}</p>}

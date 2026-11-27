@@ -4,15 +4,17 @@ import { useApi } from "../../hooks/useApi";
 import InviteList from "./InviteList";
 import { useLeague } from "./LeagueLayout";
 import { roleLabel } from "./roles";
+import { useConfirm } from "../../components/Feedback";
 
 // The league's group of people. The owner invites and removes people; who commissions or plays
-// is chosen per season (on each season's Setup page).
+// is chosen per season (on each season's Players tab).
 export default function MembersPage() {
   const { league, reload } = useLeague();
   const isOwner = league.myRole === "OWNER";
   // Invites are owner-only; skip the request for everyone else.
   const invites = useApi<InviteView[]>(isOwner ? `/leagues/${league.id}/invites` : null);
   const [error, setError] = useState<string | null>(null);
+  const confirm = useConfirm();
 
   // Runs a change, then refreshes what it affects. Errors (e.g. "is part of a season") show inline.
   const act = async (change: () => Promise<unknown>, after: { members?: boolean; invites?: boolean } = {}) => {
@@ -26,8 +28,8 @@ export default function MembersPage() {
     }
   };
 
-  const remove = (m: LeagueMember) => {
-    if (!window.confirm(`Remove ${m.displayName} from ${league.name}?`)) return;
+  const remove = async (m: LeagueMember) => {
+    if (!(await confirm({ title: `Remove ${m.displayName} from ${league.name}?`, confirmLabel: "Remove", danger: true }))) return;
     void act(() => apiDelete(`/leagues/${league.id}/members/${m.id}`), { members: true, invites: true });
   };
 
@@ -57,8 +59,8 @@ export default function MembersPage() {
               <td>{m.role === "OWNER" && roleLabel.OWNER}</td>
               {isOwner && (
                 <td className="actions">
-                  {m.placeholder && <button onClick={() => void claimLink(m)}>Create claim link</button>}
-                  {m.role !== "OWNER" && <button onClick={() => remove(m)}>Remove</button>}
+                  {m.placeholder && <button className="sm" onClick={() => void claimLink(m)}>Create claim link</button>}
+                  {m.role !== "OWNER" && <button className="danger sm" onClick={() => void remove(m)}>Remove</button>}
                 </td>
               )}
             </tr>
@@ -149,7 +151,7 @@ function CreateInvite({ leagueId, onCreated }: { leagueId: string; onCreated: ()
           placeholder="Max uses (blank = unlimited)"
           inputMode="numeric"
         />
-        <button type="submit">Create invite link</button>
+        <button type="submit" className="primary">Create invite link</button>
       </form>
       {error && <p className="bad">{error}</p>}
     </>

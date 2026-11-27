@@ -13,6 +13,7 @@ import PoolGrid from "./PoolGrid";
 import { poolQueryString } from "./poolQuery";
 import { useSeason } from "./SeasonLayout";
 import { usePoolParams } from "./usePoolParams";
+import { useConfirm, type ConfirmOptions, Loading } from "../../components/Feedback";
 
 // The draft room (the season's Draft tab). Before the start: settings, a board preview, the
 // readiness checklist and Start draft. During: who's on the clock, the board filling in, and the
@@ -26,16 +27,21 @@ export default function SeasonDraftPage() {
   const base = `/leagues/${league.id}/seasons/${season.id}/draft`;
   const draft = useApi<DraftState>(base, String(draftVersion));
   const [error, setError] = useState<string | null>(null);
+  const confirm = useConfirm();
   // Players' own queue; refetched with the draft (an auto-pick or someone's pick changes it).
   const playing = draft.data?.mySeat != null && draft.data.status !== "COMPLETE";
   const queue = useApi<DraftQueueState>(playing ? `${base}/queue` : null, String(draftVersion));
 
   if (draft.error) return <p className="bad">Couldn't load the draft ({draft.error})</p>;
-  if (!draft.data) return <p className="muted">Loading…</p>;
+  if (!draft.data) return <Loading />;
   const d = draft.data;
 
   const start = async () => {
-    if (!window.confirm("Start the draft? After this the players, seats and calendar are fixed, and the pool can't be regenerated.")) return;
+    if (!(await confirm({
+      title: "Start the draft?",
+      message: "Picking opens right away. After this the players, seats and calendar are fixed, and the pool can't be regenerated.",
+      confirmLabel: "Start draft",
+    }))) return;
     setError(null);
     try {
       await apiPost(`${base}/start`);
@@ -64,7 +70,7 @@ export default function SeasonDraftPage() {
           </ul>
           {d.canManage && (
             <p>
-              <button onClick={() => void start()} disabled={d.readiness.some((c) => !c.ok)}>Start draft</button>{" "}
+              <button className="primary" onClick={() => void start()} disabled={d.readiness.some((c) => !c.ok)}>Start draft</button>{" "}
               <span className="muted">Picking opens as soon as it starts.</span>
             </p>
           )}
@@ -97,6 +103,7 @@ function CommissionerControls({ draft: d, base, onDone }: { draft: DraftState; b
   const [error, setError] = useState<string | null>(null);
   const [editingTimer, setEditingTimer] = useState(false);
   const [timer, setTimer] = useState<TimerForm>(() => timerForm(d.timer));
+  const confirm = useConfirm();
   const saveTimer = async () => {
     setBusy(true);
     setError(null);
@@ -110,8 +117,8 @@ function CommissionerControls({ draft: d, base, onDone }: { draft: DraftState; b
       onDone();
     }
   };
-  const act = async (path: string, confirm?: string) => {
-    if (confirm && !window.confirm(confirm)) return;
+  const act = async (path: string, ask?: ConfirmOptions) => {
+    if (ask && !(await confirm(ask))) return;
     setBusy(true);
     setError(null);
     try {
@@ -136,13 +143,17 @@ function CommissionerControls({ draft: d, base, onDone }: { draft: DraftState; b
         ? <button onClick={() => void act("resume")} disabled={busy}>Resume draft</button>
         : <button onClick={() => void act("pause")} disabled={busy}>Pause draft</button>}{" "}
       {u && (
-        <button onClick={() => void act("undo", `Undo ${undoLabel}? ${undoNote} The undo is kept in the draft log.`)} disabled={busy}
+        <button onClick={() => void act("undo", { title: `Undo ${undoLabel}?`, message: `${undoNote} The undo is kept in the draft log.`, confirmLabel: "Undo pick", danger: true })} disabled={busy}
                 title={`Undo ${undoLabel}`}>
           Undo last pick
         </button>
       )}{" "}
       {d.canUnstart && (
-        <button onClick={() => void act("unstart", "Take the draft back to setup? Its log (including undone picks) is cleared, and players, seats, the pool and the calendar can change again.")}
+        <button onClick={() => void act("unstart", {
+                  title: "Take the draft back to setup?",
+                  message: "Its log (including undone picks) is cleared, and players, seats, the pool and the calendar can change again.",
+                  confirmLabel: "Back to setup", danger: true,
+                })}
                 disabled={busy}>
           Back to setup
         </button>
@@ -153,7 +164,7 @@ function CommissionerControls({ draft: d, base, onDone }: { draft: DraftState; b
         <div className="timer-change">
           <TimerFields value={timer} onChange={setTimer} timeZone={d.timeZone} />
           <p>
-            <button onClick={() => void saveTimer()} disabled={busy}>Save timer</button>{" "}
+            <button className="primary" onClick={() => void saveTimer()} disabled={busy}>Save timer</button>{" "}
             <span className="muted">The pick on the clock gets the full new time from now (from the resume, if paused).</span>
           </p>
         </div>
@@ -319,6 +330,7 @@ function Picker({ draft: d, base, queue, onQueued, onPicked }: {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [chosen, setChosen] = useState<number | null>(null);
+  const confirm = useConfirm();
   // The slot to fill: the one chosen, if still pickable, else the first (the clock comes first).
   const slot: PickableSlot | undefined = d.pickable.find((p) => p.overallPick === chosen) ?? d.pickable[0];
   const queued = new Set(queue?.cards.map((c) => c.cardId) ?? []);
@@ -327,7 +339,7 @@ function Picker({ draft: d, base, queue, onQueued, onPicked }: {
     if (!slot) return;
     const forWhom = d.mySeat === slot.seat ? "" : ` for ${slot.displayName}`;
     const what = slot.makeup ? `skipped pick #${slot.overallPick}` : `pick #${slot.overallPick}`;
-    if (!window.confirm(`Draft ${c.name}${forWhom} with ${what}? Picks are final.`)) return;
+    if (!(await confirm({ title: `Draft ${c.name}${forWhom}?`, message: `With ${what}. Picks are final.`, confirmLabel: "Draft it" }))) return;
     setBusy(true);
     setError(null);
     try {
@@ -352,7 +364,7 @@ function Picker({ draft: d, base, queue, onQueued, onPicked }: {
   };
   const actions = (c: PoolCard) => (
     <>
-      {slot && <button onClick={() => void pick(c)} disabled={busy}>Draft</button>}{" "}
+      {slot && <button className="primary" onClick={() => void pick(c)} disabled={busy}>Draft</button>}{" "}
       {queue && (queued.has(c.cardId)
         ? <span className="muted">queued</span>
         : <button onClick={() => void addToQueue(c)}>Queue</button>)}
@@ -489,7 +501,11 @@ function toRounds(blocks: Block[]): RoundBlock[] {
 function DraftSettings({ draft: d, base, onSaved }: { draft: DraftState; base: string; onSaved: () => void }) {
   const [order, setOrder] = useState(d.order);
   const [blocks, setBlocks] = useState<Block[]>(toBlocks(d.rounds));
+  // The planned start is typed in a zone of the commissioner's choosing (the league's by default)
+  // and sent in the league's zone, which is what the server expects.
+  const [zone, setZone] = useState(d.timeZone);
   const [start, setStart] = useState(d.scheduledStart ? localInput(d.scheduledStart, d.timeZone) : "");
+  const startInLeagueZone = start ? localInput(zonedToInstant(start, zone), d.timeZone) : null;
   const [forbidden, setForbidden] = useState(d.forbiddenDraftable);
   const [timer, setTimer] = useState<TimerForm>(() => timerForm(d.timer));
   const [error, setError] = useState<string | null>(null);
@@ -502,7 +518,7 @@ function DraftSettings({ draft: d, base, onSaved }: { draft: DraftState; base: s
     setError(null);
     try {
       await apiPut(`${base}/settings`, {
-        order, rounds, scheduledStart: start || null, forbiddenDraftable: forbidden, ...timerBody(timer),
+        order, rounds, scheduledStart: startInLeagueZone, forbiddenDraftable: forbidden, ...timerBody(timer),
       });
       onSaved();
     } catch (e) {
@@ -520,11 +536,21 @@ function DraftSettings({ draft: d, base, onSaved }: { draft: DraftState; base: s
             <option value="LINEAR">Linear (same order every round)</option>
           </select>
         </label>
-        <label>Planned start ({d.timeZone.replaceAll("_", " ")})
+        <label>Planned start
           <input type="datetime-local" value={start} onChange={(e) => setStart(e.target.value)} />
         </label>
+        <label>Time zone
+          <select value={zone} onChange={(e) => setZone(e.target.value)}>
+            {(ZONES.includes(d.timeZone) ? ZONES : [d.timeZone, ...ZONES]).map((z) => (
+              <option key={z} value={z}>{z.replaceAll("_", " ")}{z === d.timeZone ? " (league)" : ""}</option>
+            ))}
+          </select>
+        </label>
       </div>
-      <p className="muted">The planned start is shown to the league; a commissioner starts the draft.</p>
+      <p className="muted">
+        The planned start is shown to the league; a commissioner starts the draft.
+        {start && zone !== d.timeZone && ` That's ${when(zonedToInstant(start, zone), d.timeZone)} in the league's time zone.`}
+      </p>
 
       <h5>Rounds</h5>
       {blocks.map((b, i) => (
@@ -560,7 +586,7 @@ function DraftSettings({ draft: d, base, onSaved }: { draft: DraftState; base: s
           draft ends; any still owed when the last pick is made are forfeited. Commissioners can change the timer during the draft.
         </p>
       )}
-      <p><button onClick={() => void save()}>Save draft settings</button></p>
+      <p><button className="primary" onClick={() => void save()}>Save draft settings</button></p>
       {error && <p className="bad">{error}</p>}
     </>
   );
@@ -580,7 +606,7 @@ function Board({ draft: d }: { draft: DraftState }) {
     <>
       <h4>Draft board</h4>
       <p className="muted">
-        Draft order follows the seats on the <Link to="..">Setup</Link> tab{d.status === "NOT_STARTED" && ", where they can be set by hand or drawn at random"}.
+        Draft order follows the seats on the <Link to="../players">Players</Link> tab{d.status === "NOT_STARTED" && ", where they can be set by hand or drawn at random"}.
       </p>
       <div className="board-scroll">
         <table className="board">
@@ -633,6 +659,19 @@ function pickTitle(slot: DraftSlot): string {
 
 function when(instant: string, zone: string): string {
   return new Date(instant).toLocaleString(undefined, { timeZone: zone, weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" });
+}
+
+// Every IANA zone the browser knows, e.g. "America/Chicago".
+const ZONES: string[] = Intl.supportedValuesOf("timeZone");
+
+/** A "YYYY-MM-DDTHH:mm" wall-clock time in `zone` as an ISO instant (DST-aware). */
+function zonedToInstant(local: string, zone: string): string {
+  const asUtc = Date.parse(`${local}:00Z`);
+  // The zone's offset at a moment: its wall clock read as UTC, minus the moment.
+  const offset = (ms: number) => Date.parse(`${localInput(new Date(ms).toISOString(), zone)}:00Z`) - ms;
+  let t = asUtc - offset(asUtc);
+  t = asUtc - offset(t); // again at the result, in case a DST change lies in between
+  return new Date(t).toISOString();
 }
 
 /** An instant as the "YYYY-MM-DDTHH:mm" a datetime-local input shows, in the league's zone. */

@@ -29,16 +29,18 @@ export default function AccountMenu() {
     <div className="account">
       {user ? (
         <>
-          {user.avatarUrl && <img className="avatar" src={user.avatarUrl} alt="" referrerPolicy="no-referrer" />}
-          <span title={user.identity}>
+          {user.avatarUrl
+            ? <img className="avatar" src={user.avatarUrl} alt="" referrerPolicy="no-referrer" />
+            : <span className="avatar initials" aria-hidden="true">{initials(user.displayName)}</span>}
+          <span className="account-name" title={user.identity}>
             {user.displayName}
-            {user.admin && <span className="badge">admin</span>}
+            {user.admin && <span className="badge neutral">admin</span>}
           </span>
-          <button disabled={busy} onClick={() => run(() => apiPost("/auth/logout"))}>Sign out</button>
+          <button className="ghost sm" disabled={busy} onClick={() => run(() => apiPost("/auth/logout"))}>Sign out</button>
         </>
       ) : session.providers.includes("google") ? (
         // A full-page navigation, not fetch: the OAuth flow redirects through Google and back.
-        <a className="button" href="/api/oauth2/authorization/google">Sign in with Google</a>
+        <a className="button primary sm" href="/api/oauth2/authorization/google">Sign in with Google</a>
       ) : (
         !session.devLogin && <span className="muted">Sign-in isn't configured</span>
       )}
@@ -64,4 +66,10 @@ export default function AccountMenu() {
       )}
     </div>
   );
+}
+
+/** "Theo Novak" → "TN", "bob" → "B". */
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  return ((parts[0]?.[0] ?? "?") + (parts.length > 1 ? parts[parts.length - 1][0] : "")).toUpperCase();
 }

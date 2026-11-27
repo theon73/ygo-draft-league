@@ -28,7 +28,6 @@ export default function TransactionsPage() {
 
   return (
     <>
-      <h4>Transactions</h4>
       <p className="muted">
         {season.status === "ACTIVE"
           ? <>Claim from the <Link to="../rosters/free-agents">Free agents</Link> list, or make offers on the <Link to="../trades">Trades</Link> tab.</>

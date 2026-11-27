@@ -1,6 +1,7 @@
 import { Link, useParams } from "react-router-dom";
 import PoolGrid from "./PoolGrid";
 import { countsLine, GROUPS, playable, RosterNav, useRosters } from "./RostersPage";
+import { Loading } from "../../components/Feedback";
 
 // One player's roster with card art, grouped by deck. Under each card: how many copies they may
 // play (the league's copy limit, or the ban list's), and the pick or claim it came from.
@@ -9,7 +10,7 @@ export default function RosterPage() {
   const rosters = useRosters();
 
   if (rosters.error) return <p className="bad">Couldn't load the rosters ({rosters.error})</p>;
-  if (!rosters.data) return <p className="muted">Loading…</p>;
+  if (!rosters.data) return <Loading />;
   const roster = rosters.data.players.find((p) => p.memberId === memberId);
 
   return (

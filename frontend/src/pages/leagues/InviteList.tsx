@@ -27,8 +27,8 @@ export default function InviteList({ invites, onRevoke }: { invites: InviteView[
             <td>{i.useCount} / {i.maxUses ?? "∞"}</td>
             <td>{i.expiresAt ? new Date(i.expiresAt).toLocaleDateString() : "Never"}</td>
             <td className="actions">
-              <button onClick={() => void copy(i.code)}>{copied === i.code ? "Copied" : "Copy link"}</button>
-              <button onClick={() => onRevoke(i.code)}>Revoke</button>
+              <button className="sm" onClick={() => void copy(i.code)}>{copied === i.code ? "Copied" : "Copy link"}</button>
+              <button className="danger sm" onClick={() => onRevoke(i.code)}>Revoke</button>
             </td>
           </tr>
         ))}

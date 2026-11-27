@@ -53,7 +53,6 @@ export default function FreeAgentsPage() {
 
   return (
     <>
-      <h4>Free agents</h4>
       <RosterNav rosters={rosters.data} />
       <p className="muted">
         Pool cards nobody holds{season.status === "ACTIVE" ? "" : " (until the draft is over, these are the cards still to draft)"}.
@@ -169,8 +168,8 @@ function ClaimPanel({ seasonBase, card, memberId, roster, onCancel, onClaimed }:
               );
             })}
           </select>{" "}
-          <button onClick={() => void confirm()} disabled={!drop || busy}>Claim and drop</button>{" "}
-          <button onClick={onCancel} disabled={busy}>Cancel</button>
+          <button className="primary" onClick={() => void confirm()} disabled={!drop || busy}>Claim and drop</button>{" "}
+          <button className="ghost" onClick={onCancel} disabled={busy}>Cancel</button>
         </p>
       )}
       {error && <p className="bad">{error}</p>}
