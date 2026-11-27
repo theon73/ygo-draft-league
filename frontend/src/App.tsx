@@ -16,6 +16,10 @@ import SeasonSetup from "./pages/leagues/SeasonSetup";
 import SeasonRulesPage from "./pages/leagues/SeasonRulesPage";
 import SeasonPoolPage from "./pages/leagues/SeasonPoolPage";
 import SeasonDraftPage from "./pages/leagues/SeasonDraftPage";
+import RostersPage from "./pages/leagues/RostersPage";
+import RosterPage from "./pages/leagues/RosterPage";
+import FreeAgentsPage from "./pages/leagues/FreeAgentsPage";
+import SeasonCardPage from "./pages/leagues/SeasonCardPage";
 import InvitePage, { PendingInviteRedirect } from "./pages/InvitePage";
 
 const NAV = [
@@ -55,7 +59,11 @@ export default function App() {
               <Route path="rules" element={<SeasonRulesPage />} />
               <Route path="pool" element={<SeasonPoolPage />} />
               <Route path="draft" element={<SeasonDraftPage />} />
-              <Route path="rosters" element={<Placeholder title="Rosters" phase={4} />} />
+              <Route path="rosters" element={<RostersPage />} />
+              {/* "free-agents" is a fixed path, so React Router prefers it over the :memberId pattern. */}
+              <Route path="rosters/free-agents" element={<FreeAgentsPage />} />
+              <Route path="rosters/:memberId" element={<RosterPage />} />
+              <Route path="cards/:cardId" element={<SeasonCardPage />} />
               <Route path="standings" element={<Placeholder title="Standings" phase={4} />} />
               <Route path="transactions" element={<Placeholder title="Transactions" phase={4} />} />
             </Route>

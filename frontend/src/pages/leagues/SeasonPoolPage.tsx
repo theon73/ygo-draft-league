@@ -15,6 +15,7 @@ import PoolFilters from "./PoolFilters";
 import PoolGrid from "./PoolGrid";
 import { activeFilterCount, poolQueryString } from "./poolQuery";
 import { usePoolParams } from "./usePoolParams";
+import { seasonCardPath } from "./RostersPage";
 
 type Show = "ALL" | "EXCEPTIONS" | "FLAGGED" | "BAN_LIST" | "REMOVED";
 const SHOWS: { value: Show; label: string }[] = [
@@ -216,7 +217,7 @@ export default function SeasonPoolPage() {
                     <tr key={c.cardId}>
                       <td className="thumb"><CardPreview cardId={c.cardId}><CardImage passcode={c.passcode} size="small" alt="" /></CardPreview></td>
                       <td>
-                        <CardPreview cardId={c.cardId}><Link to={`/explore/cards/${c.cardId}`}>{c.name}</Link></CardPreview>
+                        <CardPreview cardId={c.cardId}><Link to={seasonCardPath(league.id, season.id, c.cardId)}>{c.name}</Link></CardPreview>
                         {c.source === "EXCEPTION" && <span className="badge">exception</span>}
                         {c.banStatus && <span className={`badge ban-${c.banStatus.toLowerCase()}`}>{statusLabel[c.banStatus]}</span>}
                         {c.ownedBy && <span className="badge owned">{c.ownedBy}</span>}

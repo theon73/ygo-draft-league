@@ -368,6 +368,56 @@ export interface PoolCard {
   ownedBy: string | null; // who holds it (display names), once the draft has made owners
 }
 
+// Rosters (YGO-22): who holds what. Only the draft moves cards so far; free agency and trades join it.
+
+export type RosterGroup = "MONSTER" | "EXTRA" | "SPELL" | "TRAP"; // main-deck monsters, extra deck, spells, traps
+
+export interface RosterCard {
+  card: PoolCard;
+  group: RosterGroup;
+  quantity: number; // copies held (1 with exclusive ownership)
+  acquiredAt: string;
+  acquiredWeek: number; // 0 = the draft
+  source: "DRAFT";
+  draftPick: number | null;
+}
+
+export interface Roster {
+  memberId: string;
+  displayName: string;
+  teamName: string | null;
+  seat: number | null;
+  placeholder: boolean;
+  you: boolean;
+  counts: { total: number; monsters: number; extra: number; spells: number; traps: number };
+  cards: RosterCard[]; // by group, then name
+}
+
+export interface Rosters {
+  freeAgents: number; // pool cards nobody holds that could be taken
+  players: Roster[]; // in seat order
+}
+
+export interface OwnershipChange {
+  at: string;
+  week: number;
+  source: "DRAFT";
+  fromMemberId: string | null; // null: from the draft (or, later, free agency)
+  from: string | null;
+  toMemberId: string | null; // null: dropped to free agency (later)
+  to: string | null;
+  quantity: number;
+  draftPick: number | null;
+  auto: boolean; // auto-picked from the queue
+  onBehalfBy: string | null; // the commissioner who picked for the player
+}
+
+export interface SeasonCard {
+  card: PoolCard;
+  owners: { memberId: string; displayName: string; quantity: number; since: string; week: number }[];
+  history: OwnershipChange[]; // oldest first
+}
+
 export interface PoolCardPage {
   total: number;
   page: number;
