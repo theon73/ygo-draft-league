@@ -134,7 +134,7 @@ function MyDiscordPings({ leagueId }: { leagueId: string }) {
 const EVENTS: { value: NotificationEvent; label: string; hint: string }[] = [
   { value: "DRAFT_PICKS", label: "Draft news", hint: "start and finish, every pick (auto-picks, skips, make-ups), undos, pauses, timer changes" },
   { value: "DRAFT_ON_THE_CLOCK", label: "On the clock", hint: "who's up next, with a countdown Discord shows in everyone's own time zone" },
-  { value: "TRANSACTIONS", label: "Transactions", hint: "free-agent claims and what was dropped (trades too, once they exist)" },
+  { value: "TRANSACTIONS", label: "Transactions", hint: "free-agent claims (and what was dropped) and completed trades; offers stay private" },
 ];
 
 // The league's Discord webhook. The saved URL never comes back from the server (anyone holding it

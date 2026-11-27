@@ -62,7 +62,8 @@ public class SeasonRulesService {
      */
     public record RulesUpdate(LocalDate startDate, Integer regularWeeks, LocalDate tcgCutoff, Long banListRevisionId,
                               CompetitionFormat competitionFormat, Integer roundRobinCycles, Integer effectiveFromWeek,
-                              Integer freeAgencyPerWeek) {}
+                              Integer freeAgencyPerWeek, Integer tradesPerWeek, Integer tradeDeadlineWeek,
+                              Boolean commissionerApproval) {}
 
     public static final int MAX_PER_WEEK = 50;
 
@@ -142,7 +143,9 @@ public class SeasonRulesService {
                 calendar(update, competition, current.calendar().weekStart()),
                 new SeasonRulesDocument.FormatRules(validCutoff(update.tcgCutoff()), validBanList(update.banListRevisionId(), league)),
                 competition, current.draft(),   // the draft section is edited on the Draft tab
-                new SeasonRulesDocument.TransactionRules(perWeek(update.freeAgencyPerWeek(), "Free-agent claims")));
+                new SeasonRulesDocument.TransactionRules(perWeek(update.freeAgencyPerWeek(), "Free-agent claims"),
+                        perWeek(update.tradesPerWeek(), "Trades"), deadline(update.tradeDeadlineWeek()),
+                        Boolean.TRUE.equals(update.commissionerApproval())));
 
         int effectiveFrom = 0;
         if (season.getStatus() != SeasonStatus.SETUP) {
@@ -381,6 +384,11 @@ public class SeasonRulesService {
     private static Integer perWeek(Integer value, String what) {
         if (value != null && (value < 0 || value > MAX_PER_WEEK)) throw bad(what + " per week: 0 to " + MAX_PER_WEEK + ", or blank for unlimited");
         return value;
+    }
+
+    private static Integer deadline(Integer week) {
+        if (week != null && (week < 0 || week > MAX_WEEKS)) throw bad("The trade deadline is a week from 0 to " + MAX_WEEKS + ", or blank for none");
+        return week;
     }
 
     private static LocalDate validCutoff(LocalDate cutoff) {

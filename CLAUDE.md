@@ -25,5 +25,9 @@ General-purpose web app for running Yu-Gi-Oh draft leagues, fantasy-football sty
 - Everything is league-scoped: season data hangs off a `League`. A league is a group of people: one `OWNER` and `MEMBER`s. Commissioner and player are **per-season** roles (the owner commissions every season). Every league-scoped endpoint starts with `LeagueAccess.require(publicId, user, minimumRole)` (non-members get 404, not 403); season endpoints go through `SeasonAccess.member` / `SeasonAccess.commissioner` (403 for members who don't commission that season). Never query league data by id without these.
 - State changes (picks, trades, FA, results) are append-only events; ownership is derived from them.
 - Keep domain logic (e.g. `draft/SnakeOrder`) free of Spring so it's unit-testable.
+- **Backwards compatible by default:** a new feature must work on leagues and seasons created before it.
+  - **Stored JSON** (`season_rules`, draft config, `draft.result`): every new field must read correctly when it's missing. Use boxed types (`Boolean`, `Integer`) normalized in the record's compact constructor, never a bare primitive (Jackson refuses `null` into `boolean`). Add a test that reads the old shape.
+  - **Migrations:** new columns get a default or are nullable, and existing rows get sensible values.
+  - **APIs:** new request fields are optional, and new statuses or enum values don't break existing data.
 - Commit messages start with a ticket prefix in place of Jira: `YGO-<n>: <summary>`. One number per piece of work (shared by its commits); the next number is one more than the highest `YGO-` in `git log`. YGO-1 was the product vision / planning docs.
 - Theo is strongest in Java/Spring; explain non-obvious frontend choices briefly.

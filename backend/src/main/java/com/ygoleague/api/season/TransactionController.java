@@ -4,7 +4,7 @@ import com.ygoleague.auth.CurrentUser;
 import com.ygoleague.season.transaction.FreeAgencyService;
 import com.ygoleague.season.transaction.FreeAgencyService.ClaimRequest;
 import com.ygoleague.season.transaction.FreeAgencyService.FreeAgencyView;
-import com.ygoleague.season.transaction.FreeAgencyService.TransactionView;
+import com.ygoleague.season.transaction.TransactionFeed.TransactionView;
 import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
