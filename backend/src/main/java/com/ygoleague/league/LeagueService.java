@@ -30,15 +30,16 @@ public class LeagueService {
     public static final int MAX_NAME_LENGTH = 60;
 
     /** A league in "My leagues". {@code id} is the public id. */
-    public record LeagueSummary(String id, String name, LeagueRole myRole, long memberCount) {}
+    /** @param currentSeason the season the league opens on (see {@link LeagueDetail}), or null; for the Home dashboard (YGO-31) */
+    public record LeagueSummary(String id, String name, LeagueRole myRole, long memberCount, SeasonLink currentSeason) {}
 
     /**
      * A league's page. Member user ids are never exposed.
      *
      * @param timeZone        IANA zone; week boundaries, deadlines and draft times use it
      * @param seasons         newest first
-     * @param currentSeasonId the season the league page opens on: the newest one that isn't
-     *                        complete, else the newest; null if there are none
+     * @param currentSeasonId the season the league page opens on: the newest running one, else the newest in
+     *                        setup, else the newest (see {@code current}); null if there are none
      * @param weekStartsOn    day each league week starts, in {@code timeZone}
      * @param weekStartsAt    local time it starts, "HH:mm"
      * @param currentWeek     the week containing now, as offsets in the league's zone (for display)
@@ -98,7 +99,7 @@ public class LeagueService {
         league.setTimeZone(zone);
         league = leagues.save(league);
         members.save(LeagueMember.forUser(league, creator, creator.getDisplayName(), LeagueRole.OWNER));
-        return new LeagueSummary(publicId(league), league.getName(), LeagueRole.OWNER, 1);
+        return new LeagueSummary(publicId(league), league.getName(), LeagueRole.OWNER, 1, null);
     }
 
     @Transactional(readOnly = true)
@@ -111,7 +112,10 @@ public class LeagueService {
         }
         return mine.stream()
                 .map(m -> new LeagueSummary(publicId(m.getLeague()), m.getLeague().getName(), m.getRole(),
-                        counts.getOrDefault(m.getLeague().getId(), 0L)))
+                        counts.getOrDefault(m.getLeague().getId(), 0L),
+                        current(seasons.findByLeagueIdOrderByCreatedAtDesc(m.getLeague().getId()))
+                                .map(s -> new SeasonLink(publicIds.encode(PublicIdType.SEASON, s.getId()), s.getName(), s.getStatus()))
+                                .orElse(null)))
                 .toList();
     }
 
@@ -127,15 +131,23 @@ public class LeagueService {
         List<SeasonLink> links = all.stream()
                 .map(s -> new SeasonLink(publicIds.encode(PublicIdType.SEASON, s.getId()), s.getName(), s.getStatus()))
                 .toList();
-        String current = all.stream().filter(s -> s.getStatus() != SeasonStatus.COMPLETE).findFirst()
-                .or(() -> all.stream().findFirst())
-                .map(s -> publicIds.encode(PublicIdType.SEASON, s.getId()))
-                .orElse(null);
+        String current = current(all).map(s -> publicIds.encode(PublicIdType.SEASON, s.getId())).orElse(null);
         WeekBoundary.Week week = league.weekBoundary().weekContaining(Instant.now());
         return new LeagueDetail(publicId(league), league.getName(), me.getRole(), league.getCreatedAt(), league.getTimeZone(),
                 league.getWeekStartsOn(), league.getWeekStartsAt().toString(),
                 new WeekView(week.start().toOffsetDateTime(), week.end().toOffsetDateTime()),
                 roster, links, current);
+    }
+
+    /**
+     * The season a league opens on: the newest running one (drafting or active), else the newest
+     * in setup, else the newest; {@code all} is newest first. A season being set up for later doesn't
+     * take over from the one being played (Theo, YGO-31).
+     */
+    private static java.util.Optional<Season> current(List<Season> all) {
+        return all.stream().filter(s -> s.getStatus() == SeasonStatus.DRAFTING || s.getStatus() == SeasonStatus.ACTIVE).findFirst()
+                .or(() -> all.stream().filter(s -> s.getStatus() == SeasonStatus.SETUP).findFirst())
+                .or(() -> all.stream().findFirst());
     }
 
     /** The owner only. Fields left null keep their current value. */

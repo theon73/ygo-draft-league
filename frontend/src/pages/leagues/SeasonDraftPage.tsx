@@ -497,7 +497,7 @@ function Picker({ draft: d, base, queue, onQueued, onPicked }: {
 }
 
 // The draft at a glance: format, progress, timer, pool and start, as a row of stat tiles.
-function DraftSummary({ draft: d }: { draft: DraftState }) {
+export function DraftSummary({ draft: d }: { draft: DraftState }) {
   const timer = timerTile(d);
   const multiPick = d.rounds.some((r) => r.picksPerTurn > 1);
   const fmt = (instant: string) => new Date(instant).toLocaleString(undefined, { timeZone: d.timeZone, month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
@@ -537,7 +537,7 @@ function DraftSummary({ draft: d }: { draft: DraftState }) {
 
 // The latest picks, newest first, with their card art: the last one large, then a strip of the
 // few before it. Hover (or tap) a card for its full text, like the queue.
-function RecentPicks({ draft: d }: { draft: DraftState }) {
+export function RecentPicks({ draft: d }: { draft: DraftState }) {
   const { league } = useLeague();
   const { season } = useSeason();
   const names = new Map(d.seats.map((s) => [s.seat, s.displayName]));

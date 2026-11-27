@@ -150,8 +150,9 @@ export default function SchedulePage() {
 
 // The week's matches; byes are named in the week's heading instead (see Byes). Each tile shows the
 // score and where the result stands, and the actions the viewer has.
-function Matchups({ week, compact = false, where, selected, onSelect }: {
-  week: ScheduleWeek; compact?: boolean; where: Selected["where"]; selected: Selected | null; onSelect: (s: Selected) => void;
+// Exported for the Overview (YGO-31), which shows this week's tiles without actions (onSelect omitted).
+export function Matchups({ week, compact = false, where, selected, onSelect }: {
+  week: ScheduleWeek; compact?: boolean; where: Selected["where"]; selected: Selected | null; onSelect?: (s: Selected) => void;
 }) {
   const games = week.matches.filter((m) => m.b !== null);
   if (games.length === 0) return <p className="muted">{week.matches.length > 0 ? "You have a bye this week." : "No matches of yours this week."}</p>;
@@ -173,7 +174,7 @@ function Matchups({ week, compact = false, where, selected, onSelect }: {
             {r && r.games.length > 0 && <GameLinks games={r.games} />}
             <div className="matchup-status">
               <Status m={m} />
-              <span className="matchup-actions">
+              {onSelect && <span className="matchup-actions">
                 {m.canConfirm && <button className="primary" onClick={() => onSelect({ matchId: m.id, action: "confirm", where })}>Confirm…</button>}
                 {m.canReport && !m.canConfirm && (
                   <button onClick={() => onSelect({ matchId: m.id, action: "report", where })}>{r?.status === "PENDING" ? "Change report" : "Report"}</button>
@@ -183,7 +184,7 @@ function Matchups({ week, compact = false, where, selected, onSelect }: {
                 {m.canEnter && (!m.mine || r?.status === "CONFIRMED" || r?.status === "DISPUTED") && (
                   <button onClick={() => onSelect({ matchId: m.id, action: "enter", where })}>{r ? "Correct" : "Enter result"}</button>
                 )}
-              </span>
+              </span>}
             </div>
           </li>
         );

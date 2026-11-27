@@ -30,7 +30,7 @@ export function useSeason(): SeasonContext {
 }
 
 const TAB_LABEL = {
-  players: "Players", rules: "Rules", pool: "Pool", draft: "Draft", rosters: "Rosters", trades: "Trades",
+  overview: "Overview", players: "Players", rules: "Rules", pool: "Pool", draft: "Draft", rosters: "Rosters", trades: "Trades",
   schedule: "Schedule", standings: "Standings", transactions: "Transactions",
 } as const;
 type Tab = keyof typeof TAB_LABEL;
@@ -38,14 +38,32 @@ type Tab = keyof typeof TAB_LABEL;
 // The tabs a season shows, most useful first, by its state: setup is about players, rules, pool and
 // the draft; a running season about matches. The other pages still open by URL (and then show
 // their tab), they're just not offered where they'd be empty.
+// Every state opens on the Overview (YGO-31), which summarizes it and says what needs you.
 const TABS: Record<SeasonStatus, Tab[]> = {
-  SETUP: ["players", "rules", "pool", "draft"],
-  DRAFTING: ["draft", "rosters", "pool", "players", "rules"],
+  SETUP: ["overview", "players", "rules", "pool", "draft"],
+  DRAFTING: ["overview", "draft", "rosters", "pool", "players", "rules"],
   // Most used first; draft, players and rules are mostly history or for commissioners. The playoffs
   // are a section of the Schedule tab.
-  ACTIVE: ["schedule", "rosters", "pool", "standings", "trades", "transactions", "draft", "players", "rules"],
-  COMPLETE: ["schedule", "rosters", "pool", "standings", "trades", "transactions", "draft", "players", "rules"],
+  ACTIVE: ["overview", "schedule", "rosters", "pool", "standings", "trades", "transactions", "draft", "players", "rules"],
+  COMPLETE: ["overview", "schedule", "rosters", "pool", "standings", "trades", "transactions", "draft", "players", "rules"],
 };
+
+/** "Week 4 of 9" for a running season: before week 1, the weeks, then after the regular season. */
+function weekLabel(s: SeasonDetail): string | null {
+  if (s.status !== "ACTIVE") return null;
+  if (s.playoffsStarted) return "Playoffs";
+  if (s.currentWeek == null || !s.weekCount) return null;
+  if (s.currentWeek === 0) return "Before week 1";
+  if (s.currentWeek > s.weekCount) return "Regular season over";
+  return `Week ${s.currentWeek} of ${s.weekCount}`;
+}
+
+/** Your part in the season: "Commissioner", "Player", both, or following along. */
+function roleLabel(s: SeasonDetail): string {
+  if (s.canManage && s.youPlay) return "Commissioner · player";
+  if (s.canManage) return "Commissioner";
+  return s.youPlay ? "Player" : "Following";
+}
 
 /** /leagues/:id/seasons/:id opens the season on its first tab for its state. */
 export function SeasonIndex() {
@@ -82,6 +100,8 @@ export default function SeasonLayout() {
       <div className="season-head">
         <h2>{s.name}</h2>
         <span className={`pill status-${s.status}`}>{seasonStatusLabel[s.status]}</span>
+        {weekLabel(s) && <span className="pill">{weekLabel(s)}</span>}
+        <span className="pill role">{roleLabel(s)}</span>
         {league.seasons.length > 1 && (
           <label className="season-switch">
             Season

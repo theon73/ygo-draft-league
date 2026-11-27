@@ -16,6 +16,7 @@ import SeasonSetup from "./pages/leagues/SeasonSetup";
 import SeasonRulesPage from "./pages/leagues/SeasonRulesPage";
 import SeasonPoolPage from "./pages/leagues/SeasonPoolPage";
 import SeasonDraftPage from "./pages/leagues/SeasonDraftPage";
+import OverviewPage from "./pages/leagues/OverviewPage";
 import RostersPage from "./pages/leagues/RostersPage";
 import RosterPage from "./pages/leagues/RosterPage";
 import FreeAgentsPage from "./pages/leagues/FreeAgentsPage";
@@ -75,6 +76,7 @@ export default function App() {
               <Route path="standings" element={<StandingsPage />} />
               <Route path="playoffs" element={<PlayoffsRedirect />} />
               <Route path="trades" element={<TradesPage />} />
+              <Route path="overview" element={<OverviewPage />} />
               <Route path="schedule" element={<SchedulePage />} />
               <Route path="transactions" element={<TransactionsPage />} />
             </Route>

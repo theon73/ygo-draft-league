@@ -79,6 +79,14 @@ class SeasonApiTest {
                 .andExpect(jsonPath("$.seasons[0].id").value(s2))
                 .andExpect(jsonPath("$.currentSeasonId").value(s2));
         mvc.perform(get(l("/seasons")).with(as(mai))).andExpect(jsonPath("$[1].id").value(s1));
+
+        // A running season stays current while the next one is set up (YGO-31).
+        jdbc.update("update season set status = 'ACTIVE' where name = 'Season 2'");
+        String s3 = season("Season 3");
+        mvc.perform(get("/api/leagues/" + league).with(as(mai))).andExpect(jsonPath("$.currentSeasonId").value(s2));
+        mvc.perform(get("/api/leagues").with(as(mai))).andExpect(jsonPath("$[0].currentSeason.id").value(s2));
+        jdbc.update("update season set status = 'COMPLETE' where name = 'Season 2'");
+        mvc.perform(get("/api/leagues/" + league).with(as(mai))).andExpect(jsonPath("$.currentSeasonId").value(s3));
     }
 
     @Test
