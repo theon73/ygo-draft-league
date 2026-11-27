@@ -9,7 +9,8 @@ package com.ygoleague.common;
 public enum PublicIdType {
     LEAGUE(1),
     SEASON(2),
-    LEAGUE_MEMBER(3);
+    LEAGUE_MEMBER(3),
+    TRADE_OFFER(4);
 
     private final long tag;
 

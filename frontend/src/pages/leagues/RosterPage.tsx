@@ -43,6 +43,7 @@ export default function RosterPage() {
                         {n === 0 ? "Can't be played" : `Play up to ${n}`}
                         {entry?.source === "DRAFT" && entry.draftPick != null && ` · pick ${entry.draftPick}`}
                         {entry?.source === "FREE_AGENCY" && ` · claimed ${entry.acquiredWeek === 0 ? "before week 1" : `week ${entry.acquiredWeek}`}`}
+                        {entry?.source === "TRADE" && ` · traded ${entry.acquiredWeek === 0 ? "before week 1" : `week ${entry.acquiredWeek}`}`}
                       </span>
                     );
                   }}

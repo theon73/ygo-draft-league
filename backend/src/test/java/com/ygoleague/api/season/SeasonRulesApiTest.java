@@ -75,6 +75,22 @@ class SeasonRulesApiTest {
     }
 
     @Test
+    void rulesSavedBeforeAFieldExistedStillRead() throws Exception {
+        // As YGO-23 stored them: a transactions section without the trade settings (and earlier, none at all).
+        long seasonId = jdbc.queryForObject("select id from season", Long.class);
+        jdbc.update("insert into season_rules (season_id, version, effective_from_week, schema_version, rules) values (?, 1, 0, 1, ?::jsonb)",
+                seasonId, "{\"calendar\":{\"startDate\":\"2030-01-07\",\"weeks\":[]},\"transactions\":{\"freeAgencyPerWeek\":1}}");
+        mvc.perform(get(rules()).with(as(kaiba))).andExpect(status().isOk())
+                .andExpect(jsonPath("$.transactions.freeAgencyPerWeek").value(1))
+                .andExpect(jsonPath("$.transactions.tradesPerWeek").doesNotExist())
+                .andExpect(jsonPath("$.transactions.commissionerApproval").value(false));
+        jdbc.update("insert into season_rules (season_id, version, effective_from_week, schema_version, rules) values (?, 2, 0, 1, ?::jsonb)",
+                seasonId, "{\"calendar\":{\"startDate\":\"2030-01-07\",\"weeks\":[]}}");
+        mvc.perform(get(rules()).with(as(kaiba))).andExpect(status().isOk())
+                .andExpect(jsonPath("$.transactions.commissionerApproval").value(false));
+    }
+
+    @Test
     void newSeasonHasNoRulesYetAndFollowsTheLeaguesWeekStart() throws Exception {
         mvc.perform(get(rules()).with(as(kaiba)))
                 .andExpect(status().isOk())

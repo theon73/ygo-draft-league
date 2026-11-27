@@ -84,6 +84,9 @@ export default function SeasonCardPage() {
 
 function describe(h: OwnershipChange, who: (memberId: string | null, name: string | null) => ReactNode) {
   const by = h.onBehalfBy ? ` (by ${h.onBehalfBy})` : "";
+  if (h.source === "TRADE") {
+    return <>{who(h.toMemberId, h.to)} got it from {who(h.fromMemberId, h.from)} in a trade{by}</>;
+  }
   if (h.source === "FREE_AGENCY") {
     return h.to !== null
       ? <>{who(h.toMemberId, h.to)} claimed it from free agency{by}</>

@@ -290,7 +290,7 @@ export interface BanListOption {
 
 export interface SeasonRules {
   version: number | null; // null until first saved
-  transactions: { freeAgencyPerWeek: number | null }; // null = unlimited
+  transactions: TransactionRules;
   effectiveFromWeek: number;
   canManage: boolean;
   started: boolean; // season left setup: changes need effectiveFromWeek
@@ -371,7 +371,7 @@ export interface PoolCard {
 
 // Rosters (YGO-22): who holds what. Only the draft moves cards so far; free agency and trades join it.
 
-export type OwnershipSource = "DRAFT" | "FREE_AGENCY";
+export type OwnershipSource = "DRAFT" | "FREE_AGENCY" | "TRADE";
 
 export type RosterGroup = "MONSTER" | "EXTRA" | "SPELL" | "TRAP"; // main-deck monsters, extra deck, spells, traps
 
@@ -447,15 +447,85 @@ export interface CardRef {
   passcode: number;
 }
 
+export interface TransactionRules {
+  freeAgencyPerWeek: number | null; // null = unlimited
+  tradesPerWeek: number | null; // null = unlimited
+  tradeDeadlineWeek: number | null; // last week trades can happen in; null = none
+  commissionerApproval: boolean; // accepted trades wait for a commissioner
+}
+
+export type AllowanceKind = "FREE_AGENCY" | "TRADE";
+
+// One executed transaction. added/dropped are from `player`'s side: a claim's pick-up and drop, or
+// what the trade's proposer received and gave (the counterparty got the reverse).
 export interface SeasonTransaction {
-  kind: "FREE_AGENCY";
+  kind: "FREE_AGENCY" | "TRADE";
   week: number;
   at: string;
   memberId: string;
   player: string;
+  counterpartyMemberId: string | null;
+  counterparty: string | null;
   added: CardRef[];
   dropped: CardRef[];
-  onBehalfBy: string | null; // the commissioner who made it for the player
+  allowances: { kind: AllowanceKind; quantity: number; week: number; fromMemberId: string; from: string; toMemberId: string; to: string }[];
+  onBehalfBy: string | null; // a commissioner who made it for a player, or approved the trade
+}
+
+// Trades (YGO-24): one private conversation per pair of players.
+
+export type OfferStatus = "OPEN" | "PENDING_APPROVAL" | "EXECUTED" | "WITHDRAWN" | "CANCELLED" | "REJECTED";
+
+export interface TradeAsset {
+  kind: "CARD" | AllowanceKind;
+  card: CardRef | null;
+  quantity: number;
+}
+
+export interface TradeOffer {
+  id: string;
+  fromMemberId: string;
+  from: string;
+  toMemberId: string;
+  to: string;
+  status: OfferStatus;
+  counterOf: string | null; // the offer this answers
+  at: string;
+  fromGives: TradeAsset[];
+  toGives: TradeAsset[];
+  cancelReason: string | null;
+  canAccept: boolean;
+  canDecline: boolean;
+  canWithdraw: boolean;
+  canApprove: boolean;
+}
+
+export interface TradeLimits {
+  tradesLeft: number | null; // null = unlimited
+  claimsLeft: number | null;
+}
+
+export interface TradeThread {
+  withMemberId: string;
+  with: string;
+  items: { type: "OFFER" | "MESSAGE"; at: string; offer: TradeOffer | null;
+           message: { authorMemberId: string; author: string; typedBy: string | null; body: string; at: string } | null }[];
+  mine: TradeLimits;
+  theirs: TradeLimits;
+}
+
+export interface TradesOverview {
+  open: boolean;
+  closedReason: string | null;
+  week: number;
+  budgetWeek: number;
+  rules: TransactionRules;
+  actors: { memberId: string; name: string; you: boolean }[]; // who you can trade as
+  as: string | null;
+  mine: TradeLimits | null;
+  players: { memberId: string; name: string; you: boolean }[]; // everyone else
+  threads: { withMemberId: string; with: string; live: number; awaitingYou: number; lastAt: string }[];
+  approvals: TradeOffer[]; // commissioners: accepted trades waiting for a decision
 }
 
 export interface PoolCardPage {

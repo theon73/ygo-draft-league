@@ -36,7 +36,7 @@ public class RosterService {
      * @param quantity     copies held (always 1 with exclusive ownership)
      * @param acquiredAt   when the player got it (their latest acquisition of it)
      * @param acquiredWeek the league week of that (0 = the draft, before week 1)
-     * @param source       how: DRAFT or FREE_AGENCY (trades in YGO-24)
+     * @param source       how: DRAFT, FREE_AGENCY or TRADE
      * @param draftPick    the board slot, for drafted cards
      */
     public record RosterCard(PoolCardView card, Group group, int quantity, Instant acquiredAt, int acquiredWeek, String source,
@@ -173,11 +173,14 @@ public class RosterService {
                 .query((rs, n) -> new Owner(memberId(rs.getLong(1)), rs.getString(2), rs.getInt(3), rs.getTimestamp(4).toInstant(), rs.getInt(5)))
                 .list();
 
-        // onBehalfBy: the person who clicked, when it isn't the account of the player whose action it was.
+        // onBehalfBy: the person who clicked, when it isn't the account of the player whose action it was
+        // (for a trade, of either player: the one who accepted it isn't acting for anyone).
         List<OwnershipChange> history = jdbc.sql("""
                         select e.at, e.week, e.source, fm.id, fm.display_name, tm.id, tm.display_name, e.quantity, e.draft_pick,
                                e.source = 'DRAFT' and e.made_by is null,
-                               case when e.made_by is distinct from am.user_id then u.display_name end
+                               case when e.made_by is distinct from am.user_id
+                                         and (e.source <> 'TRADE' or (e.made_by is distinct from fm.user_id and e.made_by is distinct from tm.user_id))
+                                    then u.display_name end
                         from card_ownership_event e
                         left join season_player fp on fp.id = e.from_player_id left join league_member fm on fm.id = fp.league_member_id
                         left join season_player tp on tp.id = e.to_player_id left join league_member tm on tm.id = tp.league_member_id

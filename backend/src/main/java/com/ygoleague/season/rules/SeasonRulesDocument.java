@@ -169,10 +169,19 @@ public record SeasonRulesDocument(CalendarRules calendar, FormatRules format, Co
      * Trades and free agency (YGO-23). Limits count per league week, and week 0 (between the draft
      * and week 1) shares week 1's allowance: capacity resets when each week of matches ends.
      *
-     * @param freeAgencyPerWeek free-agent claims (each a pick-up with its matching drop) a player may
-     *                          make per week; null = unlimited, 0 = none
+     * @param freeAgencyPerWeek    free-agent claims (each a pick-up with its matching drop) a player may
+     *                             make per week; null = unlimited, 0 = none
+     * @param tradesPerWeek        trades a player may make per week (each counts for both sides); null = unlimited
+     * @param tradeDeadlineWeek    the last week trades can be made in; null = no deadline
+     * @param commissionerApproval accepted trades wait for a commissioner's approval before they execute
      */
-    public record TransactionRules(Integer freeAgencyPerWeek) {
-        public static final TransactionRules EMPTY = new TransactionRules(null);
+    public record TransactionRules(Integer freeAgencyPerWeek, Integer tradesPerWeek, Integer tradeDeadlineWeek,
+                                   Boolean commissionerApproval) {
+        public static final TransactionRules EMPTY = new TransactionRules(null, null, null, false);
+
+        /** Rules saved before a field existed read it as missing (null): approval is then off. */
+        public TransactionRules {
+            commissionerApproval = Boolean.TRUE.equals(commissionerApproval);
+        }
     }
 }

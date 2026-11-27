@@ -29,9 +29,12 @@ function RulesForm({ rules, banLists, base, onSaved }: { rules: SeasonRules; ban
   const [cutoff, setCutoff] = useState(rules.format.tcgCutoff ?? "");
   const [banList, setBanList] = useState(rules.format.banList?.revisionId.toString() ?? "");
   const [faPerWeek, setFaPerWeek] = useState(rules.transactions.freeAgencyPerWeek?.toString() ?? "");
+  const [tradesPerWeek, setTradesPerWeek] = useState(rules.transactions.tradesPerWeek?.toString() ?? "");
+  const [deadline, setDeadline] = useState(rules.transactions.tradeDeadlineWeek?.toString() ?? "");
+  const [approval, setApproval] = useState(rules.transactions.commissionerApproval);
   const [fromWeek, setFromWeek] = useState(rules.minEffectiveWeek.toString());
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
-  useEffect(() => setMessage(null), [startDate, weeks, cutoff, banList, fromWeek, format, cycles, faPerWeek]);
+  useEffect(() => setMessage(null), [startDate, weeks, cutoff, banList, fromWeek, format, cycles, faPerWeek, tradesPerWeek, deadline, approval]);
 
   const save = async () => {
     try {
@@ -43,6 +46,9 @@ function RulesForm({ rules, banLists, base, onSaved }: { rules: SeasonRules; ban
         tcgCutoff: cutoff || null,
         banListRevisionId: banList ? Number(banList) : null,
         freeAgencyPerWeek: faPerWeek === "" ? null : Number(faPerWeek),
+        tradesPerWeek: tradesPerWeek === "" ? null : Number(tradesPerWeek),
+        tradeDeadlineWeek: deadline === "" ? null : Number(deadline),
+        commissionerApproval: approval,
         ...(rules.started && { effectiveFromWeek: Number(fromWeek) }),
       });
       onSaved();
@@ -162,10 +168,22 @@ function RulesForm({ rules, banLists, base, onSaved }: { rules: SeasonRules; ban
           <input type="number" min={0} max={50} value={faPerWeek} onChange={(e) => setFaPerWeek(e.target.value)} disabled={!edit}
                  placeholder="Unlimited" />
         </label>
+        <label>Trades per week
+          <input type="number" min={0} max={50} value={tradesPerWeek} onChange={(e) => setTradesPerWeek(e.target.value)} disabled={!edit}
+                 placeholder="Unlimited" />
+        </label>
+        <label>Trade deadline (last week)
+          <input type="number" min={0} max={52} value={deadline} onChange={(e) => setDeadline(e.target.value)} disabled={!edit} placeholder="None" />
+        </label>
+        <label className="check">
+          <input type="checkbox" checked={approval} onChange={(e) => setApproval(e.target.checked)} disabled={!edit} />{" "}
+          Commissioners approve accepted trades
+        </label>
       </div>
       <p className="muted">
         A claim picks up a free agent and drops a card from the roster, so rosters keep their size. Blank means unlimited, 0 turns
-        claims off. Limits reset when each week starts; the time between the draft and week 1 counts as week 1.
+        claims off. A trade counts for both players, and must be even (the same number of cards each way). Limits reset when each week
+        starts; the time between the draft and week 1 counts as week 1. This week's claims and trades can themselves be traded.
       </p>
 
       {edit && (
