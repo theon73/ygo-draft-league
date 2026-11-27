@@ -137,3 +137,4 @@ ol.queue li.taken .queue-name { text-decoration: line-through; color: #888; }
 .commish { margin: 0.5rem 0; }
 .on-clock.paused { background: #e8e4f8; }
 .timer-change { margin-top: 0.5rem; padding: 0.5rem 0.75rem; border-radius: 6px; background: #f3f1ec; }
+input.wide { width: min(36rem, 100%); }
