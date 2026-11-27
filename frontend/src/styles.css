@@ -227,14 +227,14 @@ button.pick-row.on { background: #ece8fb; border-color: #b9b0e6; }
 .this-week h5 { margin: 0 0 0.5rem; font-size: 1rem; }
 .this-week h5 .muted { font-weight: normal; font-size: 0.85rem; }
 ul.matchups { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr)); gap: 0.4rem; }
-ul.matchups li { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0.25rem 0.5rem; padding: 0.45rem 0.6rem; background: #fbfaf7;
+ul.matchups > li { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0.25rem 0.5rem; padding: 0.45rem 0.6rem; background: #fbfaf7;
   border: 1px solid #e4e2dc; border-radius: 6px; }
-ul.matchups li.mine { background: #f3f1fb; border-color: #b9b0e6; }
+ul.matchups > li.mine { background: #f3f1fb; border-color: #b9b0e6; }
 ul.matchups .vs { color: #888; font-size: 0.8rem; text-transform: uppercase; }
 ul.matchups .bye { font-size: 0.85rem; }
 ul.matchups .team { font-size: 0.8rem; }
 ul.matchups.compact { grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); }
-ul.matchups.compact li { padding: 0.3rem 0.5rem; font-size: 0.9rem; background: #fff; }
+ul.matchups.compact > li { padding: 0.3rem 0.5rem; font-size: 0.9rem; background: #fff; }
 .matchup-player .badge { margin-left: 0.25rem; }
 h5.schedule-all { margin: 0; font-size: 1rem; }
 ol.schedule-weeks { list-style: none; padding: 0; margin: 0.5rem 0 0; }
@@ -244,3 +244,39 @@ ol.schedule-weeks > li.past { opacity: 0.65; }
 .week-head { display: flex; gap: 0.75rem; align-items: baseline; flex-wrap: wrap; margin-bottom: 0.35rem; }
 .week-head .muted { font-size: 0.85rem; }
 @media (max-width: 480px) { ul.matchups, ul.matchups.compact { grid-template-columns: 1fr; } }
+/* Results (YGO-26). */
+ul.matchups > li { flex-direction: column; align-items: stretch; }
+ul.matchups > li.selected { outline: 2px solid #b9b0e6; }
+.matchup-line { display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap; }
+.matchup-line .score { font-variant-numeric: tabular-nums; color: #555; min-width: 2.5rem; text-align: center; }
+.matchup-line .score.final { color: #1d1b16; font-weight: 700; }
+.matchup-status { display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.3rem; font-size: 0.8rem; }
+.matchup-status .badge { margin-left: 0; white-space: normal; }
+.matchup-actions { display: flex; gap: 0.3rem; margin-left: auto; }
+.matchup-actions button { font-size: 0.8rem; padding: 0.1rem 0.5rem; }
+.result-form { margin-top: 0.5rem; }
+.result-form p { margin: 0.35rem 0; }
+.score-entry { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin: 0.4rem 0; }
+.forfeit-choice { display: flex; gap: 0.75rem; flex-wrap: wrap; margin: 0.4rem 0; }
+.game-rows { display: flex; flex-direction: column; gap: 0.3rem; margin: 0.5rem 0; }
+.game-rows-head { font-size: 0.8rem; }
+.game-row { display: grid; grid-template-columns: 4.5rem minmax(0, 1.4fr) minmax(0, 1fr); gap: 0.4rem; align-items: center; }
+.game-row input { min-width: 0; width: 100%; box-sizing: border-box; }
+.game-label { font-size: 0.8rem; color: #555; white-space: nowrap; }
+details.game-links { margin-top: 0.3rem; font-size: 0.8rem; }
+details.game-links summary { cursor: pointer; color: #3b4fb8; width: fit-content; }
+details.game-links ul { list-style: none; padding: 0; margin: 0.25rem 0 0; }
+details.game-links li { display: flex; gap: 0.5rem; align-items: baseline; padding: 0.1rem 0; flex-wrap: wrap; }
+.replay-link { white-space: nowrap; }
+a.replay-link { text-decoration: none; font-weight: 600; }
+.game-note { color: #444; }
+@media (max-width: 480px) { .game-row { grid-template-columns: 1fr 1fr; } .game-row .game-label { grid-column: 1 / -1; } }
+.table-scroll { overflow-x: auto; }
+table.standings { width: auto; min-width: min(100%, 28rem); }
+table.standings td, table.standings th { text-align: center; padding: 0.35rem 0.6rem; white-space: nowrap; }
+table.standings td:nth-child(2), table.standings th:nth-child(2) { text-align: left; }
+table.standings tr.mine { background: #f3f1fb; }
+ol.tiebreakers { margin: 0.25rem 0 0.75rem; padding-left: 1.5rem; }
+ol.tiebreakers li { padding: 0.15rem 0; }
+.tiebreaker-moves { margin-left: 0.6rem; display: inline-flex; gap: 0.25rem; }
+.tiebreaker-moves button { padding: 0 0.4rem; }

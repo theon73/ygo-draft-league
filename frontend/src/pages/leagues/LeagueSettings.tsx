@@ -134,6 +134,7 @@ function MyDiscordPings({ leagueId }: { leagueId: string }) {
 const EVENTS: { value: NotificationEvent; label: string; hint: string }[] = [
   { value: "DRAFT_PICKS", label: "Draft news", hint: "start and finish, every pick (auto-picks, skips, make-ups), undos, pauses, timer changes" },
   { value: "DRAFT_ON_THE_CLOCK", label: "On the clock", hint: "who's up next, with a countdown Discord shows in everyone's own time zone" },
+  { value: "RESULTS", label: "Results", hint: "final match results (confirmed, auto-confirmed or entered by a commissioner) and disputes" },
   { value: "TRANSACTIONS", label: "Transactions", hint: "free-agent claims (and what was dropped) and completed trades; offers stay private" },
 ];
 

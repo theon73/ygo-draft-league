@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { apiPut, type BanListOption, type SeasonRules } from "../../api/client";
+import { apiPut, type BanListOption, type SeasonRules, type Tiebreaker } from "../../api/client";
 import { useApi } from "../../hooks/useApi";
 import { useLeague } from "./LeagueLayout";
 import { useSeason } from "./SeasonLayout";
 
 const dayLabel = (d: string) => d.charAt(0) + d.slice(1).toLowerCase();
+const TIEBREAKERS: Record<Tiebreaker, string> = { GAME_DIFF: "Game difference", GAMES_WON: "Games won", HEAD_TO_HEAD: "Head-to-head" };
 
 export default function SeasonRulesPage() {
   const { league } = useLeague();
@@ -33,9 +34,11 @@ function RulesForm({ rules, banLists, base, onSaved }: { rules: SeasonRules; ban
   const [tradesPerWeek, setTradesPerWeek] = useState(rules.transactions.tradesPerWeek?.toString() ?? "");
   const [deadline, setDeadline] = useState(rules.transactions.tradeDeadlineWeek?.toString() ?? "");
   const [approval, setApproval] = useState(rules.transactions.commissionerApproval);
+  const [confirmHours, setConfirmHours] = useState(rules.results.autoConfirmHours?.toString() ?? "");
+  const [tiebreakers, setTiebreakers] = useState<Tiebreaker[]>(rules.results.tiebreakers);
   const [fromWeek, setFromWeek] = useState(rules.minEffectiveWeek.toString());
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
-  useEffect(() => setMessage(null), [startDate, weeks, cutoff, banList, fromWeek, format, cycles, bestOf, faPerWeek, tradesPerWeek, deadline, approval]);
+  useEffect(() => setMessage(null), [startDate, weeks, cutoff, banList, fromWeek, format, cycles, bestOf, faPerWeek, tradesPerWeek, deadline, approval, confirmHours, tiebreakers]);
 
   const save = async () => {
     try {
@@ -51,6 +54,8 @@ function RulesForm({ rules, banLists, base, onSaved }: { rules: SeasonRules; ban
         tradesPerWeek: tradesPerWeek === "" ? null : Number(tradesPerWeek),
         tradeDeadlineWeek: deadline === "" ? null : Number(deadline),
         commissionerApproval: approval,
+        autoConfirmHours: confirmHours === "" ? null : Number(confirmHours),
+        tiebreakers,
         ...(rules.started && { effectiveFromWeek: Number(fromWeek) }),
       });
       onSaved();
@@ -194,6 +199,31 @@ function RulesForm({ rules, banLists, base, onSaved }: { rules: SeasonRules; ban
         claims off. A trade counts for both players, and must be even (the same number of cards each way). Limits reset when each week
         starts; the time between the draft and week 1 counts as week 1. This week's claims and trades can themselves be traded.
       </p>
+
+      <h4>Results and standings</h4>
+      <div className="form-grid">
+        <label>Unanswered reports confirm after (hours)
+          <input type="number" min={1} max={336} value={confirmHours} onChange={(e) => setConfirmHours(e.target.value)} disabled={!edit}
+                 placeholder={`${rules.results.confirmHours} (default)`} />
+        </label>
+      </div>
+      <p className="muted">Either player reports a match and the other confirms it; a report nobody answers becomes final after this delay.</p>
+      <p>Standings rank by wins, then:</p>
+      <ol className="tiebreakers">
+        {tiebreakers.map((t, i) => (
+          <li key={t}>
+            {TIEBREAKERS[t]}
+            {edit && (
+              <span className="tiebreaker-moves">
+                <button type="button" aria-label={`Move ${TIEBREAKERS[t]} up`} disabled={i === 0}
+                        onClick={() => setTiebreakers((x) => { const y = [...x]; [y[i - 1], y[i]] = [y[i], y[i - 1]]; return y; })}>↑</button>
+                <button type="button" aria-label={`Move ${TIEBREAKERS[t]} down`} disabled={i === tiebreakers.length - 1}
+                        onClick={() => setTiebreakers((x) => { const y = [...x]; [y[i], y[i + 1]] = [y[i + 1], y[i]]; return y; })}>↓</button>
+              </span>
+            )}
+          </li>
+        ))}
+      </ol>
 
       {edit && (
         <p>

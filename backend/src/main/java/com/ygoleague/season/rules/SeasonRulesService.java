@@ -63,7 +63,8 @@ public class SeasonRulesService {
     public record RulesUpdate(LocalDate startDate, Integer regularWeeks, LocalDate tcgCutoff, Long banListRevisionId,
                               CompetitionFormat competitionFormat, Integer roundRobinCycles, Integer matchBestOf, Integer effectiveFromWeek,
                               Integer freeAgencyPerWeek, Integer tradesPerWeek, Integer tradeDeadlineWeek,
-                              Boolean commissionerApproval) {}
+                              Boolean commissionerApproval, Integer autoConfirmHours,
+                              List<com.ygoleague.competition.Standings.Tiebreaker> tiebreakers) {}
 
     public static final int MAX_PER_WEEK = 50;
 
@@ -75,7 +76,7 @@ public class SeasonRulesService {
      */
     public record RulesView(Integer version, int effectiveFromWeek, boolean canManage, boolean started,
                             CalendarView calendar, FormatView format, CompetitionView competition,
-                            SeasonRulesDocument.TransactionRules transactions, List<WeekView> weeks,
+                            SeasonRulesDocument.TransactionRules transactions, ResultsView results, List<WeekView> weeks,
                             Integer currentWeek, int minEffectiveWeek, List<VersionView> history) {}
 
     /**
@@ -103,6 +104,9 @@ public class SeasonRulesService {
                                 int latestRevision, long latestRevisionId) {}
 
     public record WeekView(int number, OffsetDateTime start, OffsetDateTime end) {}
+
+    /** @param autoConfirmHours as set (null = the default); confirmHours and tiebreakers: what applies */
+    public record ResultsView(Integer autoConfirmHours, int confirmHours, List<com.ygoleague.competition.Standings.Tiebreaker> tiebreakers) {}
 
     public record VersionView(int version, int effectiveFromWeek, String by, Instant at) {}
 
@@ -146,7 +150,8 @@ public class SeasonRulesService {
                 competition, current.draft(),   // the draft section is edited on the Draft tab
                 new SeasonRulesDocument.TransactionRules(perWeek(update.freeAgencyPerWeek(), "Free-agent claims"),
                         perWeek(update.tradesPerWeek(), "Trades"), deadline(update.tradeDeadlineWeek()),
-                        Boolean.TRUE.equals(update.commissionerApproval())));
+                        Boolean.TRUE.equals(update.commissionerApproval())),
+                results(update));
 
         int effectiveFrom = 0;
         if (season.getStatus() != SeasonStatus.SETUP) {
@@ -309,7 +314,8 @@ public class SeasonRulesService {
         return new RulesView(latest == null ? null : latest.getVersion(), latest == null ? 0 : latest.getEffectiveFromWeek(),
                 canManage, season.getStatus() != SeasonStatus.SETUP, calendar,
                 new FormatView(doc.format().tcgCutoff(), banListChoice(doc.format().banListRevisionId())),
-                competition, doc.transactions(), weeks, currentWeek, minEffectiveWeek(season, latest, doc), history);
+                competition, doc.transactions(), new ResultsView(doc.results().autoConfirmHours(), doc.results().confirmHours(),
+                        doc.results().order()), weeks, currentWeek, minEffectiveWeek(season, latest, doc), history);
     }
 
     /**
@@ -398,6 +404,16 @@ public class SeasonRulesService {
     private static Integer perWeek(Integer value, String what) {
         if (value != null && (value < 0 || value > MAX_PER_WEEK)) throw bad(what + " per week: 0 to " + MAX_PER_WEEK + ", or blank for unlimited");
         return value;
+    }
+
+    private static SeasonRulesDocument.ResultRules results(RulesUpdate update) {
+        Integer hours = update.autoConfirmHours();
+        if (hours != null && (hours < 1 || hours > 14 * 24)) throw bad("Results auto-confirm after 1 hour to 14 days");
+        var order = update.tiebreakers();
+        if (order != null && (order.contains(null) || new java.util.HashSet<>(order).size() != order.size())) {
+            throw bad("List each tiebreaker at most once");
+        }
+        return new SeasonRulesDocument.ResultRules(hours, order);
     }
 
     private static Integer deadline(Integer week) {

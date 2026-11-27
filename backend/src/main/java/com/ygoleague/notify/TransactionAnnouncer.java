@@ -14,8 +14,9 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
- * Posts executed transactions (free-agent claims now, trades in YGO-24) to the league's Discord,
- * if it chose the {@link NotificationEvent#TRANSACTIONS} event. Like the draft's news: one message
+ * Posts season news to the league's Discord: executed transactions (free-agent claims and trades)
+ * under the {@link NotificationEvent#TRANSACTIONS} event, and match results under
+ * {@link NotificationEvent#RESULTS}. Like the draft's news: one message
  * per transaction, sent after the change commits from a background thread, so a broken webhook
  * never fails or delays a claim, and a refused claim posts nothing. Names are escaped and mentions
  * are off (pings for trade offers come with trades).
@@ -44,9 +45,17 @@ public class TransactionAnnouncer {
 
     /** One line of news (already formatted with {@link DiscordText#escape}), posted once the current transaction commits. */
     public void announce(Season season, String line) {
-        Optional<LeagueNotifications.Target> target = settings.target(season.getLeague().getId(), NotificationEvent.TRANSACTIONS);
+        announce(season, NotificationEvent.TRANSACTIONS, "transactions", line);
+    }
+
+    /**
+     * The same for another kind of season news (results, YGO-26), under "**Season heading**", if the
+     * league posts that event.
+     */
+    public void announce(Season season, NotificationEvent event, String heading, String line) {
+        Optional<LeagueNotifications.Target> target = settings.target(season.getLeague().getId(), event);
         if (target.isEmpty()) return;
-        String content = "**" + DiscordText.escape(season.getName()) + " transactions**\n" + line;
+        String content = "**" + DiscordText.escape(season.getName()) + " " + heading + "**\n" + line;
         Runnable post = () -> {
             try {
                 DiscordWebhook.Delivery d = discord.post(target.get().webhookUrl(), target.get().leagueName(), content, List.of());
