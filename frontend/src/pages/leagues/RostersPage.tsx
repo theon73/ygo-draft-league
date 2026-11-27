@@ -1,3 +1,4 @@
+import PlayerAvatar from "../../components/PlayerAvatar";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import type { PoolCard, Roster, RosterCard, RosterGroup, Rosters } from "../../api/client";
 import CardPreview from "../../components/CardPreview";
@@ -92,7 +93,8 @@ export default function RostersPage() {
 function RosterColumn({ roster }: { roster: Roster }) {
   return (
     <section className={`roster-column${roster.you ? " mine" : ""}`}>
-      <h5>
+      <h5 className="roster-head">
+        <PlayerAvatar name={roster.displayName} passcode={roster.avatar} size="md" />
         <Link to={roster.memberId}>{roster.displayName}</Link>
         {roster.you && <span className="badge">you</span>}
       </h5>

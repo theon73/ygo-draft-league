@@ -55,7 +55,9 @@ public class SeasonService {
      * @param memberId the league member's public id
      * @param you      this participant is the caller
      */
-    public record Participant(String memberId, String displayName, int seat, String teamName, boolean placeholder, boolean you) {}
+    /** @param avatar the avatar shown this season; {@code ownAvatar}: it's this season's override, not the member's default */
+    public record Participant(String memberId, String displayName, int seat, String teamName, boolean placeholder, boolean you,
+                              Long avatar, boolean ownAvatar) {}
 
     /** A league member who could be given a role in the season (shown to commissioners only). */
     public record Candidate(String memberId, String displayName, boolean placeholder) {}
@@ -274,7 +276,8 @@ public class SeasonService {
         List<SeasonPlayer> seated = players.findBySeasonIdOrderBySeat(season.getId());
         List<Participant> participants = seated.stream()
                 .map(p -> new Participant(memberId(p.getMember()), p.getMember().getDisplayName(), p.getSeat(),
-                        p.getTeamName(), p.getMember().isPlaceholder(), p.getMember().getId().equals(me.getId())))
+                        p.getTeamName(), p.getMember().isPlaceholder(), p.getMember().getId().equals(me.getId()),
+                        p.avatar(), p.getAvatarPasscode() != null))
                 .toList();
         boolean youPlay = participants.stream().anyMatch(Participant::you);
 

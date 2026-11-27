@@ -133,11 +133,18 @@ class PlayoffApiTest {
         mvc.perform(get(s("/playoffs")).with(as(kaiba)))   // a preview of the seeds from the standings
                 .andExpect(listAt("$.seeds[*].player.name", STRENGTH))
                 .andExpect(listAt("$.seeds[*].playIn", List.of(false, false, true, true, true, true)))
-                .andExpect(jsonPath("$.canStart").value(false));   // commissioners start it
+                .andExpect(jsonPath("$.canStart").value(false))   // commissioners start it
+                // ...and the bracket they'd make, to draw before the start (YGO-30).
+                .andExpect(listAt("$.preview[*].label", List.of("Play-in: 3 v 4", "Play-in: 5 v 6", "Play-in: for the 4th seed", "Semifinal", "Semifinal", "Final")))
+                .andExpect(listAt("$.preview[0:2].a.name", List.of("Kaiba", "P5")))
+                .andExpect(jsonPath("$.preview[3].aSource.kind").value("SEED"))
+                .andExpect(jsonPath("$.preview[3].bSource.matchId").value("preview-2"))
+                .andExpect(jsonPath("$.preview[0].canReport").value(false));
         send(post(s("/playoffs/start")), kaiba, null).andExpect(status().isForbidden());
         String body = mvc.perform(post(s("/playoffs/start")).with(csrf()).with(as(yugi))).andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
         Assertions.assertTrue(posts().getLast().contains("The playoffs have started"), posts().getLast());
+        Assertions.assertEquals(List.of(), JsonPath.read(body, "$.preview"));   // the real bracket replaces it
 
         // The bracket: play-in 3 v 4 and 5 v 6 are ready (with a week each); the rest wait for results.
         Assertions.assertEquals(List.of("Play-in: 3 v 4", "Play-in: 5 v 6", "Play-in: for the 4th seed", "Semifinal", "Semifinal", "Final"),
@@ -147,6 +154,13 @@ class PlayoffApiTest {
         Assertions.assertEquals("Loser of Play-in: 3 v 4", JsonPath.read(body, "$.matches[2].aFrom"));
         Assertions.assertEquals("P1", JsonPath.read(body, "$.matches[3].a.name"));
         Assertions.assertEquals("Winner of Play-in: for the 4th seed", JsonPath.read(body, "$.matches[3].bFrom"));
+        // The same sources as data, for drawing the bracket (YGO-30).
+        Assertions.assertEquals("LOSER", JsonPath.read(body, "$.matches[2].aSource.kind"));
+        Assertions.assertEquals(JsonPath.<String>read(body, "$.matches[0].id"), JsonPath.read(body, "$.matches[2].aSource.matchId"));
+        Assertions.assertEquals("SEED", JsonPath.read(body, "$.matches[3].aSource.kind"));
+        Assertions.assertEquals(1, (int) JsonPath.read(body, "$.matches[3].aSource.seed"));
+        Assertions.assertEquals("WINNER", JsonPath.read(body, "$.matches[3].bSource.kind"));
+        Assertions.assertEquals(JsonPath.<String>read(body, "$.matches[2].id"), JsonPath.read(body, "$.matches[3].bSource.matchId"));
         Assertions.assertNotNull(JsonPath.read(body, "$.matches[0].deadline"));
 
         // Trades and free agency close; regular-season results are frozen.

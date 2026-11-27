@@ -69,6 +69,7 @@ export interface SessionUser {
   avatarUrl: string | null;
   admin: boolean;
   identity: string; // provider:subject, what goes in APP_ADMINS
+  avatar?: number | null; // profile avatar (a card art passcode, YGO-30)
 }
 
 export interface Session {
@@ -131,7 +132,7 @@ export interface CardPage {
   total: number;
   page: number;
   pageSize: number;
-  items: { id: number; name: string; cardType: string; tcgDate: string }[];
+  items: { id: number; name: string; cardType: string; tcgDate: string; passcodes?: number[] }[];
 }
 
 export type BanStatus = "FORBIDDEN" | "LIMITED" | "SEMI_LIMITED";
@@ -181,6 +182,8 @@ export interface LeagueMember {
   role: LeagueRole;
   placeholder: boolean; // a seat for someone without an account yet
   you: boolean;
+  avatar?: number | null; // shown in this league: the league's own for them, else their profile's (YGO-30)
+  ownAvatar?: boolean; // it's this league's own, not the profile's
 }
 
 export interface LeagueDetail {
@@ -221,6 +224,8 @@ export interface Participant {
   teamName: string | null;
   placeholder: boolean;
   you: boolean;
+  avatar?: number | null; // shown this season (their own for it, else their default) (YGO-30)
+  ownAvatar?: boolean; // this season has its own avatar, not the default
 }
 
 export interface Candidate {
@@ -399,6 +404,7 @@ export interface Roster {
   you: boolean;
   counts: { total: number; monsters: number; extra: number; spells: number; traps: number };
   cards: RosterCard[]; // by group, then name
+  avatar?: number | null; // the avatar art's passcode (YGO-30); null/missing: initials
 }
 
 export interface Rosters {
@@ -484,6 +490,7 @@ export interface SchedulePlayer {
   name: string;
   teamName: string | null;
   you: boolean;
+  avatar?: number | null; // the avatar art's passcode (YGO-30); null/missing: initials
 }
 
 export interface ScheduleWeek {
@@ -529,6 +536,7 @@ export interface StandingsRow {
   name: string;
   teamName: string | null;
   you: boolean;
+  avatar?: number | null; // the avatar art's passcode (YGO-30); null/missing: initials
   played: number;
   wins: number;
   losses: number;
@@ -590,6 +598,15 @@ export interface BracketMatch {
   canReport: boolean;
   canConfirm: boolean;
   canEnter: boolean;
+  aSource: SlotSource | null; // where a / b come from, as data (YGO-30); null only from an older server
+  bSource: SlotSource | null;
+}
+
+/** A bracket slot's origin: a seed, or the winner / loser of an earlier match. */
+export interface SlotSource {
+  kind: "SEED" | "WINNER" | "LOSER";
+  seed: number | null;
+  matchId: string | null;
 }
 
 export interface Playoffs {
@@ -606,6 +623,7 @@ export interface Playoffs {
   matches: BracketMatch[];
   champion: SchedulePlayer | null;
   complete: boolean;
+  preview?: BracketMatch[]; // before the start: the bracket the previewed seeds would make (YGO-30)
 }
 
 // Trades (YGO-24): one private conversation per pair of players.
@@ -720,7 +738,7 @@ export interface DraftState {
   totalPicks: number;
   draftableCards: number;
   availableCards: number; // draftable cards nobody has picked yet
-  seats: { seat: number; displayName: string; teamName: string | null }[];
+  seats: { seat: number; displayName: string; teamName: string | null; avatar?: number | null }[];
   board: DraftSlot[];
   picksMade: number;
   onTheClock: OnTheClock | null; // while in progress

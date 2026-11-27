@@ -1,4 +1,10 @@
+import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { apiPut, type Roster } from "../../api/client";
+import AvatarPicker, { type AvatarChoice, type AvatarScope } from "../../components/AvatarPicker";
+import PlayerAvatar from "../../components/PlayerAvatar";
+import { useLeague } from "./LeagueLayout";
+import { useSeason } from "./SeasonLayout";
 import PoolGrid from "./PoolGrid";
 import { countsLine, GROUPS, playable, RosterNav, useRosters } from "./RostersPage";
 import { Loading } from "../../components/Feedback";
@@ -15,16 +21,12 @@ export default function RosterPage() {
 
   return (
     <>
-      <h4>{roster ? `${roster.displayName}'s roster` : "Roster"}</h4>
+      {roster ? <RosterHeader roster={roster} onChanged={rosters.reload} /> : <h4>Roster</h4>}
       <RosterNav rosters={rosters.data} current={roster?.memberId} />
       {!roster ? (
         <p>That player isn't in this season. <Link to="..">All rosters</Link></p>
       ) : (
         <>
-          <p>
-            {roster.teamName && <><strong>{roster.teamName}</strong> · </>}
-            <span className="muted">{countsLine(roster)}</span>
-          </p>
           {roster.cards.length === 0 && <p className="muted">No cards yet.</p>}
           {GROUPS.map(({ group, label }) => {
             const entries = roster.cards.filter((c) => c.group === group);
@@ -55,5 +57,50 @@ export default function RosterPage() {
         </>
       )}
     </>
+  );
+}
+
+// The player's avatar, name, team and counts, with "Change avatar" for whoever may set it: the player
+// (for this season or as their default), a commissioner for a placeholder this season, or the
+// league owner for a placeholder's default (YGO-30).
+function RosterHeader({ roster, onChanged }: { roster: Roster; onChanged: () => void }) {
+  const { league, reload: reloadLeague } = useLeague();
+  const { season, reload: reloadSeason } = useSeason();
+  const [picking, setPicking] = useState(false);
+  const part = season.participants.find((p) => p.memberId === roster.memberId);
+  const scopes: { scope: AvatarScope; label: string }[] = [];
+  if (roster.you || (league.myRole === "OWNER" && roster.placeholder)) {
+    scopes.push({ scope: "default", label: `Every ${league.name} season` });
+  }
+  if (roster.you || (season.canManage && roster.placeholder)) scopes.push({ scope: "season", label: `${season.name} only` });
+
+  const save = async (choice: AvatarChoice | null, scope: AvatarScope) => {
+    const path = scope === "season"
+      ? `/leagues/${league.id}/seasons/${season.id}/participants/${roster.memberId}/avatar`
+      : `/leagues/${league.id}/members/${roster.memberId}/avatar`;
+    await apiPut(path, choice ?? { cardId: null });
+    onChanged();
+    reloadSeason();
+    reloadLeague();
+  };
+
+  return (
+    <div className="roster-header">
+      <PlayerAvatar name={roster.displayName} passcode={roster.avatar} size="lg" />
+      <div className="roster-header-text">
+        <h4>{roster.displayName}{roster.you && <span className="badge">you</span>}</h4>
+        <p className="muted">
+          {roster.teamName && <><strong className="team-name">{roster.teamName}</strong> · </>}
+          {countsLine(roster)}
+        </p>
+      </div>
+      {scopes.length > 0 && <button className="sm" onClick={() => setPicking(true)}>{roster.avatar ? "Change avatar" : "Choose an avatar"}</button>}
+      {picking && (
+        <AvatarPicker name={roster.displayName} current={roster.avatar} scopes={scopes}
+                      canRemove={!!part?.ownAvatar || !!league.members.find((m) => m.id === roster.memberId)?.ownAvatar}
+                      initialScope={part?.ownAvatar || !scopes.some((s) => s.scope === "default") ? "season" : "default"}
+                      onSave={save} onClose={() => setPicking(false)} />
+      )}
+    </div>
   );
 }

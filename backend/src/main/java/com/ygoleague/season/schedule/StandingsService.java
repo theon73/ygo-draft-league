@@ -23,7 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class StandingsService {
 
     public record Row(int rank, String memberId, String name, String teamName, boolean you, int played, int wins, int losses, int draws,
-                      int gamesWon, int gamesLost, int gameDiff) {}
+                      int gamesWon, int gamesLost, int gameDiff, Long avatar) {}
 
     /**
      * @param showDraws  any match this season was a draw (otherwise the table leaves the column out)
@@ -52,13 +52,13 @@ public class StandingsService {
 
     /** The table as it stands; {@code myMemberId} marks "you" (0 for nobody). */
     public StandingsView standings(Season season, long myMemberId) {
-        record P(long id, long memberId, String name, String team) {}
+        record P(long id, long memberId, String name, String team, Long avatar) {}
         Map<Long, P> players = new LinkedHashMap<>();
         jdbc.sql("""
-                        select sp.id, m.id, m.display_name, sp.team_name from season_player sp join league_member m on m.id = sp.league_member_id
+                        select sp.id, m.id, m.display_name, sp.team_name, coalesce(sp.avatar_passcode, m.avatar_passcode, (select u.avatar_passcode from app_user u where u.id = m.user_id)) from season_player sp join league_member m on m.id = sp.league_member_id
                         where sp.season_id = :s order by sp.seat nulls last, lower(m.display_name)""")
                 .param("s", season.getId())
-                .query(rs -> { players.put(rs.getLong(1), new P(rs.getLong(1), rs.getLong(2), rs.getString(3), rs.getString(4))); });
+                .query(rs -> { players.put(rs.getLong(1), new P(rs.getLong(1), rs.getLong(2), rs.getString(3), rs.getString(4), (Long) rs.getObject(5))); });
 
         List<Standings.Result<Long>> finals = finalResults(season);
         List<Standings.Tiebreaker> order = rules.latest(season).results().order();
@@ -67,7 +67,7 @@ public class StandingsService {
         List<Row> rows = table.stream().map(r -> {
             P p = players.get(r.player());
             return new Row(r.rank(), publicIds.encode(PublicIdType.LEAGUE_MEMBER, p.memberId()), p.name(), p.team(),
-                    p.memberId() == myMemberId, r.played(), r.wins(), r.losses(), r.draws(), r.gamesWon(), r.gamesLost(), r.gameDiff());
+                    p.memberId() == myMemberId, r.played(), r.wins(), r.losses(), r.draws(), r.gamesWon(), r.gamesLost(), r.gameDiff(), p.avatar());
         }).toList();
 
         int remaining = jdbc.sql("""

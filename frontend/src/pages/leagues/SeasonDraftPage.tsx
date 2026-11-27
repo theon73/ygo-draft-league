@@ -1,3 +1,4 @@
+import PlayerAvatar from "../../components/PlayerAvatar";
 import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import {
@@ -808,7 +809,10 @@ function Board({ draft: d }: { draft: DraftState }) {
             <th>Rd</th>
             {d.seats.map((s) => (
               <th key={s.seat} className={s.seat === d.mySeat ? "mine" : undefined}>
-                <span className="seat-no">{s.seat}</span> {s.displayName}
+                <span className="seat-head">
+                  <PlayerAvatar name={s.displayName} passcode={s.avatar} size="sm" />
+                  <span className="seat-no">{s.seat}</span> {s.displayName}
+                </span>
                 {s.teamName && <span className="seat-team">{s.teamName}</span>}
               </th>
             ))}

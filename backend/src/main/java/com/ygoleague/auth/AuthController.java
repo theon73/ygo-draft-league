@@ -1,5 +1,6 @@
 package com.ygoleague.auth;
 
+import com.ygoleague.league.AvatarService;
 import java.util.List;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.core.env.Environment;
@@ -17,8 +18,9 @@ public class AuthController {
     /**
      * @param identity the login identity in {@code provider:subject} form, i.e. what to put in
      *                 {@code APP_ADMINS} to make this user a site admin
+     * @param avatar   their profile avatar's artwork (a passcode, YGO-30), or null
      */
-    public record SessionUser(String displayName, String avatarUrl, boolean admin, String identity) {}
+    public record SessionUser(String displayName, String avatarUrl, boolean admin, String identity, Long avatar) {}
 
     /**
      * @param providers sign-in providers that are configured, e.g. {@code ["google"]}
@@ -28,8 +30,10 @@ public class AuthController {
 
     private final boolean googleEnabled;
     private final boolean devLogin;
+    private final AvatarService avatars;
 
-    public AuthController(ObjectProvider<ClientRegistrationRepository> clientRegistrations, Environment env) {
+    public AuthController(ObjectProvider<ClientRegistrationRepository> clientRegistrations, Environment env, AvatarService avatars) {
+        this.avatars = avatars;
         this.googleEnabled = clientRegistrations.getIfAvailable() != null;
         this.devLogin = env.matchesProfiles(DevLoginController.PROFILE);
     }
@@ -37,7 +41,7 @@ public class AuthController {
     @GetMapping("/session")
     public Session session(@AuthenticationPrincipal CurrentUser user) {
         SessionUser u = user == null ? null : new SessionUser(user.displayName(), user.avatarUrl(), user.admin(),
-                user.provider() + ":" + user.subject());
+                user.provider() + ":" + user.subject(), avatars.profileAvatar(user.userId()));
         return new Session(u, googleEnabled ? List.of(GoogleLogin.REGISTRATION_ID) : List.of(), devLogin);
     }
 }

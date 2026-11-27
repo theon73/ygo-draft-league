@@ -131,7 +131,8 @@ public class CardImageService {
         Optional<byte[]> cached = store.get(key);   // another fetch may have just finished
         if (cached.isPresent()) return cached;
         throttle.acquire();
-        Optional<byte[]> fetched = source.fetch(key);
+        Integer max = key.variant().maxDimension();
+        Optional<byte[]> fetched = source.fetch(key).map(bytes -> max == null ? bytes : ImageResizer.fitWithin(bytes, max));
         fetched.ifPresent(bytes -> store.put(key, bytes));
         return fetched;
     }

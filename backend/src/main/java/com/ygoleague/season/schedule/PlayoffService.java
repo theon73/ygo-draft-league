@@ -62,7 +62,14 @@ public class PlayoffService {
      */
     public record BracketMatch(String id, String stage, int round, String label, Integer seedA, Integer seedB, PlayerRef a, PlayerRef b,
                                String aFrom, String bFrom, int bestOf, Instant readyAt, Instant deadline, boolean overdue,
-                               ResultView result, PlayerRef winner, boolean mine, boolean canReport, boolean canConfirm, boolean canEnter) {}
+                               ResultView result, PlayerRef winner, boolean mine, boolean canReport, boolean canConfirm, boolean canEnter,
+                               SlotSource aSource, SlotSource bSource) {}
+
+    /**
+     * Where a bracket slot's player comes from, as data for drawing the bracket (YGO-30): a seed
+     * ({@code kind} SEED, {@code seed}), or the WINNER / LOSER of an earlier match ({@code matchId}).
+     */
+    public record SlotSource(String kind, Integer seed, String matchId) {}
 
     /**
      * @param settings  the playoff rules (null fields = defaults)
@@ -70,10 +77,12 @@ public class PlayoffService {
      * @param started   when the playoffs started (seeding frozen), or null
      * @param canStart  the caller can start them now; {@code why}: why not, otherwise
      * @param seeds     frozen seeds once started; before that, a preview from the current standings
+     * @param preview   before the start: the bracket those seeds would make (ids "preview-N"; nothing can be
+     *                  reported on it), so the tree can be drawn early (YGO-30). Empty once started.
      */
     public record PlayoffView(boolean enabled, SeasonRulesDocument.PlayoffRules settings, String shape, int playoffBestOf, int playInBestOf,
                               Instant started, boolean canStart, boolean canComplete, String why, List<SeedView> seeds,
-                              List<BracketMatch> matches, PlayerRef champion, boolean complete) {}
+                              List<BracketMatch> matches, PlayerRef champion, boolean complete, List<BracketMatch> preview) {}
 
     private final SeasonAccess access;
     private final SeasonRulesService rules;
@@ -129,7 +138,50 @@ public class PlayoffService {
         String whyNotComplete = commissioner ? whyNotComplete(season, p) : "";
         return new PlayoffView(p.on(), p, p.on() ? shape(p) : null, p.playoffBestOf(regular), p.playInBestOf(regular), started,
                 commissioner && p.on() && why == null, commissioner && whyNotComplete == null, p.on() ? why : whyNotComplete, seeds,
-                matches(season, players, commissioner), champion == null ? null : players.get(champion), complete);
+                matches(season, players, commissioner), champion == null ? null : players.get(champion), complete,
+                started == null && p.on() && !complete ? preview(p, seeds, regular) : List.of());
+    }
+
+    /** The bracket the previewed seeds would make; the same layout as {@link #start}, with nothing stored. */
+    private static List<BracketMatch> preview(SeasonRulesDocument.PlayoffRules p, List<SeedView> seeds, int regular) {
+        List<Bracket.Match> layout;
+        try {
+            layout = Bracket.layout(p.directQualifiers(), p.playIn());
+        } catch (IllegalArgumentException e) {
+            return List.of();   // settings that can't make a bracket; the commissioner sees why elsewhere
+        }
+        List<BracketMatch> out = new ArrayList<>();
+        for (int i = 0; i < layout.size(); i++) {
+            Bracket.Match m = layout.get(i);
+            Integer seedA = m.a() instanceof Bracket.Seed sa ? sa.seed() : null;
+            Integer seedB = m.b() instanceof Bracket.Seed sb ? sb.seed() : null;
+            boolean playIn = m.kind() == Bracket.Kind.PLAY_IN;
+            out.add(new BracketMatch("preview-" + i, playIn ? "PLAY_IN" : "PLAYOFFS", m.round(), m.label(), seedA, seedB,
+                    seedPlayer(seeds, seedA), seedPlayer(seeds, seedB), previewFrom(m.a(), layout), previewFrom(m.b(), layout),
+                    playIn ? p.playInBestOf(regular) : p.playoffBestOf(regular), null, null, false, null, null, false, false, false, false,
+                    previewSource(m.a()), previewSource(m.b())));
+        }
+        return out;
+    }
+
+    private static PlayerRef seedPlayer(List<SeedView> seeds, Integer seed) {
+        return seed == null || seed > seeds.size() ? null : seeds.get(seed - 1).player();
+    }
+
+    private static String previewFrom(Bracket.Source src, List<Bracket.Match> layout) {
+        return switch (src) {
+            case Bracket.Seed s -> "Seed " + s.seed();
+            case Bracket.Winner w -> "Winner of " + layout.get(w.match()).label();
+            case Bracket.Loser l -> "Loser of " + layout.get(l.match()).label();
+        };
+    }
+
+    private static SlotSource previewSource(Bracket.Source src) {
+        return switch (src) {
+            case Bracket.Seed s -> new SlotSource("SEED", s.seed(), null);
+            case Bracket.Winner w -> new SlotSource("WINNER", null, "preview-" + w.match());
+            case Bracket.Loser l -> new SlotSource("LOSER", null, "preview-" + l.match());
+        };
     }
 
     /** "Seeds 1-4 qualify directly; 5-8 play in for 2 spots; seeds 1 and 2 have byes." */
@@ -202,9 +254,18 @@ public class PlayoffService {
                     ready && !"CONFIRMED".equals(status) && r.deadline() != null && r.deadline().isBefore(now), r.result(), winner, mine,
                     active && ready && mine && !"CONFIRMED".equals(status) && !("PENDING".equals(status) && !reportedByMe),
                     active && ready && mine && "PENDING".equals(status) && !reportedByMe,
-                    commissioner && active && ready));
+                    commissioner && active && ready,
+                    source(r.slotA()), source(r.slotB())));
         }
         return out;
+    }
+
+    private SlotSource source(String slot) {
+        if (slot == null) return null;
+        String[] p = slot.split(":");
+        return "SEED".equals(p[0])
+                ? new SlotSource("SEED", Integer.parseInt(p[1]), null)
+                : new SlotSource(p[0], null, publicIds.encode(PublicIdType.MATCH, Long.parseLong(p[1])));
     }
 
     private static String describe(String slot, Map<Long, String> labels) {
@@ -418,12 +479,12 @@ public class PlayoffService {
     private Map<Long, PlayerRef> players(Season season, long myMemberId) {
         Map<Long, PlayerRef> out = new LinkedHashMap<>();
         jdbc.sql("""
-                        select sp.id, m.id, m.display_name, sp.team_name from season_player sp join league_member m on m.id = sp.league_member_id
+                        select sp.id, m.id, m.display_name, sp.team_name, coalesce(sp.avatar_passcode, m.avatar_passcode, (select u.avatar_passcode from app_user u where u.id = m.user_id)) from season_player sp join league_member m on m.id = sp.league_member_id
                         where sp.season_id = :s""")
                 .param("s", season.getId())
                 .query(rs -> {
                     out.put(rs.getLong(1), new PlayerRef(publicIds.encode(PublicIdType.LEAGUE_MEMBER, rs.getLong(2)), rs.getString(3),
-                            rs.getString(4), rs.getLong(2) == myMemberId));
+                            rs.getString(4), rs.getLong(2) == myMemberId, (Long) rs.getObject(5)));
                 });
         return out;
     }

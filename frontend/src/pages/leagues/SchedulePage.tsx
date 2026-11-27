@@ -6,6 +6,7 @@ import { useApi } from "../../hooks/useApi";
 import { useLeague } from "./LeagueLayout";
 import { useSeason } from "./SeasonLayout";
 import { useConfirm, Loading } from "../../components/Feedback";
+import PlayerAvatar from "../../components/PlayerAvatar";
 import { hasPlayoffsSection, PlayoffsSection } from "./PlayoffsPage";
 
 // The Schedule tab (YGO-25): this week's matchups first, then every week. Drawn automatically when
@@ -367,6 +368,7 @@ function Byes({ week }: { week: ScheduleWeek }) {
 export function Player({ p }: { p: SchedulePlayer }) {
   return (
     <span className="matchup-player">
+      <PlayerAvatar name={p.name} passcode={p.avatar} size="sm" />
       <Link to={`../rosters/${p.memberId}`}>{p.name}</Link>
       {p.you && <span className="badge">you</span>}
       {p.teamName && <span className="muted team"> {p.teamName}</span>}
