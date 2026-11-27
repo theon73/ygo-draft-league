@@ -1,4 +1,5 @@
 import { useState } from "react";
+import PlayoffBracket from "./PlayoffBracket";
 import { Navigate } from "react-router-dom";
 import { apiPost, type BracketMatch, type Playoffs, type SchedulePlayer } from "../../api/client";
 import { GameLinks, Player, ResultForm, type Action } from "./SchedulePage";
@@ -6,8 +7,8 @@ import { useSeason } from "./SeasonLayout";
 import { useConfirm, type ConfirmOptions } from "../../components/Feedback";
 
 // The playoffs (YGO-27), shown as a section of the Schedule tab (YGO-28): the seeding (a preview
-// from the standings until a commissioner starts the playoffs), the bracket by round, and the
-// champion. Results are reported, confirmed and entered here like regular matches. Each match has
+// from the standings until a commissioner starts the playoffs), the bracket as a tree (YGO-30) with
+// the matches as tiles below it, by round, and the champion. Results are reported, confirmed and entered here like regular matches. Each match has
 // a week from when both its players are known. Without playoffs, it holds the champion and the
 // commissioners' "Complete the season".
 
@@ -54,6 +55,13 @@ export function PlayoffsSection({ playoffs: p, base, onChanged }: { playoffs: Pl
     col.matches.push(m);
   }
   const chosen = selected ? p.matches.find((m) => m.id === selected.id) : undefined;
+  // From the tree: scroll to the match's tile and flash it.
+  const [flash, setFlash] = useState<string | null>(null);
+  const open = (id: string) => {
+    document.getElementById(`match-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    setFlash(id);
+    window.setTimeout(() => setFlash((f) => (f === id ? null : f)), 1600);
+  };
 
   return (
     <>
@@ -81,14 +89,18 @@ export function PlayoffsSection({ playoffs: p, base, onChanged }: { playoffs: Pl
           </p>
           {!p.started && (
             <>
-              {p.canStart ? (
-                <p>
-                  <button className="primary" disabled={busy} onClick={() => void act("start", { title: "Start the playoffs?", message: "Seeding is fixed from the standings now, and trades and free agency close.", confirmLabel: "Start the playoffs" })}>
+              {/* Commissioners always see the button (p.why is only sent to them), disabled with the
+                  reason until the regular season is final, so it's clear where starting happens. */}
+              {(p.canStart || p.why) && (
+                <p className="start-playoffs">
+                  <button className="primary" disabled={busy || !p.canStart} onClick={() => void act("start", { title: "Start the playoffs?", message: "Seeding is fixed from the standings now, and trades and free agency close.", confirmLabel: "Start the playoffs" })}>
                     Start the playoffs
                   </button>{" "}
-                  <span className="muted">Seeding is fixed from the standings, and trades and free agency close.</span>
+                  {p.canStart
+                    ? <span className="muted">Seeding is fixed from the standings, and trades and free agency close.</span>
+                    : <span className="warn-text">Not yet: {p.why!.charAt(0).toLowerCase() + p.why!.slice(1)}.{p.why!.includes("final result") && " A reported result becomes final when the opponent confirms it, or on its own after the season's confirm delay."}</span>}
                 </p>
-              ) : p.why && <p className="muted">{p.why}.</p>}
+              )}
             </>
           )}
           {error && <p className="bad">{error}</p>}
@@ -106,44 +118,62 @@ export function PlayoffsSection({ playoffs: p, base, onChanged }: { playoffs: Pl
             </details>
           )}
 
-          {columns.length > 0 && (
-            <div className="bracket">
-              {columns.map((c) => (
-                <section key={c.key} className="bracket-round">
-                  <h5>{c.title}</h5>
-                  {c.matches.map((m) => (
-                    <MatchCard key={m.id} m={m} selected={selected?.id === m.id} onSelect={(action) => setSelected({ id: m.id, action })} />
-                  ))}
-                </section>
-              ))}
-            </div>
+          {p.matches.length > 0 && <PlayoffBracket matches={p.matches} onOpen={open} />}
+          {!p.started && (p.preview?.length ?? 0) > 0 && (
+            <>
+              <h5 className="preview-head">The bracket if the playoffs started now</h5>
+              <PlayoffBracket matches={p.preview!} onOpen={null} />
+            </>
           )}
-          {chosen && chosen.a && chosen.b && selected && (
-            <ResultForm key={`${chosen.id}-${selected.action}`} match={{ id: chosen.id, a: chosen.a, b: chosen.b, result: chosen.result }}
-                        bestOf={chosen.bestOf} action={selected.action} base={base} bracket onClose={() => setSelected(null)}
-                        onDone={() => { setSelected(null); onChanged(); reloadSeason(); }} />
-          )}
+          {/* The matches as regular-season tiles, by round; the result form opens under the round
+              holding the chosen match, as it does under a week. */}
+          {columns.map((c) => (
+            <section key={c.key} className="bracket-round">
+              <h5>{c.title} <span className="muted">· best of {c.matches[0].bestOf}</span></h5>
+              <ul className="matchups">
+                {c.matches.map((m) => (
+                  <MatchTile key={m.id} m={m} showLabel={c.matches.length > 1} selected={selected?.id === m.id} flash={flash === m.id}
+                             onSelect={(action) => setSelected({ id: m.id, action })} />
+                ))}
+              </ul>
+              {chosen && chosen.a && chosen.b && selected && c.matches.some((m) => m.id === chosen.id) && (
+                <ResultForm key={`${chosen.id}-${selected.action}`} match={{ id: chosen.id, a: chosen.a, b: chosen.b, result: chosen.result }}
+                            bestOf={chosen.bestOf} action={selected.action} base={base} bracket onClose={() => setSelected(null)}
+                            onDone={() => { setSelected(null); onChanged(); reloadSeason(); }} />
+              )}
+            </section>
+          ))}
         </>
       )}
     </>
   );
 }
 
-function MatchCard({ m, selected, onSelect }: { m: BracketMatch; selected: boolean; onSelect: (a: Action) => void }) {
+// A play-in or playoff match as a regular-season tile (YGO-30): "Player 2 – 1 Player" with each
+// player's seed beside them, the result's status and the viewer's actions. Before its players are
+// known, each side says where they come from ("Winner of Semifinal").
+function MatchTile({ m, showLabel, selected, flash, onSelect }: {
+  m: BracketMatch; showLabel: boolean; selected: boolean; flash: boolean; onSelect: (a: Action) => void;
+}) {
   const r = m.result;
   const final = r?.status === "CONFIRMED";
-  const side = (p: SchedulePlayer | null, seed: number | null, from: string | null, games: number | undefined, forfeited: boolean) => (
-    <div className={`bracket-side${final && m.winner && p && m.winner.memberId === p.memberId ? " won" : ""}`}>
-      <span className="bracket-seed">{seed ?? ""}</span>
-      {p ? <Player p={p} /> : <span className="muted">{from}</span>}
-      <span className="bracket-games">{forfeited ? "FF" : r && !r.forfeit ? games : ""}</span>
-    </div>
+  const counts = r && !r.forfeit;
+  const side = (p: SchedulePlayer | null, seed: number | null, from: string | null) => (
+    <span className={`bracket-player${final && m.winner && p && m.winner.memberId === p.memberId ? " won" : ""}`}>
+      {seed != null && <span className="seed-tag" title={`Seed ${seed}`}>{seed}</span>}
+      {p ? <Player p={p} /> : <span className="muted" title={from ?? undefined}>{shortFrom(from)}</span>}
+    </span>
   );
   return (
-    <div className={`bracket-match${m.mine ? " mine" : ""}${selected ? " selected" : ""}`}>
-      <div className="bracket-label">{m.label} · Bo{m.bestOf}</div>
-      {side(m.a, m.seedA, m.aFrom, r?.gamesA, r?.forfeit === "A")}
-      {side(m.b, m.seedB, m.bFrom, r?.gamesB, r?.forfeit === "B")}
+    <li id={`match-${m.id}`} className={`${m.mine ? "mine" : ""}${selected ? " selected" : ""}${flash ? " flash" : ""}`}>
+      {showLabel && <span className="matchup-label">{m.label}</span>}
+      <div className="matchup-line">
+        {side(m.a, m.seedA, m.aFrom)}
+        <span className={`score${final ? " final" : ""}`}>
+          {counts ? `${r.gamesA} – ${r.gamesB}` : <span className="vs">vs</span>}
+        </span>
+        {side(m.b, m.seedB, m.bFrom)}
+      </div>
       {r && r.games.length > 0 && <GameLinks games={r.games} />}
       <div className="matchup-status">
         <BracketStatus m={m} />
@@ -153,16 +183,29 @@ function MatchCard({ m, selected, onSelect }: { m: BracketMatch; selected: boole
           {m.canEnter && (!m.mine || final || r?.status === "DISPUTED") && <button onClick={() => onSelect("enter")}>{r ? "Correct" : "Enter result"}</button>}
         </span>
       </div>
-    </div>
+    </li>
   );
+}
+
+/** "Winner of Play-in: 2 v 3" → "Play-in winner", "Loser of Semifinal" → "Semifinal loser"; seeds as they are. */
+function shortFrom(from: string | null): string {
+  const m = from?.match(/^(Winner|Loser) of (.+)$/);
+  if (!m) return from ?? "TBD";
+  return `${m[2].replace(/:.*$/, "")} ${m[1].toLowerCase()}`;
 }
 
 function BracketStatus({ m }: { m: BracketMatch }) {
   const r = m.result;
   if (!m.a || !m.b) return <span className="muted">Waiting for earlier results</span>;
-  if (r?.status === "CONFIRMED") return <span className="badge status-executed">{m.winner?.name} advances{r.autoConfirmed ? " · auto-confirmed" : ""}</span>;
-  if (r?.status === "PENDING") return <span className="badge status-open">Reported by {r.reportedBy}, waiting for confirmation</span>;
-  if (r?.status === "DISPUTED") return <span className="badge ban-forbidden" title={r.disputeNote ?? undefined}>Disputed</span>;
+  if (r?.status === "CONFIRMED") {
+    const how = r.forfeit ? " · by forfeit" : r.autoConfirmed ? " · auto-confirmed" : r.byCommissioner ? " · by a commissioner" : "";
+    return <span className="badge status-executed">{m.winner?.name} advances{how}</span>;
+  }
+  if (r?.status === "PENDING") {
+    const other = r.reportedBy === m.a.name ? m.b.name : m.a.name;
+    return <span className="badge status-open">Reported by {r.reportedBy}, waiting for {other}</span>;
+  }
+  if (r?.status === "DISPUTED") return <span className="badge ban-forbidden" title={r.disputeNote ?? undefined}>Disputed{r.disputeNote ? `: ${r.disputeNote}` : ""}</span>;
   const due = m.deadline ? new Date(m.deadline).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }) : "";
   return m.overdue ? <span className="badge status-open">Overdue · was due {due}</span> : <span className="muted">Play by {due}</span>;
 }

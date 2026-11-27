@@ -602,7 +602,7 @@ ol.schedule-weeks > li.current .week-head strong { color: var(--accent); }
 ol.schedule-weeks > li.past { opacity: 0.7; }
 .week-head { display: flex; gap: 0.75rem; align-items: baseline; flex-wrap: wrap; margin-bottom: 0.4rem; }
 .week-head .muted { font-size: 0.85rem; }
-.matchup-line { display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap; }
+.matchup-line { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
 .matchup-line .score { font-variant-numeric: tabular-nums; color: var(--text-2); min-width: 2.5rem; text-align: center; }
 .matchup-line .score.final { color: var(--text); font-weight: 700; font-size: 1.05rem; }
 .matchup-status { display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.35rem; font-size: 0.8rem; }
@@ -659,18 +659,51 @@ ol.tiebreakers li { padding: 0.2rem 0; }
 details.seeds { margin: 0.5rem 0; }
 details.seeds summary { font-weight: 600; color: var(--text); }
 details.seeds ol { margin: 0.4rem 0; padding-left: 1.6rem; columns: 2 14rem; }
-.bracket { display: flex; gap: 1rem; overflow-x: auto; padding: 0.5rem 0 0.75rem; align-items: flex-start; }
-.bracket-round { flex: 0 0 15.5rem; display: flex; flex-direction: column; gap: 0.6rem; }
-.bracket-round h5 { margin: 0; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-2); }
-.bracket-match { border: 1px solid var(--border-soft); border-radius: var(--radius-sm); background: var(--surface); padding: 0.5rem 0.65rem; font-size: 0.9rem; }
-.bracket-match.mine { border-color: var(--accent-line); box-shadow: inset 3px 0 0 var(--accent); }
-.bracket-match.selected { outline: 2px solid var(--accent); outline-offset: 1px; }
-.bracket-label { font-size: 0.72rem; color: var(--text-2); margin-bottom: 0.25rem; }
-.bracket-side { display: grid; grid-template-columns: 1.4rem minmax(0, 1fr) auto; gap: 0.35rem; align-items: baseline; padding: 0.15rem 0; }
-.bracket-side.won { font-weight: 700; }
-.bracket-side.won .bracket-games { color: var(--accent); }
-.bracket-seed { color: var(--text-3); font-size: 0.8rem; text-align: right; }
-.bracket-games { font-variant-numeric: tabular-nums; min-width: 1.2rem; text-align: right; }
+.bracket-round { margin: 1rem 0; }
+.bracket-round h5 { margin: 0 0 0.45rem; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-2); }
+ul.matchups > li.flash { animation: tile-flash 1.6s ease-out; }
+.matchup-label { font-size: 0.72rem; color: var(--text-2); }
+.bracket-player { display: inline-flex; align-items: center; gap: 0.3rem; min-width: 0; }
+.bracket-player.won .matchup-player a { color: var(--accent-strong); }
+.seed-tag { display: inline-grid; place-items: center; min-width: 1.1rem; height: 1.1rem; padding: 0 0.2rem; border-radius: 4px;
+  background: var(--surface-3); color: var(--text-2); font-size: 0.65rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+@keyframes tile-flash { 0%, 40% { outline: 2px solid var(--accent); outline-offset: 2px; } 100% { outline: 2px solid transparent; outline-offset: 2px; } }
+
+/* The bracket tree (YGO-30). Lines: --gap is the space between columns; each cell's ::after runs
+   right to the middle of the gap and half the vertical join, ::before comes in from the left. */
+.bracket-view { margin: 0.75rem 0 0.5rem; }
+.bracket-scroll { overflow-x: auto; padding-bottom: 0.4rem; border: 1px solid var(--border-soft); border-radius: var(--radius); background: var(--surface); }
+.bracket-tree { --gap: 2rem; --line: var(--border); display: grid; column-gap: var(--gap); padding: 0.75rem 1rem 1rem; min-width: min-content; }
+.bracket-col-head { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-2); padding-bottom: 0.4rem; }
+.bracket-cell { position: relative; display: flex; align-items: center; padding: 0.3rem 0; }
+.bracket-cell.top::after, .bracket-cell.bottom::after { content: ""; position: absolute; right: calc(var(--gap) / -2); width: calc(var(--gap) / 2);
+  border-right: 1px solid var(--line); pointer-events: none; }
+.bracket-cell.top::after { top: 50%; bottom: 0; border-top: 1px solid var(--line); }
+.bracket-cell.bottom::after { top: 0; bottom: 50%; border-bottom: 1px solid var(--line); }
+.bracket-cell.fed::before { content: ""; position: absolute; left: calc(var(--gap) / -2); width: calc(var(--gap) / 2); top: 50%; border-top: 1px solid var(--line); pointer-events: none; }
+button.tree-match { display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; width: 100%; padding: 0; gap: 0; text-align: left; font-weight: 400; font-size: 0.85rem;
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; position: relative; }
+button.tree-match:hover:not(:disabled) { border-color: var(--accent-line); background: var(--surface-3); }
+button.tree-match.mine { border-color: var(--accent-line); box-shadow: inset 3px 0 0 var(--accent); }
+.tree-side { display: grid; grid-template-columns: 1.4rem minmax(0, 1fr) 1.6rem; align-items: center; gap: 0.3rem; padding: 0.3rem 0.5rem; }
+.tree-side + .tree-side { border-top: 1px solid var(--border-soft); }
+.tree-seed { color: var(--text-3); font-size: 0.72rem; text-align: right; font-variant-numeric: tabular-nums; }
+.tree-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tree-games { text-align: right; font-variant-numeric: tabular-nums; color: var(--text-2); }
+.tree-side.won { font-weight: 700; }
+.tree-side.won .tree-name, .tree-side.won .tree-games { color: var(--accent-strong); }
+.tree-side.lost .tree-name { color: var(--text-2); }
+.tree-side.you .tree-name::after { content: "(you)"; margin-left: 0.3rem; font-weight: 400; color: var(--text-2); font-size: 0.75rem; }
+.tree-status { align-self: flex-start; margin: 0 0.5rem 0.3rem 2.1rem; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.06em;
+  background: var(--surface); border: 1px solid var(--border); color: var(--text-2); border-radius: 999px; padding: 0 0.35rem; line-height: 1.4; }
+.tree-status.reported { color: var(--warn); border-color: var(--warn-line); }
+.tree-status.disputed, .tree-status.overdue { color: var(--bad); border-color: var(--bad-line); }
+.bracket-cell.final button.tree-match { border-color: var(--accent-line); }
+.play-in-block { margin-bottom: 0.75rem; }
+.play-in-matches { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+.play-in-match { display: flex; flex-direction: column; gap: 0.25rem; width: 13.5rem; }
+.play-in-label { font-size: 0.75rem; color: var(--text-2); }
+.play-in-next { font-size: 0.72rem; color: var(--text-3); }
 
 /* ==========================================================================
    Phone
@@ -703,3 +736,53 @@ h3 button.info-tip, h4 button.info-tip, h5 button.info-tip { vertical-align: 0.2
 details.how-to { margin: 0.25rem 0 0.75rem; font-size: 0.88rem; }
 details.how-to ol { margin: 0.4rem 0 0; padding-left: 1.4rem; color: var(--text-2); }
 details.how-to li { margin: 0.15rem 0; }
+
+/* Roster avatars (YGO-30): card art cropped round, or initials */
+.player-avatar { display: inline-grid; place-items: center; flex: 0 0 auto; border-radius: 50%; object-fit: cover; vertical-align: middle;
+  background: var(--surface-3); box-shadow: 0 0 0 1px var(--border); }
+.player-avatar.initials { background: var(--charcoal-blue); color: var(--text); font-weight: 700; letter-spacing: 0.02em; }
+.player-avatar.xs { width: 1.15rem; height: 1.15rem; font-size: 0.5rem; margin-right: 0.3rem; }
+.player-avatar.sm { width: 1.6rem; height: 1.6rem; font-size: 0.62rem; margin-right: 0.4rem; }
+.player-avatar.md { width: 2.1rem; height: 2.1rem; font-size: 0.75rem; margin-right: 0.45rem; }
+.player-avatar.lg { width: 4rem; height: 4rem; font-size: 1.2rem; box-shadow: 0 0 0 2px var(--accent-line); }
+.matchup-player { display: inline-flex; align-items: center; flex-wrap: wrap; }
+.tree-name { display: flex; align-items: center; }
+td.standings-player, td.player-cell { white-space: nowrap; }
+td.standings-player > *, td.player-cell > * { vertical-align: middle; }
+td.player-cell button.link { margin-left: 0.25rem; }
+.seat-head { display: inline-flex; align-items: center; gap: 0.1rem; }
+h5.roster-head { display: flex; align-items: center; gap: 0.1rem; }
+.roster-header { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; margin: 0.25rem 0 0.75rem; }
+.roster-header-text { flex: 1; min-width: 12rem; }
+.roster-header h4 { margin: 0 0 0.2rem; font-size: 1.2rem; }
+.roster-header p { margin: 0; }
+.roster-header .team-name { color: var(--accent); }
+
+dialog.avatar-picker { width: min(34rem, calc(100vw - 2 * var(--gutter))); }
+.avatar-preview { display: flex; align-items: center; gap: 1rem; margin-bottom: 0.75rem; }
+.avatar-preview p { margin: 0.2rem 0 0; }
+.avatar-arts { display: flex; gap: 0.4rem; flex-wrap: wrap; margin: 0 0 0.75rem; }
+.avatar-arts button { padding: 2px; border-radius: 50%; background: none; border: 2px solid transparent; }
+.avatar-arts button.selected { border-color: var(--accent); }
+.avatar-arts .player-avatar { margin: 0; }
+dialog.avatar-picker input[type="search"] { width: 100%; }
+.avatar-results { height: 15rem; overflow-y: auto; margin: 0.5rem 0 0.75rem; border: 1px solid var(--border-soft); border-radius: var(--radius-sm); padding: 0.5rem; }
+.avatar-results ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(5.2rem, 1fr)); gap: 0.5rem; }
+.avatar-results button { display: flex; flex-direction: column; gap: 0.25rem; width: 100%; padding: 0.25rem; background: none; border: 2px solid transparent;
+  border-radius: var(--radius-sm); font-size: 0.7rem; font-weight: 500; color: var(--text-2); text-align: center; }
+.avatar-results button:hover:not(:disabled) { background: var(--surface-2); border-color: transparent; }
+.avatar-results button.selected { border-color: var(--accent); color: var(--text); }
+.avatar-results button > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%; }
+.avatar-results .card-image { width: 100%; }
+fieldset.avatar-scope { border: none; padding: 0; margin: 0 0 0.75rem; display: flex; gap: 1rem; flex-wrap: wrap; }
+button.tree-match.preview { cursor: default; }
+button.tree-match.preview:hover:not(:disabled) { border-color: var(--border); background: var(--surface-2); }
+h5.preview-head { margin: 1rem 0 0.25rem; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-2); }
+button.avatar-button { padding: 0; border: none; background: none; border-radius: 50%; width: auto; height: auto; }
+button.avatar-button:hover:not(:disabled) { background: none; box-shadow: 0 0 0 2px var(--accent-line); }
+button.avatar-button .player-avatar { margin: 0; }
+details.seeds ol { columns: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); gap: 0.25rem 1.5rem; }
+details.seeds li { display: list-item; }
+details.seeds .matchup-player { vertical-align: middle; }
+.warn-text { color: var(--warn); font-size: 0.88rem; }
+p.start-playoffs { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }

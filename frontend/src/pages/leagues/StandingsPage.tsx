@@ -4,6 +4,7 @@ import type { SeasonStandings, Tiebreaker } from "../../api/client";
 import { useApi } from "../../hooks/useApi";
 import { useLeague } from "./LeagueLayout";
 import { useSeason } from "./SeasonLayout";
+import PlayerAvatar from "../../components/PlayerAvatar";
 import { Loading } from "../../components/Feedback";
 
 // The Standings tab (YGO-26): the regular season's table from final results. A draws column
@@ -48,7 +49,8 @@ export default function StandingsPage() {
               {s.rows.map((r) => (
                 <tr key={r.memberId} className={r.you ? "mine" : undefined}>
                   <td>{r.rank}</td>
-                  <td>
+                  <td className="standings-player">
+                    <PlayerAvatar name={r.name} passcode={r.avatar} size="sm" />
                     <Link to={`../rosters/${r.memberId}`}>{r.name}</Link>{r.you && <span className="badge">you</span>}
                     {r.teamName && <span className="muted"> {r.teamName}</span>}
                   </td>

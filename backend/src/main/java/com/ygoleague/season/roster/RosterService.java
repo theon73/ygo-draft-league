@@ -45,7 +45,7 @@ public class RosterService {
     public record Counts(int total, int monsters, int extra, int spells, int traps) {}
 
     public record Roster(String memberId, String displayName, String teamName, Integer seat, boolean placeholder, boolean you,
-                         Counts counts, List<RosterCard> cards) {}
+                         Counts counts, List<RosterCard> cards, Long avatar) {}
 
     /** @param freeAgents pool cards nobody holds that could be taken (see {@link PoolService#availableCount}) */
     public record Rosters(long freeAgents, List<Roster> players) {}
@@ -118,14 +118,14 @@ public class RosterService {
                     .add(new RosterCard(cards.get(h.cardId()), h.group(), h.quantity(), h.at(), h.week(), h.source(), h.draftPick()));
         }
 
-        record Player(long id, long memberId, String name, String team, Integer seat, boolean placeholder) {}
+        record Player(long id, long memberId, String name, String team, Integer seat, boolean placeholder, Long avatar) {}
         List<Player> players = jdbc.sql("""
-                        select sp.id, m.id, m.display_name, sp.team_name, sp.seat, m.user_id is null
+                        select sp.id, m.id, m.display_name, sp.team_name, sp.seat, m.user_id is null, coalesce(sp.avatar_passcode, m.avatar_passcode, (select u.avatar_passcode from app_user u where u.id = m.user_id))
                         from season_player sp join league_member m on m.id = sp.league_member_id
                         where sp.season_id = :s order by sp.seat nulls last, lower(m.display_name)""")
                 .param("s", s)
                 .query((rs, n) -> new Player(rs.getLong(1), rs.getLong(2), rs.getString(3), rs.getString(4), (Integer) rs.getObject(5),
-                        rs.getBoolean(6)))
+                        rs.getBoolean(6), (Long) rs.getObject(7)))
                 .list();
 
         List<Roster> rosters = players.stream().map(p -> {
@@ -134,7 +134,7 @@ public class RosterService {
                     .thenComparing(rc -> rc.card().name().toLowerCase())
                     .thenComparing(rc -> rc.card().cardId()));
             return new Roster(memberId(p.memberId()), p.name(), p.team(), p.seat(), p.placeholder(), p.memberId() == ref.me().getId(),
-                    counts(held), held);
+                    counts(held), held, p.avatar());
         }).toList();
         return new Rosters(pool.availableCount(season), rosters);
     }

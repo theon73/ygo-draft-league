@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 // (VITE_CARD_IMAGE_BASE at build time) with no other code changes. See PLANNING.md "Card images".
 const BASE = (import.meta.env.VITE_CARD_IMAGE_BASE ?? "/api/card-images").replace(/\/$/, "");
 
-export type CardImageSize = "small" | "full";
+export type CardImageSize = "small" | "full" | "art"; // art: the artwork alone, cropped (avatars)
 
 export function cardImageUrl(passcode: number, size: CardImageSize): string {
   return `${BASE}/${size}/${passcode}.jpg`;

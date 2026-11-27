@@ -46,7 +46,8 @@ public class ScheduleService {
 
     private static final SecureRandom RANDOM = new SecureRandom();
 
-    public record PlayerRef(String memberId, String name, String teamName, boolean you) {}
+    /** @param avatar the player's avatar this season (a passcode), or null (YGO-30) */
+    public record PlayerRef(String memberId, String name, String teamName, boolean you, Long avatar) {}
 
     /**
      * The match's live result (YGO-26): games follow a / b; {@code forfeit} A, B or BOTH; status
@@ -201,12 +202,12 @@ public class ScheduleService {
 
         Map<Long, PlayerRef> players = new LinkedHashMap<>();
         jdbc.sql("""
-                        select sp.id, m.id, m.display_name, sp.team_name from season_player sp join league_member m on m.id = sp.league_member_id
+                        select sp.id, m.id, m.display_name, sp.team_name, coalesce(sp.avatar_passcode, m.avatar_passcode, (select u.avatar_passcode from app_user u where u.id = m.user_id)) from season_player sp join league_member m on m.id = sp.league_member_id
                         where sp.season_id = :s""")
                 .param("s", season.getId())
                 .query(rs -> {
                     players.put(rs.getLong(1), new PlayerRef(publicIds.encode(PublicIdType.LEAGUE_MEMBER, rs.getLong(2)), rs.getString(3),
-                            rs.getString(4), rs.getLong(2) == myMemberId));
+                            rs.getString(4), rs.getLong(2) == myMemberId, (Long) rs.getObject(5)));
                 });
 
         Map<Integer, SeasonRulesService.WeekView> dates = new LinkedHashMap<>();

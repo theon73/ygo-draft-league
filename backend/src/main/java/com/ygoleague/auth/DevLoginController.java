@@ -77,6 +77,8 @@ public class DevLoginController {
         contexts.saveContext(context, request, response);
 
         return new AuthController.SessionUser(user.displayName(), user.avatarUrl(), user.admin(),
-                user.provider() + ":" + user.subject());
+                user.provider() + ":" + user.subject(),
+                jdbc.sql("select avatar_passcode from app_user where id = :u").param("u", user.userId())
+                        .query((rs, n) -> (Long) rs.getObject(1)).optional().orElse(null));
     }
 }

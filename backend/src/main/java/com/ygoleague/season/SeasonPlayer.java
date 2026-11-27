@@ -45,6 +45,10 @@ public class SeasonPlayer {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
+    // The avatar (YGO-30) is written with SQL by AvatarService; the entity only reads it.
+    @Column(name = "avatar_passcode", insertable = false, updatable = false)
+    private Long avatarPasscode;
+
     protected SeasonPlayer() {}
 
     public SeasonPlayer(Season season, LeagueMember member) {
@@ -64,6 +68,10 @@ public class SeasonPlayer {
     public Integer getSeat() { return seat; }
     public String getTeamName() { return teamName; }
     public Instant getCreatedAt() { return createdAt; }
+    /** This season's own avatar (a passcode), or null to use the member's. */
+    public Long getAvatarPasscode() { return avatarPasscode; }
+    /** The avatar shown this season: its own, else the member's default. */
+    public Long avatar() { return avatarPasscode != null ? avatarPasscode : member.avatar(); }
 
     public void setSeat(Integer seat) { this.seat = seat; }
     public void setTeamName(String teamName) { this.teamName = teamName; }

@@ -1,3 +1,4 @@
+import PlayerAvatar from "../../components/PlayerAvatar";
 import InfoTip from "../../components/InfoTip";
 import { useState } from "react";
 import { apiPatch, apiPost, apiPut } from "../../api/client";
@@ -145,7 +146,9 @@ export default function SeasonSetup() {
               return (
                 <tr key={r.memberId} className={current === "none" ? "dim" : undefined}>
                   <td>{r.seat ?? ""}</td>
-                  <td>
+                  <td className="player-cell">
+                    <PlayerAvatar name={r.displayName} size="sm"
+                                  passcode={players.find((p) => p.memberId === r.memberId)?.avatar ?? league.members.find((m) => m.id === r.memberId)?.avatar} />
                     {r.displayName}
                     {r.you && <span className="badge">you</span>}
                     {r.owner && <span className="muted"> · league owner</span>}

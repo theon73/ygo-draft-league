@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
-import { apiGet, apiPost, type DevUser } from "../api/client";
+import { apiGet, apiPost, apiPut, type DevUser } from "../api/client";
+import AvatarPicker from "../components/AvatarPicker";
+import PlayerAvatar from "../components/PlayerAvatar";
 import { useSession } from "./session";
 
 // Header widget: who's signed in, sign in / sign out, and (dev profile only) "log in as…".
@@ -7,6 +9,7 @@ export default function AccountMenu() {
   const { session, refresh } = useSession();
   const [devUsers, setDevUsers] = useState<DevUser[]>([]);
   const [busy, setBusy] = useState(false);
+  const [picking, setPicking] = useState(false);
 
   useEffect(() => {
     if (session?.devLogin) apiGet<DevUser[]>("/dev/users").then(setDevUsers).catch(() => setDevUsers([]));
@@ -29,9 +32,22 @@ export default function AccountMenu() {
     <div className="account">
       {user ? (
         <>
-          {user.avatarUrl
-            ? <img className="avatar" src={user.avatarUrl} alt="" referrerPolicy="no-referrer" />
-            : <span className="avatar initials" aria-hidden="true">{initials(user.displayName)}</span>}
+          {/* The profile avatar (card art, YGO-30) if chosen, else the sign-in photo, else initials.
+              Clicking it opens the picker. */}
+          <button className="avatar avatar-button" onClick={() => setPicking(true)} title="Change your avatar" aria-label="Change your avatar">
+            {!user.avatar && user.avatarUrl
+              ? <img className="player-avatar sm" src={user.avatarUrl} alt="" referrerPolicy="no-referrer" />
+              : <PlayerAvatar name={user.displayName} passcode={user.avatar} size="sm" />}
+          </button>
+          {picking && (
+            <AvatarPicker name={user.displayName} current={user.avatar} onClose={() => setPicking(false)}
+                          scopes={[{ scope: "profile", label: "Everywhere (your profile)" }]}
+                          note="Your profile avatar shows in the header and in every league where you haven't picked a different one."
+                          onSave={async (choice) => {
+                            await apiPut("/me/avatar", choice ?? { cardId: null });
+                            await refresh();
+                          }} />
+          )}
           <span className="account-name" title={user.identity}>
             {user.displayName}
             {user.admin && <span className="badge neutral">admin</span>}
@@ -66,10 +82,4 @@ export default function AccountMenu() {
       )}
     </div>
   );
-}
-
-/** "Theo Novak" → "TN", "bob" → "B". */
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  return ((parts[0]?.[0] ?? "?") + (parts.length > 1 ? parts[parts.length - 1][0] : "")).toUpperCase();
 }

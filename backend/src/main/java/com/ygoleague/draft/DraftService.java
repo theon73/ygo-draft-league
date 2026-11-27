@@ -122,7 +122,7 @@ public class DraftService {
 
     record ConfigSeat(int seat, long memberId, String displayName) {}
 
-    public record SeatView(int seat, String displayName, String teamName) {}
+    public record SeatView(int seat, String displayName, String teamName, Long avatar) {}
 
     /**
      * @param madeBy   who made the pick (display name); null for an auto-pick
@@ -820,7 +820,7 @@ public class DraftService {
             return new DraftView(DraftStatus.NOT_STARTED, canManage, season.getLeague().getTimeZone(), draft.order(), draft.rounds(),
                     draft.scheduledStart(), draft.forbiddenDraftable(), draft.pickTimer(), draft.roundCount(), draft.picksPerPlayer(),
                     draft.picksPerPlayer() * seated.size(), draftable, draftable,
-                    seated.stream().map(p -> new SeatView(p.getSeat(), p.getMember().getDisplayName(), p.getTeamName())).toList(),
+                    seated.stream().map(p -> new SeatView(p.getSeat(), p.getMember().getDisplayName(), p.getTeamName(), p.avatar())).toList(),
                     board, 0, null, null, false, false, null, null, null, false, null, null, List.of(), List.of(), mySeat, away, false,
                     readiness(season), null, null, null, now);
         }
@@ -838,8 +838,8 @@ public class DraftService {
         }).toList();
         List<SeatView> seats = d.config().seats().stream().map(s -> {
             SeasonPlayer p = byMember.get(s.memberId());
-            return p == null ? new SeatView(s.seat(), s.displayName(), null)
-                    : new SeatView(s.seat(), p.getMember().getDisplayName(), p.getTeamName());
+            return p == null ? new SeatView(s.seat(), s.displayName(), null, null)
+                    : new SeatView(s.seat(), p.getMember().getDisplayName(), p.getTeamName(), p.avatar());
         }).toList();
         Function<Integer, String> nameAt = seat -> seats.stream().filter(s -> s.seat() == seat).map(SeatView::displayName).findFirst().orElse("?");
 

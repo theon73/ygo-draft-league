@@ -59,7 +59,12 @@ public class LeagueService {
      * @param placeholder a seat the commissioner added for someone without an account yet
      * @param you         this member is the caller
      */
-    public record MemberView(String id, String displayName, LeagueRole role, boolean placeholder, boolean you) {}
+    /**
+     * @param avatar    the avatar shown in this league (a passcode): the league's own for them, else their profile's
+     * @param ownAvatar it's this league's own (so it can be removed), not their profile's
+     */
+    public record MemberView(String id, String displayName, LeagueRole role, boolean placeholder, boolean you, Long avatar,
+                             boolean ownAvatar) {}
 
     private final LeagueRepository leagues;
     private final LeagueMemberRepository members;
@@ -169,7 +174,7 @@ public class LeagueService {
 
     public MemberView memberView(LeagueMember m, boolean you) {
         return new MemberView(publicIds.encode(PublicIdType.LEAGUE_MEMBER, m.getId()), m.getDisplayName(), m.getRole(),
-                m.isPlaceholder(), you);
+                m.isPlaceholder(), you, m.avatar(), m.getAvatarPasscode() != null);
     }
 
     /** Trims and collapses whitespace; rejects blank, over-long and control-character names. */

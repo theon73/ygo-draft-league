@@ -6,6 +6,9 @@ import InviteList from "./InviteList";
 import { useLeague } from "./LeagueLayout";
 import { roleLabel } from "./roles";
 import { useConfirm } from "../../components/Feedback";
+import AvatarPicker from "../../components/AvatarPicker";
+import PlayerAvatar from "../../components/PlayerAvatar";
+import { apiPut } from "../../api/client";
 
 // The league's group of people. The owner invites and removes people; who commissions or plays
 // is chosen per season (on each season's Players tab).
@@ -16,6 +19,7 @@ export default function MembersPage() {
   const invites = useApi<InviteView[]>(isOwner ? `/leagues/${league.id}/invites` : null);
   const [error, setError] = useState<string | null>(null);
   const confirm = useConfirm();
+  const [picking, setPicking] = useState<LeagueMember | null>(null);
 
   // Runs a change, then refreshes what it affects. Errors (e.g. "is part of a season") show inline.
   const act = async (change: () => Promise<unknown>, after: { members?: boolean; invites?: boolean } = {}) => {
@@ -50,9 +54,13 @@ export default function MembersPage() {
         <tbody>
           {league.members.map((m) => (
             <tr key={m.id}>
-              <td>
+              <td className="player-cell">
+                <PlayerAvatar name={m.displayName} passcode={m.avatar} size="sm" />
                 {m.displayName}
                 {m.you && <span className="badge">you</span>}
+                {(m.you || (isOwner && m.placeholder)) && (
+                  <button className="link" onClick={() => setPicking(m)}>{m.avatar ? "change avatar" : "choose an avatar"}</button>
+                )}
                 {m.placeholder && <span className="muted"> · no account yet</span>}
               </td>
               <td>{m.role === "OWNER" && roleLabel.OWNER}</td>
@@ -66,6 +74,16 @@ export default function MembersPage() {
           ))}
         </tbody>
       </table>
+
+      {picking && (
+        <AvatarPicker name={picking.displayName} current={picking.avatar} canRemove={!!picking.ownAvatar} onClose={() => setPicking(null)}
+                      scopes={[{ scope: "default", label: "Every season" }]}
+                      note={`For ${league.name} only${picking.you ? "; elsewhere your profile avatar shows" : ""}.`}
+                      onSave={async (choice) => {
+                        await apiPut(`/leagues/${league.id}/members/${picking.id}/avatar`, choice ?? { cardId: null });
+                        reload();
+                      }} />
+      )}
 
       {isOwner && (
         <>

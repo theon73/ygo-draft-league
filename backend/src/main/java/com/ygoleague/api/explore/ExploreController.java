@@ -40,7 +40,8 @@ public class ExploreController {
     public record BanListInfo(long id, String name, LocalDate effectiveDate, int revision,
                               long forbidden, long limited, long semiLimited) {}
 
-    public record CardRow(long id, String name, String cardType, LocalDate tcgDate) {}
+    /** @param passcodes the card's artworks, for images (added for the avatar picker, YGO-30) */
+    public record CardRow(long id, String name, String cardType, LocalDate tcgDate, List<Long> passcodes) {}
 
     public record CardPage(long total, int page, int pageSize, List<CardRow> items) {}
 
@@ -101,13 +102,14 @@ public class ExploreController {
         long total = jdbc.sql("select count(*) from card where lower(name) like :p escape '\\'")
                 .param("p", pattern).query(Long.class).single();
         List<CardRow> items = jdbc.sql("""
-                        select id, name, card_type, tcg_date from card
+                        select id, name, card_type, tcg_date, passcodes from card
                         where lower(name) like :p escape '\\'
                         order by lower(name), id limit :limit offset :offset
                         """)
                 .param("p", pattern).param("limit", PAGE_SIZE).param("offset", (long) page * PAGE_SIZE)
                 .query((rs, i) -> new CardRow(rs.getLong("id"), rs.getString("name"),
-                        rs.getString("card_type"), rs.getObject("tcg_date", LocalDate.class)))
+                        rs.getString("card_type"), rs.getObject("tcg_date", LocalDate.class),
+                        java.util.Arrays.asList((Long[]) rs.getArray("passcodes").getArray())))
                 .list();
         return new CardPage(total, page, PAGE_SIZE, items);
     }

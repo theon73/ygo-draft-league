@@ -45,6 +45,10 @@ public class LeagueMember {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
+    // The avatar (YGO-30) is written with SQL by AvatarService; the entity only reads it.
+    @Column(name = "avatar_passcode", insertable = false, updatable = false)
+    private Long avatarPasscode;
+
     protected LeagueMember() {}
 
     private LeagueMember(League league, AppUser user, String displayName, LeagueRole role) {
@@ -79,6 +83,10 @@ public class LeagueMember {
     public String getDisplayName() { return displayName; }
     public LeagueRole getRole() { return role; }
     public Instant getCreatedAt() { return createdAt; }
+    /** This league's avatar for them (a passcode), or null. */
+    public Long getAvatarPasscode() { return avatarPasscode; }
+    /** The avatar shown in this league: its own, else their profile's (placeholders have none). */
+    public Long avatar() { return avatarPasscode != null ? avatarPasscode : user == null ? null : user.getAvatarPasscode(); }
 
     public void setDisplayName(String displayName) { this.displayName = displayName; }
     public void setRole(LeagueRole role) { this.role = role; }
