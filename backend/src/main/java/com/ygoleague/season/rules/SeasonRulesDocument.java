@@ -91,9 +91,22 @@ public record SeasonRulesDocument(CalendarRules calendar, FormatRules format, Co
      * @param format           null until chosen
      * @param roundRobinCycles round-robin only: how many times each pair of players meets
      *                         (1 = single round-robin, 2 = double)
+     * @param matchBestOf      games per regular-season match (1, 3, 5, …); null = the default,
+     *                         {@link #DEFAULT_BEST_OF} (also how seasons from before YGO-25 read).
+     *                         Unlike the format, it can change mid-season from a given week.
      */
-    public record CompetitionRules(CompetitionFormat format, Integer roundRobinCycles) {
-        public static final CompetitionRules EMPTY = new CompetitionRules(null, null);
+    public record CompetitionRules(CompetitionFormat format, Integer roundRobinCycles, Integer matchBestOf) {
+        public static final int DEFAULT_BEST_OF = 3;
+        public static final CompetitionRules EMPTY = new CompetitionRules(null, null, null);
+
+        public int bestOf() {
+            return matchBestOf == null ? DEFAULT_BEST_OF : matchBestOf;
+        }
+
+        /** The format and cycles, which fix the schedule; best-of isn't part of it. */
+        public boolean sameFormat(CompetitionRules other) {
+            return java.util.Objects.equals(format, other.format) && java.util.Objects.equals(roundRobinCycles, other.roundRobinCycles);
+        }
 
         /** The weeks come from the format (and player count) rather than an explicit week count. */
         public boolean derivesWeeks() {

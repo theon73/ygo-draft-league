@@ -223,3 +223,24 @@ button.pick-row.on { background: #ece8fb; border-color: #b9b0e6; }
   .offer-time { margin-left: 0; }
 }
 .stepper.off { color: #888; }
+/* Schedule (YGO-25). */
+.this-week h5 { margin: 0 0 0.5rem; font-size: 1rem; }
+.this-week h5 .muted { font-weight: normal; font-size: 0.85rem; }
+ul.matchups { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr)); gap: 0.4rem; }
+ul.matchups li { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0.25rem 0.5rem; padding: 0.45rem 0.6rem; background: #fbfaf7;
+  border: 1px solid #e4e2dc; border-radius: 6px; }
+ul.matchups li.mine { background: #f3f1fb; border-color: #b9b0e6; }
+ul.matchups .vs { color: #888; font-size: 0.8rem; text-transform: uppercase; }
+ul.matchups .bye { font-size: 0.85rem; }
+ul.matchups .team { font-size: 0.8rem; }
+ul.matchups.compact { grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); }
+ul.matchups.compact li { padding: 0.3rem 0.5rem; font-size: 0.9rem; background: #fff; }
+.matchup-player .badge { margin-left: 0.25rem; }
+h5.schedule-all { margin: 0; font-size: 1rem; }
+ol.schedule-weeks { list-style: none; padding: 0; margin: 0.5rem 0 0; }
+ol.schedule-weeks > li { padding: 0.6rem 0; border-top: 1px solid #e4e2dc; }
+ol.schedule-weeks > li.current .week-head strong { color: #3b2f8a; }
+ol.schedule-weeks > li.past { opacity: 0.65; }
+.week-head { display: flex; gap: 0.75rem; align-items: baseline; flex-wrap: wrap; margin-bottom: 0.35rem; }
+.week-head .muted { font-size: 0.85rem; }
+@media (max-width: 480px) { ul.matchups, ul.matchups.compact { grid-template-columns: 1fr; } }

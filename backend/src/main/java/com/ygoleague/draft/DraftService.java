@@ -12,6 +12,7 @@ import com.ygoleague.season.SeasonPlayer;
 import com.ygoleague.season.SeasonPlayerRepository;
 import com.ygoleague.season.SeasonRepository;
 import com.ygoleague.season.SeasonStatus;
+import com.ygoleague.season.schedule.ScheduleService;
 import com.ygoleague.season.pool.PoolOwnership;
 import com.ygoleague.season.rules.SeasonRulesDocument;
 import com.ygoleague.season.rules.SeasonRulesDocument.DraftOrder;
@@ -202,11 +203,12 @@ public class DraftService {
     private final DraftEvents events;
     private final DraftAnnouncer announcer;
     private final LeagueNotifications notifications;
+    private final ScheduleService schedule;
     private final TransactionTemplate tx;
 
     public DraftService(SeasonAccess access, SeasonRulesService rules, SeasonRepository seasons, SeasonPlayerRepository players,
                         DraftQueue queue, JdbcClient jdbc, ObjectMapper json, DraftEvents events, DraftAnnouncer announcer,
-                        LeagueNotifications notifications, PlatformTransactionManager txManager) {
+                        LeagueNotifications notifications, ScheduleService schedule, PlatformTransactionManager txManager) {
         this.access = access;
         this.rules = rules;
         this.seasons = seasons;
@@ -217,6 +219,7 @@ public class DraftService {
         this.events = events;
         this.announcer = announcer;
         this.notifications = notifications;
+        this.schedule = schedule;
         this.tx = new TransactionTemplate(txManager);
     }
 
@@ -609,7 +612,7 @@ public class DraftService {
     }
 
     /**
-     * The last slot filled: freeze the final board and start the season. Skipped picks still owed
+     * The last slot filled: freeze the final board, start the season and draw its schedule. Skipped picks still owed
      * are forfeited (their slots stay empty in the result).
      */
     private void complete(Season season, Loaded d) {
@@ -644,6 +647,7 @@ public class DraftService {
         jdbc.sql("update draft set completed_at = now(), result = cast(:r as jsonb) where season_id = :s")
                 .param("s", season.getId()).param("r", json.writeValueAsString(Map.of("board", board))).update();
         season.setStatus(SeasonStatus.ACTIVE);
+        schedule.generateAutomatically(season);   // YGO-25: the regular season is drawn as the draft ends
         announcer.note(season, "🏆 The draft is complete. Good luck this season!");
     }
 
