@@ -174,6 +174,7 @@ export interface LeagueSummary {
   name: string;
   myRole: LeagueRole;
   memberCount: number;
+  currentSeason?: SeasonLink | null; // the season the league opens on (YGO-31)
 }
 
 export interface LeagueMember {
@@ -253,6 +254,25 @@ export interface SeasonDetail {
   participants: Participant[]; // in seat order
   candidates: Candidate[]; // commissioners only: every league member
   lastDraw: { drawnBy: string; drawnAt: string; order: string[] } | null;
+  currentWeek?: number | null; // once active: 0 before week 1, past weekCount after the regular season (YGO-31)
+  weekCount?: number | null;
+  playoffsStarted?: boolean;
+}
+
+/** Something waiting on the viewer (YGO-31): from /me/needs-you (every league) or a season's /needs-you. */
+export interface NeedsYouItem {
+  kind: "PICK" | "REPORT" | "CONFIRM" | "TRADE_OFFER" | "DISPUTE" | "TRADE_APPROVAL" | "START_DRAFT" | "FINISH_SETUP"
+    | "START_PLAYOFFS" | "COMPLETE_SEASON";
+  leagueId: string;
+  league: string;
+  seasonId: string;
+  season: string;
+  title: string;
+  detail: string;
+  tab: string; // the season tab where it's done
+  due: string | null;
+  matchId: string | null;
+  commissioner: boolean; // a commissioner's job rather than the viewer's own
 }
 
 // Invites

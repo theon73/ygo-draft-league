@@ -647,7 +647,23 @@ With the league's backbone built (accounts through playoffs), the app works but 
       - A **standings snippet** with your row marked.
       - **Recent pickups:** the latest claims and trades as card-art tiles ("Bob · FA claim").
       - In the season header, a **"Week 4 of 9" pill** and your role this season ("Commissioner").
+    - **Built:**
+      - **Needs you** (`season/overview/NeedsYouService`): built by calling the season's own services as the viewer, so an item appears exactly when the page shows the button. Completed seasons are skipped.
+        - Kinds: PICK, REPORT, CONFIRM (due when the report confirms itself), TRADE_OFFER, and for commissioners DISPUTE, TRADE_APPROVAL, START_DRAFT, FINISH_SETUP, START_PLAYOFFS and COMPLETE_SEASON.
+        - Endpoints: `GET /api/me/needs-you` (every league) and `GET /api/leagues/{l}/seasons/{s}/needs-you`.
+      - The **Overview tab** is first in every state and where a season opens:
+        - setup: the readiness checklist with Fix links (commissioners), then "The season ahead" for everyone (cards, draft, season, players);
+        - drafting: who's on the clock, the summary tiles, the latest picks;
+        - active: this week's matches, or the bracket once the playoffs start; a standings snippet with your row; recent pickups with card art;
+        - complete: the champion and the final standings.
+      - The season header shows "Week 4 of 9" (or "Before week 1", "Playoffs") and your role. `SeasonDetail` gains `currentWeek`, `weekCount` and `playoffsStarted`.
+      - **Home**, signed in, is a dashboard: "Welcome back", what needs you across leagues, and your leagues with their current season. `LeagueSummary` gains `currentSeason`.
   - **YGO-32: Guided setup.** A league wizard (name; time zone and week start; invite link and placeholders; "set up your first season") and a **season setup wizard**, plus the invite landing (sign in, join, set a team name and Discord pings). Copying from a previous season is part of it.
+    - **Flatten the league / season navigation** (Theo, 2026-11-27, YGO-31 review: much of the "where am I" friction comes from leagues and seasons being separate). The data model keeps them separate: the league is what persists (members, invites, Discord, time zone), each season is one run, and next season (YGO-37) and all-time stats need several seasons per group. The UI makes the season the main thing on screen:
+      - The league becomes a light header with a season switcher. Seasons, Members and Settings move into a small "League" menu instead of a second nav row.
+      - The league wizard creates the league and its first season in one flow, so a new commissioner never sees an empty league.
+      - Together with "next season" as one button (YGO-37), most people only ever see "my league's season".
+    - A league opens on its running season (drafting or active) ahead of one being set up for later (YGO-31).
   - **YGO-33 to 36: Page passes,** one critique-and-polish pass per group (the draft room had its pass in YGO-29, the playoffs in YGO-30): rules and pool; rosters, free agents, trades and transactions (card art wherever a card is named, e.g. claims, drops, offers); schedule and standings; members, settings and the Explorer.
   - **YGO-37: Next season.** When a season completes, "start the next season" (the wizard, starting from a copy of it).
 - **The season setup wizard (decided with Theo, 2026-11-27).** The process is non-linear today, so the first pass is *directed*: one guided route that gets a season close to final; editing afterwards stays non-linear on the Rules, Pool and Draft pages.

@@ -1,9 +1,9 @@
 import { useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
+import LeagueCards from "./LeagueCards";
 import { apiPost, type LeagueSummary } from "../../api/client";
 import { useSession } from "../../auth/session";
 import { useApi } from "../../hooks/useApi";
-import { roleLabel } from "./roles";
 import { EmptyState, Loading } from "../../components/Feedback";
 
 const MAX_NAME = 60; // matches LeagueService.MAX_NAME_LENGTH
@@ -49,17 +49,7 @@ export default function MyLeagues() {
             <p>Create one below, or ask a league owner for an invite link.</p>
           </EmptyState>
         ) : (
-          <ul className="league-cards">
-            {leagues.data.map((l) => (
-              <li key={l.id}>
-                <Link to={`/leagues/${l.id}`}>
-                  <strong>{l.name}</strong>
-                  <span className="badge neutral">{roleLabel[l.myRole]}</span>
-                  <span className="muted">{l.memberCount} member{l.memberCount === 1 ? "" : "s"}</span>
-                </Link>
-              </li>
-            ))}
-          </ul>
+          <LeagueCards leagues={leagues.data} />
         ))}
 
       <h3>Create a league</h3>

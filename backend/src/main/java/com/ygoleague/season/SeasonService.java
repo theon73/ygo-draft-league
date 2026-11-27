@@ -72,10 +72,14 @@ public class SeasonService {
      * @param youPlay    the caller is one of its players
      * @param editable   participants and seats can still change (season in setup)
      * @param candidates every league member, for choosing players and commissioners (commissioners only)
+     * @param currentWeek once the season is active: 0 before week 1, past {@code weekCount} after the regular season (YGO-31)
+     * @param weekCount   the regular season's weeks, once active
+     * @param playoffsStarted a commissioner has started the playoffs
      */
     public record SeasonDetail(String id, String name, SeasonStatus status, Instant createdAt, boolean canManage,
                                boolean youPlay, boolean editable, List<Commissioner> commissioners,
-                               List<Participant> participants, List<Candidate> candidates, SeatDraw lastDraw) {}
+                               List<Participant> participants, List<Candidate> candidates, SeatDraw lastDraw,
+                               Integer currentWeek, Integer weekCount, boolean playoffsStarted) {}
 
     private final LeagueAccess access;
     private final LeagueRepository leagues;
@@ -85,10 +89,12 @@ public class SeasonService {
     private final PublicIds publicIds;
     private final JdbcClient jdbc;
     private final SeasonAccess seasonAccess;
+    private final com.ygoleague.season.rules.SeasonRulesService rules;
 
     public SeasonService(LeagueAccess access, LeagueRepository leagues, LeagueMemberRepository members,
                          SeasonRepository seasons, SeasonPlayerRepository players, PublicIds publicIds, JdbcClient jdbc,
-                         SeasonAccess seasonAccess) {
+                         SeasonAccess seasonAccess, com.ygoleague.season.rules.SeasonRulesService rules) {
+        this.rules = rules;
         this.access = access;
         this.leagues = leagues;
         this.members = members;
@@ -292,9 +298,13 @@ public class SeasonService {
         List<Candidate> candidates = !canManage ? List.of() : all.stream()
                 .map(m -> new Candidate(memberId(m), m.getDisplayName(), m.isPlaceholder()))
                 .toList();
+        boolean active = season.getStatus() == SeasonStatus.ACTIVE;
         return new SeasonDetail(publicIds.encode(PublicIdType.SEASON, season.getId()), season.getName(), season.getStatus(),
                 season.getCreatedAt(), canManage, youPlay, season.getStatus() == SeasonStatus.SETUP, commissioners,
-                participants, candidates, lastDraw(season));
+                participants, candidates, lastDraw(season),
+                active ? rules.currentWeek(season) : null, active ? rules.weeks(season).size() : null,
+                jdbc.sql("select exists (select 1 from stage where season_id = :s and kind = 'PLAYOFFS' and started_at is not null)")
+                        .param("s", season.getId()).query(Boolean.class).single());
     }
 
     private boolean commissions(Season season, LeagueMember member) {

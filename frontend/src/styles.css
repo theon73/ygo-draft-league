@@ -786,3 +786,53 @@ details.seeds li { display: list-item; }
 details.seeds .matchup-player { vertical-align: middle; }
 .warn-text { color: var(--warn); font-size: 0.88rem; }
 p.start-playoffs { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+
+/* Overview and "needs you" (YGO-31) */
+.overview-section { margin: 0 0 1.5rem; }
+.overview-section > h4 { margin: 0 0 0.6rem; }
+.overview-section .section-head { margin-top: 0; }
+.overview-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr)); gap: 0 2rem; }
+ul.needs-you { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+ul.needs-you li { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; padding: 0.7rem 0.9rem; border-radius: var(--radius);
+  background: var(--accent-wash); border: 1px solid var(--accent-line); }
+ul.needs-you li.commish { background: var(--surface); border-color: var(--border); }
+.needs-dot { width: 0.55rem; height: 0.55rem; border-radius: 50%; background: var(--accent); flex: 0 0 auto; box-shadow: 0 0 0 3px var(--accent-wash); }
+ul.needs-you li.commish .needs-dot { background: var(--text-2); box-shadow: none; }
+ul.needs-you li.needs-pick .needs-dot { animation: pulse 1.6s ease-in-out infinite; }
+@keyframes pulse { 50% { box-shadow: 0 0 0 6px transparent; } }
+@media (prefers-reduced-motion: reduce) { ul.needs-you li.needs-pick .needs-dot { animation: none; } }
+.needs-text { flex: 1; min-width: 12rem; display: flex; flex-direction: column; }
+.needs-detail { color: var(--text-2); font-size: 0.85rem; }
+ul.needs-you .button { margin-left: auto; }
+.pill.role { background: transparent; }
+ul.setup-steps { list-style: none; margin: 0 0 0.5rem; padding: 0; border: 1px solid var(--border-soft); border-radius: var(--radius); overflow: hidden; }
+ul.setup-steps li { display: flex; align-items: center; gap: 0.75rem; padding: 0.55rem 0.85rem; background: var(--surface); }
+ul.setup-steps li + li { border-top: 1px solid var(--border-soft); }
+ul.setup-steps li.ok { color: var(--text-2); }
+.step-mark { width: 1.3rem; height: 1.3rem; border-radius: 50%; border: 1.5px solid var(--border); display: inline-grid; place-items: center;
+  font-size: 0.75rem; flex: 0 0 auto; }
+ul.setup-steps li.ok .step-mark { background: var(--good-wash); border-color: var(--good-line); color: var(--good); }
+.grow { flex: 1; min-width: 0; }
+ul.player-chips { list-style: none; padding: 0; margin: 0.4rem 0; display: flex; flex-wrap: wrap; gap: 0.5rem; }
+ul.player-chips li { display: flex; align-items: center; gap: 0.1rem; padding: 0.4rem 0.75rem 0.4rem 0.45rem; border-radius: 999px; background: var(--surface);
+  border: 1px solid var(--border-soft); font-size: 0.9rem; }
+ul.player-chips li.you { border-color: var(--accent-line); }
+.callout.mine { background: linear-gradient(120deg, rgba(217, 180, 106, 0.2), var(--accent-wash) 60%); border-color: var(--accent); }
+table.standings-snippet { width: 100%; }
+table.standings-snippet tr.mine td { background: var(--accent-wash); }
+table.standings-snippet tr.gap-before td { border-top: 2px dashed var(--border); }
+ul.pickups { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr)); gap: 0.5rem; }
+ul.pickups li { display: flex; align-items: center; gap: 0.6rem; padding: 0.45rem; background: var(--surface); border: 1px solid var(--border-soft);
+  border-radius: var(--radius); min-width: 0; }
+.pickup-art.card-image-small, .pickup-art.card-image { width: 40px; flex: 0 0 auto; }
+.pickup-text { display: flex; flex-direction: column; min-width: 0; }
+.pickup-name { font-weight: 600; font-size: 0.88rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.overview-champion { display: flex; align-items: center; gap: 1rem; }
+.overview-champion > span { display: flex; flex-direction: column; }
+.overview-champion strong { font-size: 1.4rem; }
+.eyebrow { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--accent); }
+.league-season { display: block; margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-2); }
+.dashboard h1 { margin-bottom: 1.25rem; }
+.dashboard > h4 { margin: 0 0 0.6rem; }
+.dashboard .section-head { margin-top: 2rem; }
+.all-clear { padding: 0.75rem 0.9rem; border: 1px dashed var(--border); border-radius: var(--radius); }
