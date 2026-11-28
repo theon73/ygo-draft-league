@@ -16,6 +16,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeParseException;
 import java.util.HashMap;
+import com.ygoleague.season.transaction.TradeInbox;
 import java.util.List;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
@@ -31,7 +32,8 @@ public class LeagueService {
 
     /** A league in "My leagues". {@code id} is the public id. */
     /** @param currentSeason the season the league opens on (see {@link LeagueDetail}), or null; for the Home dashboard (YGO-31) */
-    public record LeagueSummary(String id, String name, LeagueRole myRole, long memberCount, SeasonLink currentSeason) {}
+    /** @param unread unread trade messages and offers for the caller in the league's seasons (YGO-34) */
+    public record LeagueSummary(String id, String name, LeagueRole myRole, long memberCount, SeasonLink currentSeason, int unread) {}
 
     /**
      * A league's page. Member user ids are never exposed.
@@ -53,7 +55,8 @@ public class LeagueService {
     /** League settings a commissioner can change; null fields are left as they are. */
     public record SettingsUpdate(String timeZone, DayOfWeek weekStartsOn, String weekStartsAt) {}
 
-    public record SeasonLink(String id, String name, SeasonStatus status) {}
+    /** @param unread the caller's unread trade messages and offers in the season (YGO-34) */
+    public record SeasonLink(String id, String name, SeasonStatus status, int unread) {}
 
     /**
      * @param id          the member's public id (for commissioner actions on them)
@@ -73,9 +76,11 @@ public class LeagueService {
     private final LeagueAccess access;
     private final PublicIds publicIds;
     private final SeasonRepository seasons;
+    private final TradeInbox inbox;
 
     public LeagueService(LeagueRepository leagues, LeagueMemberRepository members, AppUserRepository users,
-                         LeagueAccess access, PublicIds publicIds, SeasonRepository seasons) {
+                         LeagueAccess access, PublicIds publicIds, SeasonRepository seasons, TradeInbox inbox) {
+        this.inbox = inbox;
         this.leagues = leagues;
         this.members = members;
         this.users = users;
@@ -99,13 +104,14 @@ public class LeagueService {
         league.setTimeZone(zone);
         league = leagues.save(league);
         members.save(LeagueMember.forUser(league, creator, creator.getDisplayName(), LeagueRole.OWNER));
-        return new LeagueSummary(publicId(league), league.getName(), LeagueRole.OWNER, 1, null);
+        return new LeagueSummary(publicId(league), league.getName(), LeagueRole.OWNER, 1, null, 0);
     }
 
     @Transactional(readOnly = true)
     public List<LeagueSummary> myLeagues(CurrentUser caller) {
         List<LeagueMember> mine = members.findMembershipsOfUser(caller.userId());
         if (mine.isEmpty()) return List.of();
+        List<TradeInbox.Unread> unread = inbox.forUser(caller.userId());
         Map<Long, Long> counts = new HashMap<>();
         for (Object[] row : members.countByLeague(mine.stream().map(m -> m.getLeague().getId()).toList())) {
             counts.put((Long) row[0], (Long) row[1]);
@@ -114,9 +120,16 @@ public class LeagueService {
                 .map(m -> new LeagueSummary(publicId(m.getLeague()), m.getLeague().getName(), m.getRole(),
                         counts.getOrDefault(m.getLeague().getId(), 0L),
                         current(seasons.findByLeagueIdOrderByCreatedAtDesc(m.getLeague().getId()))
-                                .map(s -> new SeasonLink(publicIds.encode(PublicIdType.SEASON, s.getId()), s.getName(), s.getStatus()))
-                                .orElse(null)))
+                                .map(s -> new SeasonLink(publicIds.encode(PublicIdType.SEASON, s.getId()), s.getName(), s.getStatus(),
+                                        unreadIn(unread, null, s.getId())))
+                                .orElse(null),
+                        unreadIn(unread, m.getLeague().getId(), null)))
                 .toList();
+    }
+
+    private static int unreadIn(List<TradeInbox.Unread> unread, Long leagueId, Long seasonId) {
+        return unread.stream().filter(u -> (leagueId == null || u.leagueId() == leagueId) && (seasonId == null || u.seasonId() == seasonId))
+                .mapToInt(TradeInbox.Unread::count).sum();
     }
 
     /** Any member may see the league. */
@@ -128,8 +141,10 @@ public class LeagueService {
                 .map(m -> memberView(m, m.getId().equals(me.getId())))
                 .toList();
         List<Season> all = seasons.findByLeagueIdOrderByCreatedAtDesc(league.getId());
+        List<TradeInbox.Unread> unread = inbox.forUser(caller.userId());
         List<SeasonLink> links = all.stream()
-                .map(s -> new SeasonLink(publicIds.encode(PublicIdType.SEASON, s.getId()), s.getName(), s.getStatus()))
+                .map(s -> new SeasonLink(publicIds.encode(PublicIdType.SEASON, s.getId()), s.getName(), s.getStatus(),
+                        unreadIn(unread, null, s.getId())))
                 .toList();
         String current = current(all).map(s -> publicIds.encode(PublicIdType.SEASON, s.getId())).orElse(null);
         WeekBoundary.Week week = league.weekBoundary().weekContaining(Instant.now());

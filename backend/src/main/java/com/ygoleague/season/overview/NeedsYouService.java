@@ -41,7 +41,7 @@ public class NeedsYouService {
     /**
      * One thing waiting on the viewer.
      *
-     * @param kind    PICK, REPORT, CONFIRM, TRADE_OFFER, DISPUTE, TRADE_APPROVAL, START_DRAFT, FINISH_SETUP,
+     * @param kind    PICK, REPORT, CONFIRM, TRADE_OFFER, MESSAGE, DISPUTE, TRADE_APPROVAL, START_DRAFT, FINISH_SETUP,
      *                START_PLAYOFFS or COMPLETE_SEASON
      * @param title   what to do, e.g. "Confirm Carol's report"
      * @param detail  the specifics, e.g. "Bob 1–2 Carol · week 2"
@@ -162,9 +162,14 @@ public class NeedsYouService {
                 TradeService.TradesView tv = trades.overview(leagueId, seasonId, null, caller);
                 if (isPlayer(tv)) {
                     for (TradeService.ThreadSummary t : tv.threads()) {
+                        String thread = "trades?with=" + t.withMemberId();
                         if (t.awaitingYou() > 0) {
                             add.add("TRADE_OFFER", t.with() + (t.awaitingYou() == 1 ? " sent you a trade offer" : " sent you " + t.awaitingYou() + " trade offers"),
-                                    "Accept, decline or counter it.", "trades", null, null, false);
+                                    "Accept, decline or counter it.", thread, null, null, false);
+                        } else if (t.unread() > 0) {
+                            // New messages (YGO-34); an offer waiting for you already says the same and more.
+                            add.add("MESSAGE", t.with() + " messaged you", t.unread() == 1 ? "1 new message" : t.unread() + " new messages",
+                                    thread, null, null, false);
                         }
                     }
                 }

@@ -95,7 +95,8 @@ public class TradeService {
     public record PlayerRef(String memberId, String name, boolean you) {}
 
     /** @param live offers still open or waiting for approval; awaitingYou: open offers made to you */
-    public record ThreadSummary(String withMemberId, String with, int live, int awaitingYou, Instant lastAt) {}
+    /** @param unread the other player's messages and offers since you last opened the conversation (YGO-34) */
+    public record ThreadSummary(String withMemberId, String with, int live, int awaitingYou, Instant lastAt, int unread) {}
 
     /**
      * @param actors     who the caller can act as (themselves if they play; placeholders for a commissioner)
@@ -115,9 +116,11 @@ public class TradeService {
     private final TransactionAnnouncer announcer;
     private final PublicIds publicIds;
     private final JdbcClient jdbc;
+    private final TradeInbox inbox;
 
     public TradeService(SeasonAccess access, SeasonRulesService rules, SeasonPlayers players, WeeklyLimits limits, StaleOffers staleOffers,
-                        TransactionAnnouncer announcer, PublicIds publicIds, JdbcClient jdbc) {
+                        TransactionAnnouncer announcer, PublicIds publicIds, JdbcClient jdbc, TradeInbox inbox) {
+        this.inbox = inbox;
         this.access = access;
         this.rules = rules;
         this.players = players;
@@ -151,7 +154,8 @@ public class TradeService {
                 threads, approvals);
     }
 
-    @Transactional(readOnly = true)
+    /** Opening the conversation as yourself (not as a placeholder you act for) marks it read. */
+    @Transactional
     public ThreadView thread(String leagueId, String seasonId, String withMemberId, String as, CurrentUser caller) {
         SeasonAccess.SeasonRef ref = access.member(leagueId, seasonId, caller);
         Season season = ref.season();
@@ -159,6 +163,7 @@ public class TradeService {
         Player other = other(season, me, withMemberId);
         int budget = limits.currentAllowanceWeek(season);
         Long threadId = threadId(season, me, other).orElse(null);
+        if (threadId != null && me.userId() != null && me.userId() == caller.userId()) inbox.markRead(threadId, me.id());
 
         List<ThreadItem> items = new ArrayList<>();
         if (threadId != null) {
@@ -537,14 +542,21 @@ public class TradeService {
                                (select count(*) from trade_offer o where o.thread_id = t.id and o.status = 'OPEN' and o.to_player_id = :p),
                                greatest(t.created_at,
                                         (select max(o.created_at) from trade_offer o where o.thread_id = t.id and o.status <> 'DECLINED'),
-                                        (select max(m.created_at) from trade_message m where m.thread_id = t.id))
+                                        (select max(m.created_at) from trade_message m where m.thread_id = t.id)),
+                               (select count(*) from (
+                                   select m.created_at from trade_message m where m.thread_id = t.id and m.author_player_id <> :p
+                                   union all
+                                   select o.created_at from trade_offer o where o.thread_id = t.id and o.to_player_id = :p) x
+                                where x.created_at > coalesce((select r.last_read_at from trade_thread_read r
+                                                               where r.thread_id = t.id and r.season_player_id = :p), '-infinity'))
                         from trade_thread t
                         where t.season_id = :s and (t.player_low_id = :p or t.player_high_id = :p)
                         order by 4 desc""")
                 .param("s", season.getId()).param("p", me.id())
                 .query((rs, n) -> {
                     Player other = byId.get(rs.getLong(1));
-                    return new ThreadSummary(players.publicMemberId(other), other.name(), rs.getInt(2), rs.getInt(3), rs.getTimestamp(4).toInstant());
+                    return new ThreadSummary(players.publicMemberId(other), other.name(), rs.getInt(2), rs.getInt(3), rs.getTimestamp(4).toInstant(),
+                            rs.getInt(5));
                 })
                 .list();
     }

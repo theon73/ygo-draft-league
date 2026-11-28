@@ -540,8 +540,25 @@ ul.thread-list li.selected button { background: var(--surface-2); border-color: 
 .offer-side p { margin: 0; }
 .offer-actions p { margin: 0.6rem 0 0; display: flex; gap: 0.4rem; flex-wrap: wrap; }
 .card-image.thumb-xs { width: 28px; flex: 0 0 28px; border-radius: 2px; }
-.thread p.message { margin: 0.4rem 0; padding: 0.45rem 0.7rem; background: var(--surface); border: 1px solid var(--border-soft); border-radius: 10px; max-width: 36rem; width: fit-content; }
-.thread p.message.mine { margin-left: auto; background: var(--surface-2); border-color: var(--border); }
+/* Trade chat (YGO-34): bubbles, grouped by author */
+.msg-day { text-align: center; font-size: 0.72rem; color: var(--text-3); margin: 0.9rem 0 0.4rem; text-transform: uppercase; letter-spacing: 0.08em; }
+.msg-row { display: flex; align-items: flex-end; gap: 0.45rem; margin-top: 2px; }
+.msg-row.first { margin-top: 0.6rem; }
+.msg-row.mine { justify-content: flex-end; }
+.msg-row .player-avatar.sm { margin: 0 0 1.15rem; }
+.msg-row:not(.last) .player-avatar.sm { margin-bottom: 0; }
+.msg-gutter { width: 1.6rem; flex: 0 0 auto; }
+.msg-col { display: flex; flex-direction: column; max-width: min(34rem, 80%); }
+.msg-row.mine .msg-col { align-items: flex-end; }
+.msg-author { font-size: 0.75rem; color: var(--text-2); margin: 0 0 0.15rem 0.6rem; }
+.bubble { padding: 0.45rem 0.75rem; border-radius: 16px; font-size: 0.92rem; line-height: 1.4; white-space: pre-wrap; overflow-wrap: anywhere;
+  background: var(--surface-2); color: var(--text); }
+.msg-row.mine .bubble { background: rgba(217, 180, 106, 0.16); }
+.msg-row.theirs:not(.first) .bubble { border-top-left-radius: 6px; }
+.msg-row.theirs:not(.last) .bubble { border-bottom-left-radius: 6px; }
+.msg-row.mine:not(.first) .bubble { border-top-right-radius: 6px; }
+.msg-row.mine:not(.last) .bubble { border-bottom-right-radius: 6px; }
+.msg-time { font-size: 0.7rem; color: var(--text-3); margin: 0.2rem 0.6rem 0; }
 
 /* The offer builder */
 .offer-builder { padding: 0.9rem; }
@@ -941,3 +958,40 @@ p.save-bar { position: sticky; bottom: 0; z-index: 20; display: flex; align-item
 p.save-bar .primary { margin-left: auto; }
 .pool-tools button.on { background: var(--accent-wash); border-color: var(--accent-line); color: var(--accent); }
 .pool-tools .tool-panel { flex-basis: 100%; padding-top: 0.4rem; border-top: 1px solid var(--border-soft); }
+
+/* Rosters, free agents, trades and transactions pass (YGO-34) */
+.card-chip, .roster-card { display: inline-flex; align-items: center; gap: 0.4rem; min-width: 0; vertical-align: middle; }
+.card-chip a, .roster-card a { text-decoration: none; }
+.card-chip a:hover, .roster-card a:hover { text-decoration: underline; }
+.chip-art.card-image-small { width: 22px; flex: 0 0 auto; border-radius: 2px; }
+.roster-card .chip-art.card-image-small { width: 18px; }
+.roster-list li { display: flex; align-items: center; justify-content: space-between; gap: 0.3rem; }
+.allowance-chip { display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.85rem; color: var(--accent); }
+
+ul.tx-feed { list-style: none; padding: 0; margin: 0.5rem 0; display: flex; flex-direction: column; gap: 0.5rem; }
+li.tx { background: var(--surface); border: 1px solid var(--border-soft); border-radius: var(--radius); padding: 0.65rem 0.85rem; }
+.tx-head { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.tx-head .player-avatar { margin-right: 0; }
+.tx-player { font-weight: 600; text-decoration: none; }
+.tx-head .badge a { color: inherit; }
+.tx-when { margin-left: auto; }
+.tx-body { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 0.75rem; align-items: start; margin-top: 0.5rem; }
+.tx-side { display: flex; flex-direction: column; gap: 0.3rem; min-width: 0; }
+.tx-side h6 { margin: 0 0 0.1rem; }
+.tx-arrow { color: var(--text-3); align-self: center; }
+@media (max-width: 560px) { .tx-body { grid-template-columns: minmax(0, 1fr); } .tx-arrow { display: none; } .tx-when { margin-left: 0; flex-basis: 100%; } }
+
+p.claim-bar, .limits { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.thread-list button { display: flex; align-items: center; gap: 0.1rem; }
+
+/* Unread trade messages (YGO-34) */
+.count-badge { display: inline-grid; place-items: center; min-width: 1.15rem; height: 1.15rem; padding: 0 0.3rem; margin-left: 0.35rem; border-radius: 999px;
+  background: var(--accent); color: var(--accent-ink); font-size: 0.66rem; font-weight: 800; line-height: 1; vertical-align: 0.15em;
+  font-variant-numeric: tabular-nums; letter-spacing: 0; text-transform: none; }
+a.chat-link { position: relative; display: inline-grid; place-items: center; width: 2rem; height: 2rem; border-radius: 50%; color: var(--text-2);
+  border: 1px solid var(--border); text-decoration: none; }
+a.chat-link:hover { color: var(--text); background: var(--surface); }
+a.chat-link.unread { color: var(--accent); border-color: var(--accent-line); }
+a.chat-link .count-badge { position: absolute; top: -0.35rem; right: -0.45rem; margin: 0; box-shadow: 0 0 0 2px var(--bg); }
+ul.thread-list .count-badge { margin-left: auto; }
+ul.league-cards strong .count-badge { margin-left: 0.5rem; }

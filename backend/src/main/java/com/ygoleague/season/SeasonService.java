@@ -76,11 +76,12 @@ public class SeasonService {
      * @param weekCount   the regular season's weeks, once active
      * @param playoffsStarted a commissioner has started the playoffs
      * @param setupStep   the setup wizard's step to resume at (YGO-32), or null when it isn't in use
+     * @param unreadMessages the caller's unread trade messages and offers in this season (YGO-34)
      */
     public record SeasonDetail(String id, String name, SeasonStatus status, Instant createdAt, boolean canManage,
                                boolean youPlay, boolean editable, List<Commissioner> commissioners,
                                List<Participant> participants, List<Candidate> candidates, SeatDraw lastDraw,
-                               Integer currentWeek, Integer weekCount, boolean playoffsStarted, Integer setupStep) {}
+                               Integer currentWeek, Integer weekCount, boolean playoffsStarted, Integer setupStep, int unreadMessages) {}
 
     private final LeagueAccess access;
     private final LeagueRepository leagues;
@@ -92,10 +93,13 @@ public class SeasonService {
     private final SeasonAccess seasonAccess;
     private final com.ygoleague.season.rules.SeasonRulesService rules;
     private final SeasonCopier copier;
+    private final com.ygoleague.season.transaction.TradeInbox inbox;
 
     public SeasonService(LeagueAccess access, LeagueRepository leagues, LeagueMemberRepository members,
                          SeasonRepository seasons, SeasonPlayerRepository players, PublicIds publicIds, JdbcClient jdbc,
-                         SeasonAccess seasonAccess, com.ygoleague.season.rules.SeasonRulesService rules, SeasonCopier copier) {
+                         SeasonAccess seasonAccess, com.ygoleague.season.rules.SeasonRulesService rules, SeasonCopier copier,
+                         com.ygoleague.season.transaction.TradeInbox inbox) {
+        this.inbox = inbox;
         this.rules = rules;
         this.copier = copier;
         this.access = access;
@@ -346,7 +350,8 @@ public class SeasonService {
                 active ? rules.currentWeek(season) : null, active ? rules.weeks(season).size() : null,
                 jdbc.sql("select exists (select 1 from stage where season_id = :s and kind = 'PLAYOFFS' and started_at is not null)")
                         .param("s", season.getId()).query(Boolean.class).single(),
-                season.getStatus() == SeasonStatus.SETUP ? season.getSetupStep() : null);
+                season.getStatus() == SeasonStatus.SETUP ? season.getSetupStep() : null,
+                me.getUser() == null ? 0 : inbox.inSeason(me.getUser().getId(), season.getId()));
     }
 
     private boolean commissions(Season season, LeagueMember member) {

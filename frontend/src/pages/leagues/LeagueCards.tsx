@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import type { LeagueSummary } from "../../api/client";
 import { roleLabel } from "./roles";
 import { seasonStatusLabel } from "./seasonStatus";
+import CountBadge from "../../components/CountBadge";
 
 /** Your leagues as cards, each with its current season and where it stands (My leagues and Home). */
 export default function LeagueCards({ leagues }: { leagues: LeagueSummary[] }) {
@@ -10,7 +11,7 @@ export default function LeagueCards({ leagues }: { leagues: LeagueSummary[] }) {
       {leagues.map((l) => (
         <li key={l.id}>
           <Link to={`/leagues/${l.id}`}>
-            <strong>{l.name}</strong>
+            <strong>{l.name}<CountBadge count={l.unread} label={`${l.unread} unread trade messages`} /></strong>
             <span className="badge neutral">{roleLabel[l.myRole]}</span>
             <span className="muted">{l.memberCount} member{l.memberCount === 1 ? "" : "s"}</span>
             {l.currentSeason ? (

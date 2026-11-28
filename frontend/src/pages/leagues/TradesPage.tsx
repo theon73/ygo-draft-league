@@ -1,5 +1,7 @@
+import CountBadge from "../../components/CountBadge";
+import PlayerAvatar from "../../components/PlayerAvatar";
 import InfoTip from "../../components/InfoTip";
-import { useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
+import { useEffect, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
   apiPost, type AllowanceKind, type Roster, type RosterCard, type TradeAsset, type TradeOffer, type TradesOverview, type TradeThread,
@@ -41,6 +43,10 @@ export default function TradesPage() {
   const [version, setVersion] = useState(0);
   const overview = useApi<TradesOverview>(`${base}${as ? `?as=${encodeURIComponent(as)}` : ""}`, String(version));
   const refresh = () => setVersion((v) => v + 1);
+  // The season header refetches its unread total every minute; when it changes, refetch the
+  // conversation list too so each conversation's own count keeps up.
+  const unread = season.unreadMessages ?? 0;
+  useEffect(() => { refresh(); }, [unread]);
 
   const choose = (values: Record<string, string>) => setParams((prev) => {
     const next = new URLSearchParams(prev);
@@ -55,12 +61,7 @@ export default function TradesPage() {
 
   return (
     <>
-      <p className="muted">
-        {r.tradesPerWeek === null ? "Unlimited trades" : `${r.tradesPerWeek} trade${r.tradesPerWeek === 1 ? "" : "s"} a week`} (each counts for both players)
-        {r.tradeDeadlineWeek !== null && ` · deadline: week ${r.tradeDeadlineWeek}`}
-        {r.commissionerApproval && " · accepted trades need a commissioner's approval"}
-        <InfoTip>Trades are even: both sides give the same number of cards. Conversations are private to the two players.</InfoTip>
-      </p>
+
       {!o.open && <p className="bad">{o.closedReason}.</p>}
 
       {o.approvals.length > 0 && <Approvals base={base} offers={o.approvals} onDone={refresh} />}
@@ -77,12 +78,22 @@ export default function TradesPage() {
                 </select>
               </label>
             )}
-            {o.mine && (
-              <span className="muted">
-                {o.week === 0 ? "Before week 1 (counts toward week 1)" : `Week ${o.week}`}: {left(o.mine.tradesLeft, "trade")} and{" "}
-                {left(o.mine.claimsLeft, "free-agent claim")} left
-              </span>
-            )}
+            {/* What's left this week, with the league's trade rules in the tip (YGO-34). */}
+            <span className="limits">
+              {o.mine && (
+                <>
+                  <span className="pill accent">{left(o.mine.tradesLeft, "trade")} left</span>
+                  <span className="pill">{left(o.mine.claimsLeft, "claim")} left</span>
+                  <span className="muted small">{o.week === 0 ? "before week 1 (counts as week 1)" : `week ${o.week}`}</span>
+                </>
+              )}
+              <InfoTip>
+                {r.tradesPerWeek === null ? "Unlimited trades" : `${r.tradesPerWeek} trade${r.tradesPerWeek === 1 ? "" : "s"} a week`}, each counting for
+                both players{r.tradeDeadlineWeek !== null && `; the deadline is the end of week ${r.tradeDeadlineWeek}`}
+                {r.commissionerApproval && "; accepted trades need a commissioner's approval"}. Trades are even: both sides give the same
+                number of cards. Conversations are private to the two players.
+              </InfoTip>
+            </span>
           </div>
           <div className="trades-layout">
             <aside>
@@ -90,8 +101,10 @@ export default function TradesPage() {
                 {o.threads.map((t) => (
                   <li key={t.withMemberId} className={t.withMemberId === withId ? "selected" : undefined}>
                     <button onClick={() => choose({ with: t.withMemberId })}>
-                      {t.with}
+                      <PlayerAvatar name={t.with} passcode={season.participants.find((p) => p.memberId === t.withMemberId)?.avatar} size="sm" />
+                      <span className="grow">{t.with}</span>
                       {t.awaitingYou > 0 && <span className="badge ban-limited">{t.awaitingYou} for you</span>}
+                      <CountBadge count={t.unread} />
                       {t.live > t.awaitingYou && <span className="badge">{t.live - t.awaitingYou} open</span>}
                     </button>
                   </li>
@@ -199,6 +212,13 @@ function Thread({ base, as, withId, open, rules, onChange }: {
   const [error, setError] = useState<string | null>(null);
   const confirm = useConfirm();
   const reload = () => { setVersion((v) => v + 1); onChange(); };
+  // Opening the conversation marks it read on the server; once it has loaded, refresh what shows
+  // the unread counts (the season header and tab, and this page's conversation list).
+  const { reload: reloadSeason, reloadLeague } = useSeason();
+  const loaded = !!thread.data;
+  useEffect(() => {
+    if (loaded) { reloadSeason(); reloadLeague(); onChange(); }
+  }, [loaded, withId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (thread.error) return <p className="bad">Couldn't load the conversation ({thread.error})</p>;
   if (!thread.data) return <Loading />;
@@ -257,13 +277,7 @@ function Thread({ base, as, withId, open, rules, onChange }: {
               </p>
             )}
           </OfferBox>
-        ) : item.message && (
-          <p key={`m${i}`} className={`message${item.message.authorMemberId === withId ? "" : " mine"}`}>
-            <strong>{item.message.author}</strong>{item.message.typedBy && <span className="muted"> (by {item.message.typedBy})</span>}:{" "}
-            {item.message.body}
-            <span className="muted"> · {new Date(item.message.at).toLocaleString()}</span>
-          </p>
-        ))}
+        ) : item.message && <Message key={`m${i}`} items={t.items} i={i} theirId={withId} />)}
       </div>
       {error && <p className="bad">{error}</p>}
 
@@ -422,5 +436,44 @@ function CardPicker({ title, roster, chosen, onChange, children }: {
       </div>
       {children && <div className="picker-allowances">{children}</div>}
     </div>
+  );
+}
+
+// A chat message (YGO-34): yours on the right, theirs on the left with their avatar. Consecutive
+// messages from one person within a few minutes form a group: the name shows on the first, the
+// time on the last, and a date line marks a new day.
+const GROUP_GAP_MS = 5 * 60_000;
+
+function Message({ items, i, theirId }: { items: TradeThread["items"]; i: number; theirId: string }) {
+  const { season } = useSeason();
+  const m = items[i].message!;
+  const prev = items[i - 1]?.message ?? undefined;
+  const next = items[i + 1]?.message ?? undefined;
+  const at = Date.parse(m.at);
+  const sameGroup = (a: typeof m | undefined, b: typeof m | undefined) =>
+    !!a && !!b && a.authorMemberId === b.authorMemberId && Math.abs(Date.parse(a.at) - Date.parse(b.at)) < GROUP_GAP_MS;
+  const first = !sameGroup(prev, m);
+  const last = !sameGroup(m, next);
+  const prevAt = items[i - 1] ? Date.parse(items[i - 1].at) : null;
+  const newDay = prevAt === null || new Date(prevAt).toDateString() !== new Date(at).toDateString();
+  const theirs = m.authorMemberId === theirId;
+  const avatar = season.participants.find((p) => p.memberId === m.authorMemberId)?.avatar;
+  return (
+    <>
+      {newDay && <div className="msg-day">{new Date(at).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}</div>}
+      <div className={`msg-row ${theirs ? "theirs" : "mine"}${first ? " first" : ""}${last ? " last" : ""}`}>
+        {theirs && (first ? <PlayerAvatar name={m.author} passcode={avatar} size="sm" /> : <span className="msg-gutter" />)}
+        <div className="msg-col">
+          {theirs && first && <span className="msg-author">{m.author}</span>}
+          <div className="bubble">{m.body}</div>
+          {last && (
+            <span className="msg-time">
+              {new Date(at).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
+              {m.typedBy && ` · typed by ${m.typedBy}`}
+            </span>
+          )}
+        </div>
+      </div>
+    </>
   );
 }

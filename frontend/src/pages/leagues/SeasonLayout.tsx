@@ -5,6 +5,7 @@ import { Loading } from "../../components/Feedback";
 import { useApi } from "../../hooks/useApi";
 import { useLeague } from "./LeagueLayout";
 import { seasonStatusLabel } from "./seasonStatus";
+import CountBadge from "../../components/CountBadge";
 
 // Everything under /leagues/:leagueId/seasons/:seasonId. Same pattern as LeagueLayout: load the
 // season once, show its tabs, and give it (and reload) to every page below via useSeason().
@@ -82,6 +83,13 @@ export default function SeasonLayout() {
   const myTurn = !!draftLive && draftLive.status === "IN_PROGRESS" && !draftLive.paused && draftLive.onTheClockSeat !== null
     && season.data?.participants.find((p) => p.you)?.seat === draftLive.onTheClockSeat;
   useTitlePrefix(myTurn ? "Your pick · " : "");
+  // New trade messages show up within a minute without a reload (YGO-34): the season (which carries
+  // the unread count) is refetched every minute while the tab is visible.
+  const reloadSeason = season.reload;
+  useEffect(() => {
+    const t = window.setInterval(() => { if (document.visibilityState === "visible") reloadSeason(); }, 60_000);
+    return () => window.clearInterval(t);
+  }, [reloadSeason]);
 
   if (season.status === 404) {
     return <p className="bad">Season not found. <Link to="../seasons">All seasons</Link></p>;
@@ -102,6 +110,14 @@ export default function SeasonLayout() {
         <span className={`pill status-${s.status}`}>{seasonStatusLabel[s.status]}</span>
         {weekLabel(s) && <span className="pill">{weekLabel(s)}</span>}
         <span className="pill role">{roleLabel(s)}</span>
+        {/* Your trade conversations, with what's unread (YGO-34): only where there are trades. */}
+        {s.youPlay && (s.status === "ACTIVE" || s.status === "COMPLETE") && (
+          <Link to="trades" className={`chat-link${s.unreadMessages ? " unread" : ""}`} title="Trade messages"
+                aria-label={s.unreadMessages ? `Trade messages, ${s.unreadMessages} unread` : "Trade messages"}>
+            <ChatIcon />
+            <CountBadge count={s.unreadMessages} />
+          </Link>
+        )}
         {league.seasons.length > 1 && (
           <label className="season-switch">
             Season
@@ -110,7 +126,9 @@ export default function SeasonLayout() {
               onChange={(e) => navigate(`/leagues/${league.id}/seasons/${e.target.value}`)}
             >
               {league.seasons.map((x) => (
-                <option key={x.id} value={x.id}>{x.name}{x.id === league.currentSeasonId ? " (current)" : ""}</option>
+                <option key={x.id} value={x.id}>
+                  {x.name}{x.id === league.currentSeasonId ? " (current)" : ""}{x.unread ? ` · ${x.unread} unread` : ""}
+                </option>
               ))}
             </select>
           </label>
@@ -119,7 +137,7 @@ export default function SeasonLayout() {
       {/* The setup wizard keeps its own steps in view instead of the tabs (YGO-32). */}
       {here !== ("setup" as string) && <nav className="tabs" aria-label="Season">
         {shown.map((t) => (
-          <NavLink key={t} to={t}>{TAB_LABEL[t]}</NavLink>
+          <NavLink key={t} to={t}>{TAB_LABEL[t]}{t === "trades" && <CountBadge count={s.unreadMessages} />}</NavLink>
         ))}
       </nav>}
       {myTurn && !onDraftTab && (
@@ -132,6 +150,14 @@ export default function SeasonLayout() {
         <Outlet />
       </SeasonCtx.Provider>
     </>
+  );
+}
+
+function ChatIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M21 12a8 8 0 0 1-11.8 7L4 20l1.1-4.4A8 8 0 1 1 21 12Z" />
+    </svg>
   );
 }
 

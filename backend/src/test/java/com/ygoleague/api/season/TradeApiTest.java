@@ -226,6 +226,31 @@ class TradeApiTest {
                 .andExpect(jsonPath("$.message").value("Trades are unlimited, so they can't be traded"));
     }
 
+    @Test
+    void unreadMessagesAreCountedUntilTheConversationIsOpened() throws Exception {
+        ready(",\"tradesPerWeek\":1");
+        String joeyId = memberId("Joey"), kaibaId = memberId("Kaiba");
+        for (String body : List.of("Hi Joey", "Want Card 2?")) {
+            send(post(s("/trades/threads/" + joeyId + "/messages")), kaiba, "{\"body\":\"" + body + "\"}").andExpect(status().isCreated());
+        }
+        // Everywhere Joey looks: the season, the league and its card, the conversation, Needs you.
+        mvc.perform(get(s("")).with(as(joey))).andExpect(jsonPath("$.unreadMessages").value(2));
+        mvc.perform(get("/api/leagues").with(as(joey))).andExpect(jsonPath("$[0].unread").value(2)).andExpect(jsonPath("$[0].currentSeason.unread").value(2));
+        mvc.perform(get(l("")).with(as(joey))).andExpect(jsonPath("$.seasons[0].unread").value(2));
+        mvc.perform(get(s("/trades")).with(as(joey))).andExpect(jsonPath("$.threads[0].unread").value(2));
+        mvc.perform(get(s("/needs-you")).with(as(joey)))
+                .andExpect(jsonPath("$[?(@.kind == 'MESSAGE')].title").value("Kaiba messaged you"))
+                .andExpect(jsonPath("$[?(@.kind == 'MESSAGE')].tab").value("trades?with=" + kaibaId));
+        mvc.perform(get(s("")).with(as(kaiba))).andExpect(jsonPath("$.unreadMessages").value(0));   // your own don't count
+
+        // An offer counts too; opening the conversation reads everything.
+        offer(kaiba, null, joeyId, cards("Card 2"), cards("Card 4"), null, null).andExpect(status().isCreated());
+        mvc.perform(get(s("")).with(as(joey))).andExpect(jsonPath("$.unreadMessages").value(3));
+        mvc.perform(get(s("/trades/threads/" + kaibaId)).with(as(joey))).andExpect(status().isOk());
+        mvc.perform(get(s("")).with(as(joey))).andExpect(jsonPath("$.unreadMessages").value(0));
+        mvc.perform(get(s("/trades")).with(as(joey))).andExpect(jsonPath("$.threads[0].unread").value(0));
+    }
+
     // ---- helpers ----
 
     private ResultActions offer(AppUser user, String as, String to, String give, String get, String counterOf, String message) throws Exception {

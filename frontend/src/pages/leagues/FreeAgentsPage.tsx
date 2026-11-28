@@ -1,3 +1,4 @@
+import InfoTip from "../../components/InfoTip";
 import { useState } from "react";
 import { apiPost, type FreeAgency, type PoolCard, type PoolCardPage, type PoolFacets, type PoolSummary, type Roster } from "../../api/client";
 import { useApi } from "../../hooks/useApi";
@@ -54,14 +55,15 @@ export default function FreeAgentsPage() {
   return (
     <>
       <RosterNav rosters={rosters.data} />
-      <p className="muted">
-        Pool cards nobody holds{season.status === "ACTIVE" ? "" : " (until the draft is over, these are the cards still to draft)"}.
-        Soft-banned cards and, unless the draft allows them, Forbidden cards aren't listed.
-      </p>
 
       {fa.data && (fa.data.open ? (
         players.length > 0 && claimant && (
-          <p>
+          <p className="claim-bar">
+            <InfoTip>
+              Pool cards nobody holds{season.status === "ACTIVE" ? "" : " (until the draft is over, these are the cards still to draft)"}.
+              Soft-banned cards and, unless the draft allows them, Forbidden cards aren't listed. A claim drops one of
+              {claimant.you ? " your" : " their"} cards in exchange, so rosters keep their size.
+            </InfoTip>
             {players.length > 1 && (
               <label className="inline-label">Claiming for{" "}
                 <select value={claimant.memberId} onChange={(e) => { setChosen(e.target.value); setClaiming(null); }}>
@@ -69,15 +71,13 @@ export default function FreeAgentsPage() {
                 </select>{" "}
               </label>
             )}
-            <span className={canClaim ? "" : "bad"}>
+            <span className={`pill${canClaim ? " accent" : ""}`}>
               {claimant.limit === null
                 ? "Unlimited claims"
                 : `${claimant.left} of ${claimant.limit} claim${claimant.limit === 1 ? "" : "s"} left`}
-              {` for week ${fa.data.budgetWeek}`}
+              {` · week ${fa.data.budgetWeek}`}
             </span>
-            <span className="muted">
-              {fa.data.week === 0 ? " (before week 1, which counts as week 1)" : ""}. A claim drops one of {claimant.you ? "your" : "their"} cards in exchange.
-            </span>
+            {fa.data.week === 0 && <span className="muted small">before week 1 counts as week 1</span>}
           </p>
         )
       ) : (
