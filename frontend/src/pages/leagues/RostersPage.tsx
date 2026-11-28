@@ -1,6 +1,7 @@
 import PlayerAvatar from "../../components/PlayerAvatar";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import type { PoolCard, Roster, RosterCard, RosterGroup, Rosters } from "../../api/client";
+import CardImage from "../../components/CardImage";
 import CardPreview from "../../components/CardPreview";
 import { useApi } from "../../hooks/useApi";
 import { statusLabel } from "../explore/banStatus";
@@ -124,7 +125,10 @@ function RosterLine({ entry }: { entry: RosterCard }) {
   return (
     <li className={n === 0 ? "unusable" : undefined}>
       <CardPreview cardId={c.cardId}>
-        <Link to={seasonCardPath(league.id, season.id, c.cardId)}>{c.name}</Link>
+        <span className="roster-card">
+          <CardImage passcode={c.passcode} size="small" alt="" className="chip-art" />
+          <Link to={seasonCardPath(league.id, season.id, c.cardId)}>{c.name}</Link>
+        </span>
       </CardPreview>
       {c.softBanned ? (
         <span className="badge ban-forbidden">soft-banned</span>

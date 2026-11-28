@@ -175,6 +175,7 @@ export interface LeagueSummary {
   myRole: LeagueRole;
   memberCount: number;
   currentSeason?: SeasonLink | null; // the season the league opens on (YGO-31)
+  unread?: number; // your unread trade messages and offers in the league's seasons (YGO-34)
 }
 
 export interface LeagueMember {
@@ -211,6 +212,7 @@ export interface SeasonLink {
   id: string;
   name: string;
   status: SeasonStatus;
+  unread?: number; // your unread trade messages and offers in it (YGO-34)
 }
 
 export interface SeasonSummary extends SeasonLink {
@@ -258,11 +260,12 @@ export interface SeasonDetail {
   weekCount?: number | null;
   playoffsStarted?: boolean;
   setupStep?: number | null; // the setup wizard's step to resume at (YGO-32); null when not in use
+  unreadMessages?: number; // your unread trade messages and offers in this season (YGO-34)
 }
 
 /** Something waiting on the viewer (YGO-31): from /me/needs-you (every league) or a season's /needs-you. */
 export interface NeedsYouItem {
-  kind: "PICK" | "REPORT" | "CONFIRM" | "TRADE_OFFER" | "DISPUTE" | "TRADE_APPROVAL" | "START_DRAFT" | "FINISH_SETUP"
+  kind: "PICK" | "REPORT" | "CONFIRM" | "TRADE_OFFER" | "MESSAGE" | "DISPUTE" | "TRADE_APPROVAL" | "START_DRAFT" | "FINISH_SETUP"
     | "START_PLAYOFFS" | "COMPLETE_SEASON";
   leagueId: string;
   league: string;
@@ -699,7 +702,7 @@ export interface TradesOverview {
   as: string | null;
   mine: TradeLimits | null;
   players: { memberId: string; name: string; you: boolean }[]; // everyone else
-  threads: { withMemberId: string; with: string; live: number; awaitingYou: number; lastAt: string }[];
+  threads: { withMemberId: string; with: string; live: number; awaitingYou: number; lastAt: string; unread?: number }[];
   approvals: TradeOffer[]; // commissioners: accepted trades waiting for a decision
 }
 

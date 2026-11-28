@@ -411,7 +411,22 @@ Casual modes that run on their own, without a league, or inside one without coun
 - **Lobby snake draft on a sampled pool** (requested 2026-11-25): a lobby of n players gets a pool of **40 × n cards** drawn from a card source, and they snake-draft it until everyone has 40, which is their deck. Standalone (a lobby you invite people to) or in league format.
   - **Reuses** the Phase 3 snake draft (order, picks per turn, timer, draft board, pick log) and the pool builder; the only new piece is sampling the pool. In league format it's simply a season whose pool is a sample instead of the whole dated pool (see "Pool size" in the settings catalog).
   - **To decide when built:** how the pool is sampled (uniformly from the source, or balanced by card type or rarity so every deck is playable); whether the sample can contain copies; whether to add a margin (e.g. 45 × n so the last picks aren't forced); Extra Deck cards (inside the 40 or a separate allotment); and whether the lobby drafts live (together, with a timer) or asynchronously.
-- *Names for these modes to be chosen later.*
+- **Starter decks and a shop** (Theo's idea, 2026-11-27; early, not designed): a roguelike-flavoured league in the spirit of Slay the Spire's characters.
+  - **The idea:**
+    - Each player picks a **starter deck**, which comes with its own **objectives**, e.g. "summon Aitsu and union it with Koitsu".
+    - Completing an objective earns **currency**, not a win.
+    - Currency is spent on **packs** or in a **weekly rotating shop**.
+    - Some starters are strong from the start; others are **scalers** that pay off later.
+  - **Two ways to run it:**
+    - a multi-player league, week over week;
+    - a 1v1 over a couple of hours, where a "week" is just a round of the shop rather than a calendar week.
+  - **Needs a lot of play-testing to balance.** Theo's duel simulator (`claude/duel-sim/`) could help test starters and objective rates before anything is built.
+  - **Open questions:**
+    - How objectives are verified (self-reported like results, or confirmed by the opponent).
+    - What a pack is (a real set's pack list, or a sample of the season's pool) and the shop's size and rotation.
+    - Whether cards are owned exclusively (like the league) or each player has their own copies.
+    - How a match result and objectives combine into standings or a winner.
+  - **Reuses:** results reporting and confirmation, the weekly calendar (or a fast clock), the card catalog and pools, and transactions for buying. New: starter definitions with objectives, a currency ledger (append-only, like transactions), and a shop.
 
 ### Theo's additions
 - _(add here)_
@@ -683,6 +698,21 @@ With the league's backbone built (accounts through playoffs), the app works but 
       - The commissioner tools are one row: regenerate (in setup) or the effective week (mid-season), and toggles for "Add cards by hand" and "Flag an archetype", which open below it.
       - Remove is a quiet button that turns red on hover.
       - The table scrolls inside its box, and the Released column hides on a phone. It used to make the page 544px wide at 390.
+  - **YGO-34 (built): Rosters, free agents, trades and transactions pass.**
+    - A `CardChip` (art thumbnail, name, hover preview, link) for any card that's named.
+    - **Transactions** are a feed of cards: the player's avatar, a "trade with Carol" or "free-agent claim" badge, the week and time, then Got / Gave (or Picked up / Dropped) with card art and allowance chips. On a phone they stack.
+    - **Rosters** show a small art thumbnail on every card line.
+    - **Trades** open with "N trades left · N claims left" pills, with the league's trade rules in a tip; the conversation list has avatars.
+    - **Free agents:** the two explanatory sentences moved into a tip by "Claiming for", and the claims left show as a pill.
+    - **Unread trade messages** (after Theo's review): V30 `trade_thread_read` (when each player last read each conversation; existing conversations start read).
+      - What counts: the other player's messages and the offers sent to you since then. Opening a conversation as yourself marks it read; acting as a placeholder doesn't.
+      - Where it shows (`TradeInbox` counts per conversation, season and league): a chat icon with a count in the season header, a badge on the Trades tab and on each conversation, "N unread" in the season switcher, a badge on league cards (Home and My leagues), and a "Carol messaged you" Needs-you item (kind MESSAGE) that opens that conversation.
+      - The season header refreshes every minute while the tab is visible, so new messages appear without a reload.
+    - **Follow-ups (Theo, 2026-11-27; not started, keep short when picked up):**
+      1. **Unread highlight not showing for Theo: resolved.** His backend on :8080 had been started before the unread code (his dev DB was still at V29, so no `trade_thread_read`), and Vite had hot-reloaded the new frontend against the old API, which sends no counts. Restarting the backend applies V30. Each conversation in the list already had its own count; it now also refreshes when the header's total changes, so it doesn't go stale while you sit on Trades.
+      2. **Real-time messages and trades.** Today they need a page refresh (the header polls once a minute). Push them live like the draft does (SSE per season), to support back-and-forth chat.
+      3. **Rethink the Trades UI as messaging.** It's really "messages", with a trade as a message type the platform supports. Open question: how to make it obvious to users that trades are made through the messaging (naming, entry points, the composer).
+    - **Trade chat** (after Theo's review): messages are bubbles, yours on the right in a gold tint and theirs on the left with an avatar. Consecutive messages within 5 minutes group together (the name on the first, the time on the last), and a date line marks a new day.
   - **YGO-33 to 36: Page passes,** one critique-and-polish pass per group (the draft room had its pass in YGO-29, the playoffs in YGO-30): rules and pool; rosters, free agents, trades and transactions (card art wherever a card is named, e.g. claims, drops, offers); schedule and standings; members, settings and the Explorer.
   - **YGO-37: Next season.** When a season completes, "start the next season" (the wizard, starting from a copy of it).
 - **The season setup wizard (decided with Theo, 2026-11-27).** The process is non-linear today, so the first pass is *directed*: one guided route that gets a season close to final; editing afterwards stays non-linear on the Rules, Pool and Draft pages.

@@ -6,7 +6,7 @@ import type { NeedsYouItem } from "../api/client";
 // it's that season's only.
 
 const ACTION: Record<NeedsYouItem["kind"], string> = {
-  PICK: "Pick now", REPORT: "Report", CONFIRM: "Review", TRADE_OFFER: "Open trades", DISPUTE: "Settle",
+  PICK: "Pick now", REPORT: "Report", CONFIRM: "Review", TRADE_OFFER: "Open trades", MESSAGE: "Read", DISPUTE: "Settle",
   TRADE_APPROVAL: "Review", START_DRAFT: "Go to the draft", FINISH_SETUP: "Continue setup", START_PLAYOFFS: "Start them",
   COMPLETE_SEASON: "Complete it",
 };
