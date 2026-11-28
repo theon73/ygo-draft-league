@@ -676,6 +676,13 @@ With the league's backbone built (accounts through playoffs), the app works but 
       - **Invite landing:** after joining, a welcome with avatar, team name (if in the current season) and Discord pings, all optional.
       - **Navigation:** the league bar is one line with a "League" menu (Seasons, Members, Settings, New season).
 
+  - **YGO-33 (built): Rules and Pool pass.**
+    - **Rules** opens on a plain-language summary for everyone: a card per section (matches, calendar, cards, trades and free agents, results and standings, playoffs), then the history. Commissioners press **Edit rules** for the form, whose save bar stays in view at the bottom of the screen. Players no longer see a half-disabled form. The setup wizard still uses the form directly.
+    - **Pool:**
+      - The summary text becomes stat tiles (cards, exceptions, house rules, ban list, removed), with the explanations in ⓘ tips.
+      - The commissioner tools are one row: regenerate (in setup) or the effective week (mid-season), and toggles for "Add cards by hand" and "Flag an archetype", which open below it.
+      - Remove is a quiet button that turns red on hover.
+      - The table scrolls inside its box, and the Released column hides on a phone. It used to make the page 544px wide at 390.
   - **YGO-33 to 36: Page passes,** one critique-and-polish pass per group (the draft room had its pass in YGO-29, the playoffs in YGO-30): rules and pool; rosters, free agents, trades and transactions (card art wherever a card is named, e.g. claims, drops, offers); schedule and standings; members, settings and the Explorer.
   - **YGO-37: Next season.** When a season completes, "start the next season" (the wizard, starting from a copy of it).
 - **The season setup wizard (decided with Theo, 2026-11-27).** The process is non-linear today, so the first pass is *directed*: one guided route that gets a season close to final; editing afterwards stays non-linear on the Rules, Pool and Draft pages.

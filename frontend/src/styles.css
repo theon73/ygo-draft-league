@@ -910,3 +910,34 @@ details.menu[open] > summary, details.menu > summary:hover { color: var(--text);
 .single-section > h4:first-of-type { display: none; }
 .form-actions .push-right { margin-left: auto; }
 .button-row { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; margin: 0.75rem 0 0.5rem; }
+
+/* Pool page pass (YGO-33) */
+.pool-summary { margin-bottom: 0.75rem; }
+.pool-summary .stat-value { white-space: nowrap; }
+.pool-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem 0.75rem; margin: 0 0 1rem; padding: 0.55rem 0.75rem;
+  border: 1px dashed var(--border); border-radius: var(--radius); }
+.tools-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-2); }
+.tool-inline { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; color: var(--text-2); }
+details.tool > summary { list-style: none; display: inline-block; padding: 0.28rem 0.65rem; border-radius: var(--radius-sm); border: 1px solid var(--border);
+  background: var(--surface-2); font-size: 0.8rem; font-weight: 600; color: var(--text); cursor: pointer; }
+details.tool > summary::-webkit-details-marker { display: none; }
+details.tool > summary::after { content: " ▾"; font-size: 0.7rem; color: var(--text-2); }
+details.tool[open] { flex-basis: 100%; order: 10; }
+details.tool[open] > summary { background: var(--accent-wash); border-color: var(--accent-line); color: var(--accent); }
+details.tool[open] > :not(summary) { margin-top: 0.6rem; }
+button.quiet-danger { background: transparent; border-color: transparent; color: var(--text-2); }
+button.quiet-danger:hover:not(:disabled) { background: var(--bad-wash); border-color: var(--bad-line); color: var(--bad); }
+@media (max-width: 640px) { table.pool th:nth-child(3), table.pool td:nth-child(3) { display: none; } }
+
+/* Rules page pass (YGO-33) */
+.rule-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); gap: 0.6rem; margin-bottom: 1rem; }
+.rule-card { background: var(--surface); border: 1px solid var(--border-soft); border-radius: var(--radius); padding: 0.75rem 0.95rem; }
+.rule-card h5 { margin: 0 0 0.4rem; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent); }
+.rule-card ul { margin: 0; padding-left: 1rem; font-size: 0.9rem; color: var(--text-2); }
+.rule-card li { margin: 0.2rem 0; }
+.rule-card strong { color: var(--text); }
+p.save-bar { position: sticky; bottom: 0; z-index: 20; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin: 1.25rem 0 0;
+  padding: 0.7rem 0.9rem; background: rgba(23, 33, 33, 0.94); backdrop-filter: blur(6px); border: 1px solid var(--border); border-radius: var(--radius) var(--radius) 0 0; }
+p.save-bar .primary { margin-left: auto; }
+.pool-tools button.on { background: var(--accent-wash); border-color: var(--accent-line); color: var(--accent); }
+.pool-tools .tool-panel { flex-basis: 100%; padding-top: 0.4rem; border-top: 1px solid var(--border-soft); }
