@@ -46,10 +46,16 @@ export default function SeasonRulesPage({ sections, saveLabel, onSaved: afterSav
   const rules = useApi<SeasonRules>(`${base}/rules`);
   const banLists = useApi<BanListOption[]>(`/leagues/${league.id}/ban-lists`);
 
+  // The tab opens on a plain-language summary (YGO-33); commissioners open the form from it. The
+  // setup wizard (sections given) goes straight to the form.
+  const [editing, setEditing] = useState(false);
+
   if (rules.error) return <p className="bad">Couldn't load the rules ({rules.error})</p>;
   if (!rules.data) return <Loading />;
+  if (!sections && !editing) return <RulesSummary rules={rules.data} onEdit={rules.data.canManage ? () => setEditing(true) : undefined} />;
   return <RulesForm key={rules.data.version ?? 0} rules={rules.data} banLists={banLists.data ?? []} base={base}
-                    onSaved={() => { rules.reload(); afterSave?.(); }} sections={sections} saveLabel={saveLabel} extraFooter={extraFooter} />;
+                    onSaved={() => { rules.reload(); afterSave?.(); if (!sections) setEditing(false); }} sections={sections}
+                    saveLabel={saveLabel} extraFooter={extraFooter ?? (!sections && <button type="button" className="ghost" onClick={() => setEditing(false)}>Cancel</button>)} />;
 }
 
 function RulesForm({ rules, banLists, base, onSaved, sections, saveLabel, extraFooter }: {
@@ -341,7 +347,8 @@ function RulesForm({ rules, banLists, base, onSaved, sections, saveLabel, extraF
 
       </>)}
       {edit && (
-        <p>
+        // On the Rules tab the save bar stays in view at the bottom of the screen while editing.
+        <p className={sections ? "form-actions" : "save-bar"}>
           {rules.started && (
             <label className="inline-label">Takes effect from week{" "}
               <input type="number" className="narrow-num" min={rules.minEffectiveWeek} value={fromWeek} onChange={(e) => setFromWeek(e.target.value)} />
@@ -359,6 +366,79 @@ function RulesForm({ rules, banLists, base, onSaved, sections, saveLabel, extraF
           <summary>History ({rules.history.length} version{rules.history.length === 1 ? "" : "s"})</summary>
           <ul>
             {rules.history.map((h) => (
+              <li key={h.version}>
+                Version {h.version}, in effect from {h.effectiveFromWeek === 0 ? "the start" : `week ${h.effectiveFromWeek}`}: {h.by ?? "system"},{" "}
+                {new Date(h.at).toLocaleString()}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </>
+  );
+}
+
+// ---- The summary (YGO-33) ------------------------------------------------------------------
+
+const fmtDay = (iso: string) => new Date(`${iso}T12:00:00`).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+const times = (n: number) => (n === 1 ? "once" : n === 2 ? "twice" : `${n} times`);
+const perWeek = (n: number | null, what: string) => (n === null ? `unlimited ${what}` : n === 0 ? `no ${what}` : `${n} ${what.replace(/s$/, n === 1 ? "" : "s")}`);
+
+/** The season's rules in plain words, a card per section. */
+function RulesSummary({ rules: r, onEdit }: { rules: SeasonRules; onEdit?: () => void }) {
+  const c = r.competition;
+  const t = r.transactions;
+  const po = r.playoffs;
+  const card = (title: string, lines: ReactNode[]) => (
+    <section className="rule-card">
+      <h5>{title}</h5>
+      <ul>{lines.filter(Boolean).map((l, i) => <li key={i}>{l}</li>)}</ul>
+    </section>
+  );
+  return (
+    <>
+      <div className="section-head">
+        <h4>This season's rules</h4>
+        {r.version === null && <span className="muted small">Not set yet</span>}
+        {onEdit && <button className="primary sm push-right" onClick={onEdit}>Edit rules</button>}
+      </div>
+      {r.started && onEdit && <p className="muted small">The season has started: changes take effect from a week you choose, and the calendar and format are fixed.</p>}
+      <div className="rule-cards">
+        {card("Matches", [
+          c.format === "ROUND_ROBIN" ? <>Round-robin: each pair of players meets <strong>{times(c.roundRobinCycles ?? 1)}</strong></> : "Format not chosen yet",
+          <>Matches are <strong>best of {c.bestOf}</strong></>,
+          c.format === "ROUND_ROBIN" && c.rounds !== null && c.players >= 2 && `${c.players} players: ${c.rounds} rounds, ${c.matchesPerPlayer} matches each${c.byes ? " (one bye a round)" : ""}`,
+        ])}
+        {card("Calendar", [
+          r.calendar.startDate ? <>Starts <strong>{fmtDay(r.calendar.startDate)}</strong></> : "No start date yet",
+          r.weeks.length > 0 && `${r.weeks.length} weeks, one round a week`,
+          `Weeks start ${r.calendar.weekStartsOn.charAt(0) + r.calendar.weekStartsOn.slice(1).toLowerCase()} ${r.calendar.weekStartsAt} (${r.calendar.timeZone.replaceAll("_", " ")})`,
+        ])}
+        {card("Cards", [
+          r.format.tcgCutoff ? <>Released in the TCG by <strong>{fmtDay(r.format.tcgCutoff)}</strong></> : "No cutoff yet",
+          r.format.banList ? <>Ban list: <strong>{r.format.banList.name}</strong></> : "No ban list: up to 3 copies of anything",
+          "One owner per card; house rules per card are on the Pool tab",
+        ])}
+        {card("Trades and free agents", [
+          <>Each week: <strong>{perWeek(t.freeAgencyPerWeek, "claims")}</strong> and <strong>{perWeek(t.tradesPerWeek, "trades")}</strong></>,
+          t.tradeDeadlineWeek !== null ? `Trade deadline: the end of week ${t.tradeDeadlineWeek}` : "No trade deadline",
+          t.commissionerApproval ? "Accepted trades need a commissioner's approval" : "Accepted trades go through right away",
+          "Trades are even: the same number of cards each way",
+        ])}
+        {card("Results and standings", [
+          `Either player reports, the other confirms; unanswered reports confirm after ${r.results.confirmHours} hours`,
+          <>Ranked by wins, then {r.results.tiebreakers.map((x) => TIEBREAKERS[x].toLowerCase()).join(", then ")}</>,
+        ])}
+        {card("Playoffs", po.enabled ? [
+          playoffShape(po.directQualifiers ?? 0, po.playInTeams ?? 0),
+          `Playoff matches are best of ${po.bestOf ?? c.bestOf}${(po.playInTeams ?? 0) > 0 ? `; the play-in, best of ${po.playInBestOf ?? po.bestOf ?? c.bestOf}` : ""}`,
+        ] : ["No playoffs: the regular-season standings decide the champion"])}
+      </div>
+      {r.history.length > 0 && (
+        <details className="rules-history-summary">
+          <summary>History ({r.history.length} version{r.history.length === 1 ? "" : "s"})</summary>
+          <ul>
+            {r.history.map((h) => (
               <li key={h.version}>
                 Version {h.version}, in effect from {h.effectiveFromWeek === 0 ? "the start" : `week ${h.effectiveFromWeek}`}: {h.by ?? "system"},{" "}
                 {new Date(h.at).toLocaleString()}

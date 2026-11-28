@@ -18,6 +18,8 @@ import { usePoolParams } from "./usePoolParams";
 import { currentWeekNote } from "./currentWeek";
 import { seasonCardPath } from "./RostersPage";
 import { useConfirm, Loading } from "../../components/Feedback";
+import InfoTip from "../../components/InfoTip";
+import StatTile from "../../components/StatTile";
 
 type Show = "ALL" | "EXCEPTIONS" | "FLAGGED" | "BAN_LIST" | "REMOVED";
 const SHOWS: { value: Show; label: string }[] = [
@@ -70,6 +72,8 @@ export default function SeasonPoolPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const confirm = useConfirm();
+  // Which commissioner tool is open below the tools row.
+  const [tool, setTool] = useState<"add" | "flags" | null>(null);
   // Mid-season, every change takes effect from a week (never earlier than now).
   const [week, setWeek] = useState<string>("");
 
@@ -138,41 +142,63 @@ export default function SeasonPoolPage() {
             : <>Set the TCG cutoff on the <Link to="../rules">Rules</Link> tab first; the pool is generated from it.</>}
         </p>
       ) : (
-        <p>
-          {s.total.toLocaleString()} cards: {s.dated.toLocaleString()} up to the {s.generatedCutoff} cutoff, {s.exceptions} exception{s.exceptions === 1 ? "" : "s"}.{" "}
-          <span className="muted">
-            {s.softBanned} soft-banned · {s.requiresOwnership} must be owned · {s.overridden} with a league copy limit · {s.removed} removed
-          </span>
-          <br />
-          <span className="muted">
-            {s.banList
-              ? `Ban list: ${s.banList} (${s.forbidden} forbidden, ${s.limited} limited, ${s.semiLimited} semi-limited in this pool). Copy limits follow it unless ${manage ? "you set one here" : "the league sets one"}.`
-              : `No ban list in the rules, so every card is limited to 3 unless ${manage ? "you set a limit here" : "the league sets one"}.`}
-          </span>
-        </p>
+        // The pool at a glance (YGO-33), with the details in tips.
+        <div className="stat-tiles pool-summary">
+          <StatTile label="Cards" value={s.total.toLocaleString()}
+                    sub={`${s.dated.toLocaleString()} released by ${fmtDate(s.generatedCutoff)}`}
+                    tip="Every card released in the TCG on or before the cutoff (tokens excluded), plus the exceptions added by hand." />
+          <StatTile label="Exceptions" value={s.exceptions} sub="added by hand"
+                    tip="Cards past the cutoff that the league added anyway, each with its reason." />
+          <StatTile label="House rules" value={s.softBanned + s.requiresOwnership + s.overridden}
+                    sub={`${s.softBanned} soft-banned · ${s.requiresOwnership} must own · ${s.overridden} limits`}
+                    tip={<>Soft-banned cards can't be drafted or played. "Must own" cards can only be played by whoever owns them. A league limit replaces the ban list's copy limit for that card.</>} />
+          <StatTile label="Ban list" value={s.banList ?? "None"}
+                    sub={s.banList ? `${s.forbidden} forbidden · ${s.limited} limited · ${s.semiLimited} semi` : "every card at 3 copies"}
+                    tip={s.banList
+                      ? `Copy limits follow ${s.banList} unless the league sets its own for a card. The counts are cards in this pool.`
+                      : `No ban list in the rules, so every card is limited to 3 unless the league sets a limit.`} />
+          {manage && s.removed > 0 && <StatTile label="Removed" value={s.removed} sub="taken out by hand" tip="Cards removed from the pool. They're kept in the Removed view, where they can be put back." />}
+        </div>
       )}
       {stale && <p className="bad">The rules' cutoff is now {s.rulesCutoff}, but the pool was generated from {s.generatedCutoff}. Regenerate to match.</p>}
-      {manage && !s.started && s.rulesCutoff && (
-        <p>
-          <button className={s.generatedAt ? undefined : "primary"} onClick={() => void generate()} disabled={busy}>{s.generatedAt ? "Regenerate from the rules" : "Generate pool"}</button>{" "}
-          <span className="muted">
-            {s.generatedAt ? "Exceptions and cards you removed are kept. " : ""}Thumbnails are fetched in the background afterwards.
-          </span>
-        </p>
-      )}
-      {manage && s.started && (
-        <p>
-          <label className="inline-label">Changes take effect from week{" "}
-            <input type="number" className="narrow-num" min={s.minEffectiveWeek} value={week || s.minEffectiveWeek}
-                   onChange={(e) => setWeek(e.target.value)} />
-          </label>{" "}
-          <span className="muted">{currentWeekNote(s.minEffectiveWeek)} The season has started: earlier weeks keep the pool they had.</span>
-        </p>
+      {/* The commissioner's tools, in one row; the two forms open below it (YGO-33). */}
+      {manage && (
+        <div className="pool-tools">
+          <span className="tools-label">Commissioner</span>
+          {!s.started && s.rulesCutoff && (
+            <span className="tool-inline">
+              <button className={s.generatedAt ? "sm" : "primary sm"} onClick={() => void generate()} disabled={busy}>
+                {s.generatedAt ? "Regenerate from the rules" : "Generate pool"}
+              </button>
+              <InfoTip>
+                Takes every card released by the rules' TCG cutoff.{s.generatedAt ? " Exceptions and cards you removed are kept." : ""} Card
+                thumbnails are fetched in the background afterwards.
+              </InfoTip>
+            </span>
+          )}
+          {s.started && (
+            <label className="tool-inline">From week
+              <input type="number" className="narrow-num" min={s.minEffectiveWeek} value={week || s.minEffectiveWeek}
+                     onChange={(e) => setWeek(e.target.value)} aria-label="Changes take effect from week" />
+              <InfoTip>
+                The season has started, so pool changes take effect from a week you choose and earlier weeks keep the pool they had.
+                {" "}{currentWeekNote(s.minEffectiveWeek)}
+              </InfoTip>
+            </label>
+          )}
+          <button className={`sm${tool === "add" ? " on" : ""}`} aria-expanded={tool === "add"} onClick={() => setTool(tool === "add" ? null : "add")}>
+            Add cards by hand
+          </button>
+          {s.total > 0 && (
+            <button className={`sm${tool === "flags" ? " on" : ""}`} aria-expanded={tool === "flags"} onClick={() => setTool(tool === "flags" ? null : "flags")}>
+              Flag an archetype
+            </button>
+          )}
+          {tool === "add" && <AddException base={base} effective={effective} onAdded={() => { summary.reload(); cards.reload(); }} />}
+          {tool === "flags" && <ArchetypeFlags base={base} effective={effective} onDone={() => { summary.reload(); cards.reload(); }} />}
+        </div>
       )}
       {error && <p className="bad">{error}</p>}
-
-      {manage && <AddException base={base} effective={effective} onAdded={() => { summary.reload(); cards.reload(); }} />}
-      {manage && s.total > 0 && <ArchetypeFlags base={base} effective={effective} onDone={() => { summary.reload(); cards.reload(); }} />}
 
       {s.generatedAt !== null && (
         <>
@@ -210,6 +236,7 @@ export default function SeasonPoolPage() {
               {shownView === "grid" ? (
                 <PoolGrid cards={cards.data.items} />
               ) : (
+              <div className="table-scroll">
               <table className="pool">
                 <thead>
                   <tr><th /><th>Card</th><th>Released</th><th>Soft-ban</th><th>Must own</th><th>Max copies</th>{manage && <th />}</tr>
@@ -246,7 +273,7 @@ export default function SeasonPoolPage() {
                               {[3, 2, 1, 0].map((n) => <option key={n} value={n}>{n} (league rule)</option>)}
                             </select>
                           </td>
-                          <td className="actions"><button className="danger sm" onClick={() => void remove(c)} disabled={busy}>Remove</button></td>
+                          <td className="actions"><button className="quiet-danger sm" onClick={() => void remove(c)} disabled={busy}>Remove</button></td>
                         </>
                       ) : (
                         <>
@@ -262,6 +289,7 @@ export default function SeasonPoolPage() {
                   ))}
                 </tbody>
               </table>
+              </div>
               )}
               {cards.data.total > cards.data.pageSize && (
                 <p>
@@ -305,8 +333,7 @@ function AddException({ base, effective, onAdded }: { base: string; effective: o
   };
 
   return (
-    <details className="panel">
-      <summary>Add cards by hand (exceptions)</summary>
+    <div className="tool-panel">
       <p className="muted">
         Cards on top of the dated pool, e.g. just past the cutoff to help a deck or a struggling roster. The reason is shown to the league.
       </p>
@@ -329,7 +356,7 @@ function AddException({ base, effective, onAdded }: { base: string; effective: o
           </tbody>
         </table>
       ))}
-    </details>
+    </div>
   );
 }
 
@@ -349,8 +376,7 @@ function ArchetypeFlags({ base, effective, onDone }: { base: string; effective: 
     }
   };
   return (
-    <details className="panel">
-      <summary>Flag a whole archetype</summary>
+    <div className="tool-panel">
       <select value={archetype} onChange={(e) => setArchetype(e.target.value)} aria-label="Archetype">
         <option value="">Choose an archetype…</option>
         {archetypes.data?.map((a) => <option key={a.archetype} value={a.archetype}>{a.archetype} ({a.cards})</option>)}
@@ -358,7 +384,7 @@ function ArchetypeFlags({ base, effective, onDone }: { base: string; effective: 
       <button disabled={!archetype} onClick={() => void apply({ softBanned: true }, "Soft-ban")}>Soft-ban all</button>{" "}
       <button disabled={!archetype} onClick={() => void apply({ softBanned: false }, "Lift the soft ban on")}>Lift soft ban</button>
       {error && <p className="bad">{error}</p>}
-    </details>
+    </div>
   );
 }
 
@@ -391,4 +417,10 @@ function ChangeLog({ base, version }: { base: string; version: string }) {
       </ul>
     </details>
   );
+}
+
+/** "2008-02-28" → "Feb 28, 2008". */
+function fmtDate(iso: string | null): string {
+  if (!iso) return "the cutoff";
+  return new Date(`${iso}T12:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
