@@ -307,12 +307,29 @@ export interface SeasonDetail {
   commissioners: SeasonCommissioner[]; // owner first
   participants: Participant[]; // in seat order
   candidates: Candidate[]; // commissioners only: every league member
-  lastDraw: { drawnBy: string; drawnAt: string; order: string[] } | null;
+  lastDraw: SeatDrawRecord | null;
   currentWeek?: number | null; // once active: 0 before week 1, past weekCount after the regular season (YGO-31)
   weekCount?: number | null;
   playoffsStarted?: boolean;
   setupStep?: number | null; // the setup wizard's step to resume at (YGO-32); null when not in use
   unreadMessages?: number; // your unread trade messages and offers in this season (YGO-34)
+  copiedFrom?: SeasonRef | null; // the season this one was copied from (YGO-39)
+  next?: SeasonRef | null; // the league's next season after this one (YGO-39)
+}
+
+/** The latest recorded seat order: a random draw, or (YGO-39) the reverse of an earlier season's standings. */
+export interface SeatDrawRecord {
+  drawnBy: string;
+  drawnAt: string;
+  order: string[];
+  method?: "RANDOM" | "REVERSE_STANDINGS"; // missing before YGO-39 means RANDOM
+  basedOn?: string | null; // REVERSE_STANDINGS: the season whose standings were reversed
+}
+
+export interface SeasonRef {
+  id: string;
+  name: string;
+  status: SeasonStatus;
 }
 
 /** Something waiting on the viewer (YGO-31): from /me/needs-you (every league) or a season's /needs-you. */

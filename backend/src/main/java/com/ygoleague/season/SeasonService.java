@@ -65,7 +65,16 @@ public class SeasonService {
     /** @param owner the league owner, a commissioner of every season (can't be removed) */
     public record Commissioner(String memberId, String displayName, boolean owner, boolean you) {}
 
-    public record SeatDraw(String drawnBy, Instant drawnAt, List<String> order) {}
+    /**
+     * The latest recorded seat order.
+     *
+     * @param method  RANDOM (a draw) or REVERSE_STANDINGS (YGO-39; every earlier row is RANDOM)
+     * @param basedOn for REVERSE_STANDINGS, the season whose standings were reversed
+     */
+    public record SeatDraw(String drawnBy, Instant drawnAt, List<String> order, String method, String basedOn) {}
+
+    /** A season this one relates to (YGO-39), e.g. the one it was copied from. */
+    public record SeasonRef(String id, String name, SeasonStatus status) {}
 
     /**
      * @param canManage  the caller commissions this season (show setup controls)
@@ -77,11 +86,15 @@ public class SeasonService {
      * @param playoffsStarted a commissioner has started the playoffs
      * @param setupStep   the setup wizard's step to resume at (YGO-32), or null when it isn't in use
      * @param unreadMessages the caller's unread trade messages and offers in this season (YGO-34)
+     * @param copiedFrom  the season this one was copied from (YGO-39), or null; when it's complete, its
+     *                    reverse standings can set the seats
+     * @param next        the league's next season after this one (YGO-39), or null
      */
     public record SeasonDetail(String id, String name, SeasonStatus status, Instant createdAt, boolean canManage,
                                boolean youPlay, boolean editable, List<Commissioner> commissioners,
                                List<Participant> participants, List<Candidate> candidates, SeatDraw lastDraw,
-                               Integer currentWeek, Integer weekCount, boolean playoffsStarted, Integer setupStep, int unreadMessages) {}
+                               Integer currentWeek, Integer weekCount, boolean playoffsStarted, Integer setupStep, int unreadMessages,
+                               SeasonRef copiedFrom, SeasonRef next) {}
 
     private final LeagueAccess access;
     private final LeagueRepository leagues;
@@ -94,12 +107,15 @@ public class SeasonService {
     private final com.ygoleague.season.rules.SeasonRulesService rules;
     private final SeasonCopier copier;
     private final com.ygoleague.season.transaction.TradeInbox inbox;
+    private final com.ygoleague.season.schedule.StandingsService standings;
 
     public SeasonService(LeagueAccess access, LeagueRepository leagues, LeagueMemberRepository members,
                          SeasonRepository seasons, SeasonPlayerRepository players, PublicIds publicIds, JdbcClient jdbc,
                          SeasonAccess seasonAccess, com.ygoleague.season.rules.SeasonRulesService rules, SeasonCopier copier,
-                         com.ygoleague.season.transaction.TradeInbox inbox) {
+                         com.ygoleague.season.transaction.TradeInbox inbox,
+                         com.ygoleague.season.schedule.StandingsService standings) {
         this.inbox = inbox;
+        this.standings = standings;
         this.rules = rules;
         this.copier = copier;
         this.access = access;
@@ -147,6 +163,7 @@ public class SeasonService {
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No such season to copy from"));
             copier.copy(from, season, new SeasonCopier.Parts(Boolean.TRUE.equals(req.copyPlayers()), Boolean.TRUE.equals(req.copyRules()),
                     Boolean.TRUE.equals(req.copyDraft()), Boolean.TRUE.equals(req.copyPool())), caller.userId());
+            season.setCopiedFromSeasonId(from.getId());
         }
         if (Boolean.TRUE.equals(req.guided())) season.setSetupStep(1);
         return summary(season);
@@ -302,6 +319,32 @@ public class SeasonService {
         return detail(season, me);
     }
 
+    /**
+     * Last place picks first (YGO-39): the seats in the reverse of the final placement of the season
+     * this one was copied from, which must be complete (see {@link SeatOrder#reverseOfPlacement} for
+     * newcomers). Recorded like a draw, so everyone sees how the order was set.
+     */
+    @Transactional
+    public SeasonDetail reverseStandingsSeats(String publicLeagueId, String publicSeasonId, CurrentUser caller) {
+        Managing m = lockAsCommissioner(publicLeagueId, publicSeasonId, caller);
+        Season season = requireEditable(m.season());
+        Season from = season.getCopiedFromSeasonId() == null ? null : seasons.findById(season.getCopiedFromSeasonId()).orElse(null);
+        if (from == null || from.getStatus() != SeasonStatus.COMPLETE) {
+            throw bad("This season wasn't copied from a completed season, so there are no final standings to reverse");
+        }
+        List<Long> participants = players.findBySeasonIdOrderBySeat(season.getId()).stream()
+                .map(p -> p.getMember().getId()).toList();
+        if (participants.size() < 2) throw bad("Add at least two participants before setting seats");
+        List<Long> order = SeatOrder.reverseOfPlacement(participants, standings.finalPlacement(from));
+        assignSeats(season, order);
+        jdbc.sql("""
+                        insert into season_seat_draw (season_id, drawn_by, seat_order, method, based_on_season_id)
+                        values (:s, :u, :o, 'REVERSE_STANDINGS', :f)""")
+                .param("s", season.getId()).param("u", caller.userId()).param("o", order.toArray(Long[]::new))
+                .param("f", from.getId()).update();
+        return detail(season, m.me());
+    }
+
     /** Commissioners can name any team; players can name their own. Blank clears it. */
     @Transactional
     public SeasonDetail setTeamName(String publicLeagueId, String publicSeasonId, String memberId, String teamName, CurrentUser caller) {
@@ -351,7 +394,23 @@ public class SeasonService {
                 jdbc.sql("select exists (select 1 from stage where season_id = :s and kind = 'PLAYOFFS' and started_at is not null)")
                         .param("s", season.getId()).query(Boolean.class).single(),
                 season.getStatus() == SeasonStatus.SETUP ? season.getSetupStep() : null,
-                me.getUser() == null ? 0 : inbox.inSeason(me.getUser().getId(), season.getId()));
+                me.getUser() == null ? 0 : inbox.inSeason(me.getUser().getId(), season.getId()),
+                season.getCopiedFromSeasonId() == null ? null : seasons.findById(season.getCopiedFromSeasonId()).map(this::ref).orElse(null),
+                nextAfter(season));
+    }
+
+    private SeasonRef ref(Season s) {
+        return new SeasonRef(publicIds.encode(PublicIdType.SEASON, s.getId()), s.getName(), s.getStatus());
+    }
+
+    /** The league's oldest season created after this one, if any. */
+    private SeasonRef nextAfter(Season season) {
+        Season next = null;
+        for (Season s : seasons.findByLeagueIdOrderByCreatedAtDesc(season.getLeague().getId())) {
+            if (s.getId().equals(season.getId())) break;
+            next = s;
+        }
+        return next == null ? null : ref(next);
     }
 
     private boolean commissions(Season season, LeagueMember member) {
@@ -364,14 +423,15 @@ public class SeasonService {
 
     private SeatDraw lastDraw(Season season) {
         return jdbc.sql("""
-                        select u.display_name, d.drawn_at, d.seat_order
+                        select u.display_name, d.drawn_at, d.seat_order, d.method, b.name
                         from season_seat_draw d join app_user u on u.id = d.drawn_by
+                        left join season b on b.id = d.based_on_season_id
                         where d.season_id = :s order by d.drawn_at desc, d.id desc limit 1
                         """)
                 .param("s", season.getId())
                 .query((rs, n) -> {
                     Long[] order = (Long[]) rs.getArray("seat_order").getArray();
-                    return new Object[] {rs.getString(1), rs.getTimestamp(2).toInstant(), List.of(order)};
+                    return new Object[] {rs.getString(1), rs.getTimestamp(2).toInstant(), List.of(order), rs.getString(4), rs.getString(5)};
                 })
                 .optional()
                 .map(row -> {
@@ -380,7 +440,7 @@ public class SeasonService {
                     members.findAllById(ids).forEach(m -> names.put(m.getId(), m.getDisplayName()));
                     // A member who has since left the league shows as "(removed member)".
                     return new SeatDraw((String) row[0], (Instant) row[1],
-                            ids.stream().map(id -> names.getOrDefault(id, "(removed member)")).toList());
+                            ids.stream().map(id -> names.getOrDefault(id, "(removed member)")).toList(), (String) row[3], (String) row[4]);
                 })
                 .orElse(null);
     }

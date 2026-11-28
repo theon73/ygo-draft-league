@@ -41,4 +41,23 @@ public final class SeatOrder {
         Collections.shuffle(order, random);
         return order;
     }
+
+    /**
+     * Last place picks first (YGO-39): the participants in the reverse of an earlier season's final
+     * placement. Newcomers who didn't play it go first, in their current order, as if they finished
+     * below everyone; people who played it but don't play now are skipped.
+     *
+     * @param current   the participants in their current seat order
+     * @param placement the earlier season's final placement, first place first
+     */
+    public static List<Long> reverseOfPlacement(List<Long> current, List<Long> placement) {
+        Set<Long> playing = new LinkedHashSet<>(current);
+        List<Long> order = new ArrayList<>();
+        Set<Long> placed = new HashSet<>(placement);
+        for (Long id : current) if (!placed.contains(id)) order.add(id);
+        List<Long> reversed = new ArrayList<>(placement);
+        Collections.reverse(reversed);
+        for (Long id : reversed) if (playing.contains(id)) order.add(id);
+        return order;
+    }
 }

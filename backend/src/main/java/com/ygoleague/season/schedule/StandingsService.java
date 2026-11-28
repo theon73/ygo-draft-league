@@ -93,6 +93,37 @@ public class StandingsService {
                 .stream().map(Standings.Row::player).toList();
     }
 
+    /**
+     * A completed season's final placement as league member ids, first place first (YGO-39, for the
+     * next season's reverse-standings draft order): the champion, then the final's loser when there
+     * were playoffs, then everyone else in regular-season standings order.
+     */
+    public List<Long> finalPlacement(Season season) {
+        List<Long> order = new java.util.ArrayList<>(order(season));
+        Long champion = jdbc.sql("select champion_player_id from season where id = :s").param("s", season.getId())
+                .query((rs, n) -> (Long) rs.getObject(1)).single();
+        List<Long> top = new java.util.ArrayList<>();
+        if (champion != null) {
+            top.add(champion);
+            jdbc.sql("""
+                            select m.player_a_id, m.player_b_id from season_match m join stage st on st.id = m.stage_id
+                            where m.season_id = :s and st.kind = 'PLAYOFFS' order by m.ordinal desc limit 1""")
+                    .param("s", season.getId())
+                    .query((rs, n) -> new Long[] {(Long) rs.getObject(1), (Long) rs.getObject(2)})
+                    .optional()
+                    .ifPresent(f -> {
+                        if (champion.equals(f[0]) && f[1] != null) top.add(f[1]);
+                        else if (champion.equals(f[1]) && f[0] != null) top.add(f[0]);
+                    });
+        }
+        order.removeAll(top);
+        top.addAll(order);
+        Map<Long, Long> memberOf = new java.util.HashMap<>();
+        jdbc.sql("select id, league_member_id from season_player where season_id = :s").param("s", season.getId())
+                .query(rs -> { memberOf.put(rs.getLong(1), rs.getLong(2)); });
+        return top.stream().map(memberOf::get).toList();
+    }
+
     /** Final results of a season's regular-season matches. */
     List<Standings.Result<Long>> finalResults(Season season) {
         return jdbc.sql("""

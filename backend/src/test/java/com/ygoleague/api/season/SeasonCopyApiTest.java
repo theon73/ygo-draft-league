@@ -123,6 +123,16 @@ class SeasonCopyApiTest {
                 .andExpect(jsonPath("$.exceptions").value(1))
                 .andExpect(jsonPath("$.generatedCutoff").value("2008-03-01"));
 
+        // It remembers where it came from (YGO-39); the old season points at it as the next one. S1 isn't
+        // complete, so there are no final standings to reverse, and a random draw says it's random.
+        mvc.perform(get(l("/seasons/" + s2)).with(as(kaiba)))
+                .andExpect(jsonPath("$.copiedFrom.name").value("S1")).andExpect(jsonPath("$.copiedFrom.status").value("SETUP"))
+                .andExpect(jsonPath("$.next").doesNotExist());
+        mvc.perform(get(l("/seasons/" + season)).with(as(kaiba))).andExpect(jsonPath("$.next.name").value("S2"));
+        send(post(l("/seasons/" + s2 + "/seats/reverse-standings")), yugi, null).andExpect(status().isBadRequest());
+        send(post(l("/seasons/" + s2 + "/seats/randomize")), yugi, null)
+                .andExpect(jsonPath("$.lastDraw.method").value("RANDOM")).andExpect(jsonPath("$.lastDraw.basedOn").doesNotExist());
+
         // Only what's ticked: the rules without the draft, no players, no pool.
         String s3 = read(send(post(l("/seasons")), yugi, "{\"name\":\"S3\",\"copyFrom\":\"" + season + "\",\"copyRules\":true}"), "$.id");
         mvc.perform(get(l("/seasons/" + s3)).with(as(yugi)))

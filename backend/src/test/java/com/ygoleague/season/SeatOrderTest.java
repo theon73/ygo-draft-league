@@ -22,6 +22,14 @@ class SeatOrderTest {
     }
 
     @Test
+    void reverseOfPlacementPutsLastPlaceFirstAndNewcomersBeforeEveryone() {
+        // Last season: 1 won, then 2, 3, 4. Now 3 has left, and 9 and 8 have joined (seated 9 before 8).
+        assertEquals(List.of(9L, 8L, 4L, 2L, 1L), SeatOrder.reverseOfPlacement(List.of(1L, 9L, 2L, 8L, 4L), List.of(1L, 2L, 3L, 4L)));
+        assertEquals(List.of(3L, 2L, 1L), SeatOrder.reverseOfPlacement(List.of(1L, 2L, 3L), List.of(1L, 2L, 3L)));
+        assertEquals(List.of(5L, 6L), SeatOrder.reverseOfPlacement(List.of(5L, 6L), List.of(1L, 2L)));
+    }
+
+    @Test
     void manualOrderMustBeAPermutation() {
         Set<Long> participants = Set.of(1L, 2L, 3L);
         assertDoesNotThrow(() -> SeatOrder.requirePermutation(List.of(3L, 1L, 2L), participants));

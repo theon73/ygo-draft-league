@@ -148,7 +148,8 @@ function SetupOverview({ base }: { base: string }) {
 /**
  * The seat draw (YGO-32): its own moment, not a wizard step. The order is drawn at random (and
  * recorded for the league to see); it can be drawn again, or adjusted by hand on the Players tab,
- * until the draft starts.
+ * until the draft starts. A season copied from a completed one can instead take that season's
+ * reverse standings, last place first (YGO-39).
  */
 function SeatDraw({ base }: { base: string }) {
   const { season, reload } = useSeason();
@@ -157,6 +158,23 @@ function SeatDraw({ base }: { base: string }) {
   const seated = [...season.participants].sort((a, b) => a.seat - b.seat);
   if (seated.length < 2) return null;
   const drawn = season.lastDraw;
+  const reversed = drawn?.method === "REVERSE_STANDINGS";
+  const from = season.copiedFrom?.status === "COMPLETE" ? season.copiedFrom : null;
+
+  const reverse = async () => {
+    if (drawn && !(await confirm({
+      title: `Use ${from!.name}'s reverse standings?`,
+      message: "Last place picks first and the champion last. This replaces the current order, and is recorded like a draw.",
+      confirmLabel: "Use reverse standings",
+    }))) return;
+    setError(null);
+    try {
+      await apiPost(`${base}/seats/reverse-standings`);
+      reload();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
 
   const draw = async () => {
     if (drawn && !(await confirm({
@@ -175,7 +193,11 @@ function SeatDraw({ base }: { base: string }) {
     <section className="overview-section seat-draw">
       <div className="section-head">
         <h4>Draft order</h4>
-        <span className="muted small">{drawn ? `Drawn by ${drawn.drawnBy}, ${new Date(drawn.drawnAt).toLocaleString()}` : "Not drawn yet"}</span>
+        <span className="muted small">
+          {!drawn ? "Not set yet"
+            : reversed ? `Reverse of ${drawn.basedOn}'s standings, set by ${drawn.drawnBy}, ${new Date(drawn.drawnAt).toLocaleString()}`
+            : `Drawn by ${drawn.drawnBy}, ${new Date(drawn.drawnAt).toLocaleString()}`}
+        </span>
       </div>
       <ol className="seat-order">
         {seated.map((p) => (
@@ -187,16 +209,63 @@ function SeatDraw({ base }: { base: string }) {
         ))}
       </ol>
       <p className="button-row">
-        <button type="button" className={drawn ? undefined : "primary"} onClick={() => void draw()}>{drawn ? "Draw again" : "Draw the order"}</button>
+        {from && (
+          <button type="button" className={drawn ? undefined : "primary"} onClick={() => void reverse()} disabled={reversed}>
+            Reverse of {from.name}'s standings
+          </button>
+        )}
+        <button type="button" className={drawn || from ? undefined : "primary"} onClick={() => void draw()}>
+          {drawn && !reversed ? "Draw again" : "Draw at random"}
+        </button>
         <Link className="button ghost" to="../players">Adjust by hand</Link>
       </p>
       <p className="muted small">
-        The order is drawn at random and the draw is shown to the league. If something's off, draw again or move players by hand on
-        the Players tab, until the draft starts.
+        {from && <>Reverse standings: last place in {from.name} picks first and the champion last; anyone new picks before them. </>}
+        A random draw is shown to the league. If something's off, {from ? "change it" : "draw again"} or move players by hand on the
+        Players tab, until the draft starts.
       </p>
       {error && <p className="bad">{error}</p>}
     </section>
   );
+}
+
+/**
+ * A completed season's way on (YGO-39): the owner starts the next season from a copy of this one
+ * (the New season page, with this season ticked); once there is one, everyone gets a link to it.
+ */
+function WhatsNext() {
+  const { league } = useLeague();
+  const { season } = useSeason();
+  const leagueBase = `/leagues/${league.id}`;
+  if (season.next) {
+    return (
+      <div className="callout next-season">
+        <span className="grow"><strong>{season.next.name}</strong> {nextStatus(season.next.status)}</span>
+        <Link className="button sm primary" to={`${leagueBase}/seasons/${season.next.id}`}>Go to {season.next.name}</Link>
+      </div>
+    );
+  }
+  if (league.myRole !== "OWNER") {
+    return <p className="callout next-season muted">This season is over. The league owner starts the next one.</p>;
+  }
+  return (
+    <div className="callout next-season">
+      <span className="grow">
+        <strong>This season is over.</strong> Start the next one from a copy of it: the players, rules, draft settings and card pool
+        come along, and you pick the dates.
+      </span>
+      <Link className="button sm primary" to={`${leagueBase}/seasons/new?from=${season.id}`}>Start the next season</Link>
+    </div>
+  );
+}
+
+function nextStatus(status: string): string {
+  switch (status) {
+    case "SETUP": return "is being set up.";
+    case "DRAFTING": return "is drafting.";
+    case "ACTIVE": return "is under way.";
+    default: return "is complete.";
+  }
 }
 
 // ---- Drafting -------------------------------------------------------------------------------
@@ -255,6 +324,7 @@ function SeasonOverview({ base }: { base: string }) {
           </span>
         </p>
       )}
+      {complete && <WhatsNext />}
 
       {bracket ? (
         <section className="overview-section">

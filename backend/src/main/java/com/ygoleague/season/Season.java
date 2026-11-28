@@ -41,6 +41,10 @@ public class Season {
     @Column(name = "setup_step")
     private Integer setupStep;
 
+    /** The season this one was copied from (YGO-39), or null. */
+    @Column(name = "copied_from_season_id")
+    private Long copiedFromSeasonId;
+
     protected Season() {}
 
     public Season(League league, String name) {
@@ -55,6 +59,8 @@ public class Season {
     public Integer getSetupStep() { return setupStep; }
     public void setSetupStep(Integer setupStep) { this.setupStep = setupStep; }
     public Instant getCreatedAt() { return createdAt; }
+    public Long getCopiedFromSeasonId() { return copiedFromSeasonId; }
+    public void setCopiedFromSeasonId(Long copiedFromSeasonId) { this.copiedFromSeasonId = copiedFromSeasonId; }
 
     public void setName(String name) { this.name = name; }
     public void setStatus(SeasonStatus status) { this.status = status; }

@@ -1,19 +1,22 @@
 import { useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { apiPost, type SeasonSummary } from "../../api/client";
 import { EmptyState } from "../../components/Feedback";
 import { useLeague } from "./LeagueLayout";
 
 // "Start from" (YGO-32): name the new season, and start it blank (with sensible defaults) or from
 // an earlier season, ticking what to bring over. Creating it opens the setup wizard at step 1.
+// ?from=<season> (YGO-39, from a completed season's "Start the next season") starts it as a copy of that season.
 
 export default function NewSeasonPage() {
   const { league, reload } = useLeague();
   const navigate = useNavigate();
+  const [params] = useSearchParams();
   const earlier = league.seasons;
+  const preset = earlier.find((s) => s.id === params.get("from"))?.id;
   const [name, setName] = useState(suggestName(earlier.map((s) => s.name)));
   // The season being played (or the newest) is the likeliest to copy.
-  const [from, setFrom] = useState<string>(league.currentSeasonId ?? earlier[0]?.id ?? "");
+  const [from, setFrom] = useState<string>(preset ?? league.currentSeasonId ?? earlier[0]?.id ?? "");
   const [copy, setCopy] = useState(earlier.length > 0);
   const [parts, setParts] = useState({ copyPlayers: true, copyRules: true, copyDraft: true, copyPool: true });
   const [error, setError] = useState<string | null>(null);
