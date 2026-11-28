@@ -57,10 +57,10 @@ function Dashboard({ name, identity }: { name: string; identity: string }) {
 
       <div className="section-head">
         <h4>Your leagues</h4>
-        <Link className="button sm" to="/leagues">Create or manage leagues</Link>
+        <Link className="button sm" to="/leagues/new">Create a league</Link>
       </div>
       {leagues.data && (leagues.data.length === 0 ? (
-        <EmptyState title="No leagues yet" actions={<Link className="button primary" to="/leagues">Create a league</Link>}>
+        <EmptyState title="No leagues yet" actions={<Link className="button primary" to="/leagues/new">Create a league</Link>}>
           <p>Create one, or ask a league owner for an invite link.</p>
         </EmptyState>
       ) : <LeagueCards leagues={leagues.data} />)}

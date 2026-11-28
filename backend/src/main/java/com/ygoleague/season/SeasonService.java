@@ -75,11 +75,12 @@ public class SeasonService {
      * @param currentWeek once the season is active: 0 before week 1, past {@code weekCount} after the regular season (YGO-31)
      * @param weekCount   the regular season's weeks, once active
      * @param playoffsStarted a commissioner has started the playoffs
+     * @param setupStep   the setup wizard's step to resume at (YGO-32), or null when it isn't in use
      */
     public record SeasonDetail(String id, String name, SeasonStatus status, Instant createdAt, boolean canManage,
                                boolean youPlay, boolean editable, List<Commissioner> commissioners,
                                List<Participant> participants, List<Candidate> candidates, SeatDraw lastDraw,
-                               Integer currentWeek, Integer weekCount, boolean playoffsStarted) {}
+                               Integer currentWeek, Integer weekCount, boolean playoffsStarted, Integer setupStep) {}
 
     private final LeagueAccess access;
     private final LeagueRepository leagues;
@@ -90,11 +91,13 @@ public class SeasonService {
     private final JdbcClient jdbc;
     private final SeasonAccess seasonAccess;
     private final com.ygoleague.season.rules.SeasonRulesService rules;
+    private final SeasonCopier copier;
 
     public SeasonService(LeagueAccess access, LeagueRepository leagues, LeagueMemberRepository members,
                          SeasonRepository seasons, SeasonPlayerRepository players, PublicIds publicIds, JdbcClient jdbc,
-                         SeasonAccess seasonAccess, com.ygoleague.season.rules.SeasonRulesService rules) {
+                         SeasonAccess seasonAccess, com.ygoleague.season.rules.SeasonRulesService rules, SeasonCopier copier) {
         this.rules = rules;
+        this.copier = copier;
         this.access = access;
         this.leagues = leagues;
         this.members = members;
@@ -120,6 +123,44 @@ public class SeasonService {
     }
 
     // ---- League owner -------------------------------------------------------------------------
+
+    /**
+     * A new season (owner only). Optionally started from an earlier season of the league (see
+     * {@link SeasonCopier}) and set up with the guided wizard ({@code guided}: it starts at step 1).
+     * Every option is optional, so the old {"name"} request still works.
+     */
+    public record CreateRequest(String name, String copyFrom, Boolean copyPlayers, Boolean copyRules, Boolean copyDraft,
+                                Boolean copyPool, Boolean guided) {}
+
+    @Transactional
+    public SeasonSummary create(String publicLeagueId, CreateRequest req, CurrentUser caller) {
+        SeasonSummary created = create(publicLeagueId, req.name(), caller);
+        Season season = seasons.findById(publicIds.decode(PublicIdType.SEASON, created.id()).orElseThrow()).orElseThrow();
+        if (req.copyFrom() != null && !req.copyFrom().isBlank()) {
+            Season from = publicIds.decode(PublicIdType.SEASON, req.copyFrom())
+                    .flatMap(seasons::findById)
+                    .filter(s -> s.getLeague().getId().equals(season.getLeague().getId()))
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No such season to copy from"));
+            copier.copy(from, season, new SeasonCopier.Parts(Boolean.TRUE.equals(req.copyPlayers()), Boolean.TRUE.equals(req.copyRules()),
+                    Boolean.TRUE.equals(req.copyDraft()), Boolean.TRUE.equals(req.copyPool())), caller.userId());
+        }
+        if (Boolean.TRUE.equals(req.guided())) season.setSetupStep(1);
+        return summary(season);
+    }
+
+    /**
+     * Where the setup wizard is (commissioners, during setup): the step to resume at, or null when
+     * setup is finished (or the wizard is left for the regular tabs).
+     */
+    @Transactional
+    public SeasonDetail setSetupStep(String publicLeagueId, String publicSeasonId, Integer step, CurrentUser caller) {
+        SeasonAccess.SeasonRef ref = seasonAccess.commissioner(publicLeagueId, publicSeasonId, caller);
+        Season season = ref.season();
+        if (season.getStatus() != SeasonStatus.SETUP) throw conflict("This season's setup is over");
+        if (step != null && (step < 1 || step > 6)) throw bad("Setup has steps 1 to 6");
+        season.setSetupStep(step);
+        return detail(season, ref.me());
+    }
 
     @Transactional
     public SeasonSummary create(String publicLeagueId, String name, CurrentUser caller) {
@@ -304,7 +345,8 @@ public class SeasonService {
                 participants, candidates, lastDraw(season),
                 active ? rules.currentWeek(season) : null, active ? rules.weeks(season).size() : null,
                 jdbc.sql("select exists (select 1 from stage where season_id = :s and kind = 'PLAYOFFS' and started_at is not null)")
-                        .param("s", season.getId()).query(Boolean.class).single());
+                        .param("s", season.getId()).query(Boolean.class).single(),
+                season.getStatus() == SeasonStatus.SETUP ? season.getSetupStep() : null);
     }
 
     private boolean commissions(Season season, LeagueMember member) {

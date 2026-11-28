@@ -125,9 +125,12 @@ class NeedsYouApiTest {
     void setupNeedsTheCommissionerOnly() throws Exception {
         mvc.perform(get("/api/me/needs-you").with(as(yugi)))
                 .andExpect(listAt("$[*].kind", List.of("FINISH_SETUP")))
-                .andExpect(jsonPath("$[0].tab").value("draft"))
+                .andExpect(jsonPath("$[0].tab").value("overview"))
                 .andExpect(jsonPath("$[0].commissioner").value(true));
         mvc.perform(get("/api/me/needs-you").with(as(kaiba))).andExpect(listAt("$[*].kind", List.of()));
+        // With the setup wizard in use, it leads back to the step it was left at (YGO-32).
+        send(put(s("/setup-step")), yugi, "{\"step\":3}").andExpect(status().isOk());
+        mvc.perform(get("/api/me/needs-you").with(as(yugi))).andExpect(jsonPath("$[0].tab").value("setup/3"));
     }
 
     @Test

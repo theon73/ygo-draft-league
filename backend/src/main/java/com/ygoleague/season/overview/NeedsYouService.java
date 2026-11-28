@@ -121,7 +121,9 @@ public class NeedsYouService {
                 List<DraftService.Check> missing = d.readiness().stream().filter(c -> !c.ok()).toList();
                 if (missing.isEmpty()) add.add("START_DRAFT", "Start the draft", "Everything is ready.", "draft", d.scheduledStart(), null, true);
                 else add.add("FINISH_SETUP", "Finish setting up " + s.getName(),
-                        missing.getFirst().detail() + (missing.size() > 1 ? " (and " + (missing.size() - 1) + " more)" : ""), "draft", null, null, true);
+                        missing.getFirst().detail() + (missing.size() > 1 ? " (and " + (missing.size() - 1) + " more)" : ""),
+                        // Into the setup wizard where it was left (YGO-32), else the Overview's checklist.
+                        s.getSetupStep() != null ? "setup/" + s.getSetupStep() : "overview", null, null, true);
             }
             case DRAFTING -> {
                 DraftView d = draft.get(leagueId, seasonId, caller);
