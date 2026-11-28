@@ -836,3 +836,77 @@ ul.pickups li { display: flex; align-items: center; gap: 0.6rem; padding: 0.45re
 .dashboard > h4 { margin: 0 0 0.6rem; }
 .dashboard .section-head { margin-top: 2rem; }
 .all-clear { padding: 0.75rem 0.9rem; border: 1px dashed var(--border); border-radius: var(--radius); }
+
+/* Guided setup (YGO-32) */
+.form-actions { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin: 1rem 0; }
+.form-actions .primary { margin-left: auto; }
+.inline-form { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; margin: 0.4rem 0; }
+.inline-form input { flex: 1; min-width: 10rem; max-width: 20rem; }
+label.field { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.85rem; color: var(--text-2); margin: 0.5rem 0 1rem; max-width: 26rem; }
+.inline-pair { display: flex; gap: 0.4rem; }
+.inline-pair select, .inline-pair input { min-width: 0 !important; }
+.page-head { margin-top: 0; }
+.page-head h1 { margin: 0; }
+.page-head .button { margin-left: auto; }
+
+.wizard { max-width: 56rem; }
+ol.wizard-steps { list-style: none; display: flex; gap: 0.25rem; padding: 0; margin: 0 0 1.25rem; overflow-x: auto; scrollbar-width: none; counter-reset: none; }
+ol.wizard-steps li { flex: 1 1 0; min-width: 6.5rem; }
+ol.wizard-steps button, ol.wizard-steps .step-button { display: flex; align-items: center; gap: 0.45rem; width: 100%; padding: 0.55rem 0.6rem; background: none;
+  border: none; border-bottom: 2px solid var(--border-soft); border-radius: 0; color: var(--text-2); font-weight: 500; font-size: 0.85rem; text-align: left; }
+ol.wizard-steps button:hover:not(:disabled) { background: var(--surface); color: var(--text); border-color: var(--border); }
+ol.wizard-steps .step-no { display: inline-grid; place-items: center; width: 1.4rem; height: 1.4rem; border-radius: 50%; border: 1.5px solid var(--border);
+  font-size: 0.72rem; flex: 0 0 auto; }
+ol.wizard-steps li.done .step-no { background: var(--good-wash); border-color: var(--good-line); color: var(--good); }
+ol.wizard-steps li.current button, ol.wizard-steps li.current .step-button { color: var(--text); border-bottom-color: var(--accent); }
+ol.wizard-steps li.current .step-no { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 700; }
+.step-title { white-space: nowrap; }
+.wizard-head h3 { margin: 0; }
+.wizard-head p { margin: 0.2rem 0 1rem; }
+.wizard-note { margin-top: 2rem; padding: 0.7rem 0.9rem; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--border-soft);
+  color: var(--text-2); font-size: 0.85rem; }
+.pool-result strong { font-size: 1.05rem; }
+.review-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 0.6rem; margin-bottom: 1.25rem; }
+.review-card { background: var(--surface); border: 1px solid var(--border-soft); border-radius: var(--radius); padding: 0.7rem 0.9rem; }
+.review-card p { margin: 0; font-size: 0.9rem; }
+.review-head { display: flex; align-items: center; justify-content: space-between; }
+.review-head h5 { margin: 0 0 0.3rem; }
+ul.player-chips.small li { padding: 0.2rem 0.6rem 0.2rem 0.25rem; font-size: 0.82rem; }
+.choice-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 0.6rem; margin: 0.4rem 0 0.75rem; }
+label.choice { display: flex; flex-direction: column; gap: 0.25rem; padding: 0.8rem 0.9rem 0.8rem 2.4rem; position: relative; border-radius: var(--radius);
+  background: var(--surface); border: 1px solid var(--border-soft); cursor: pointer; }
+label.choice input { position: absolute; left: 0.9rem; top: 0.95rem; }
+label.choice.on { border-color: var(--accent-line); background: var(--accent-wash); }
+label.choice.disabled { opacity: 0.55; cursor: not-allowed; }
+.copy-parts label.check { display: block; margin: 0.35rem 0; }
+.invite-link { display: flex; gap: 0.5rem; margin: 0.5rem 0 1.25rem; flex-wrap: wrap; }
+.invite-link input { flex: 1; min-width: 14rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.85rem; }
+.callout.setup-resume { margin-bottom: 1.25rem; }
+ol.seat-order { list-style: none; padding: 0; margin: 0.4rem 0; display: flex; flex-wrap: wrap; gap: 0.5rem; }
+ol.seat-order li { display: flex; align-items: center; gap: 0.15rem; padding: 0.3rem 0.75rem 0.3rem 0.35rem; border-radius: 999px; background: var(--surface);
+  border: 1px solid var(--border-soft); font-size: 0.9rem; }
+ol.seat-order .seat-no { display: inline-grid; place-items: center; width: 1.3rem; height: 1.3rem; border-radius: 50%; background: var(--surface-3);
+  color: var(--text-2); font-size: 0.7rem; font-weight: 700; margin-right: 0.3rem; }
+.welcome { max-width: 40rem; }
+.welcome-step { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.welcome-step h5 { margin: 0 0 0.2rem; }
+.welcome-step p { margin: 0; }
+
+/* The league menu (YGO-32): Seasons, Members and Settings, off the main navigation */
+details.menu { position: relative; margin-left: auto; }
+details.menu > summary { list-style: none; cursor: pointer; padding: 0.3rem 0.8rem; border-radius: 999px; border: 1px solid var(--border);
+  font-size: 0.85rem; color: var(--text-2); }
+details.menu > summary::-webkit-details-marker { display: none; }
+details.menu > summary::after { content: " ▾"; font-size: 0.7rem; }
+details.menu[open] > summary, details.menu > summary:hover { color: var(--text); background: var(--surface); }
+.menu-list { position: absolute; right: 0; top: calc(100% + 0.35rem); z-index: 45; min-width: 11rem; display: flex; flex-direction: column; padding: 0.35rem;
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); box-shadow: var(--shadow); }
+.menu-list a { padding: 0.45rem 0.7rem; border-radius: 4px; text-decoration: none; color: var(--text-2); font-size: 0.9rem; }
+.menu-list a:hover, .menu-list a.active { background: var(--surface-3); color: var(--text); }
+.menu-list a.menu-extra { border-top: 1px solid var(--border-soft); margin-top: 0.25rem; padding-top: 0.55rem; border-radius: 0 0 4px 4px; }
+/* Wizard forms are laid out as blocks (the global form style is a one-line flex row). */
+.wizard form:not(.inline-form), form.new-season { display: block; }
+.wizard label.field input, form.new-season label.field input { max-width: 26rem; }
+.single-section > h4:first-of-type { display: none; }
+.form-actions .push-right { margin-left: auto; }
+.button-row { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; margin: 0.75rem 0 0.5rem; }

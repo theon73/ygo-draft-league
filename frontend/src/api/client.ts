@@ -257,6 +257,7 @@ export interface SeasonDetail {
   currentWeek?: number | null; // once active: 0 before week 1, past weekCount after the regular season (YGO-31)
   weekCount?: number | null;
   playoffsStarted?: boolean;
+  setupStep?: number | null; // the setup wizard's step to resume at (YGO-32); null when not in use
 }
 
 /** Something waiting on the viewer (YGO-31): from /me/needs-you (every league) or a season's /needs-you. */

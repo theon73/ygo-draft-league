@@ -11,7 +11,7 @@ export default function LeagueHome() {
       title="No seasons yet"
       actions={<>
         <Link className="button" to="members">Invite players</Link>
-        <Link className="button primary" to="seasons">Create the first season</Link>
+        <Link className="button primary" to="seasons/new">Create the first season</Link>
       </>}
     >
       <p>Invite your players, then create the first season to pick its format, card pool and draft.</p>

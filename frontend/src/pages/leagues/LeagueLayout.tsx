@@ -1,5 +1,5 @@
-import { createContext, useContext } from "react";
-import { Link, NavLink, Outlet, useParams } from "react-router-dom";
+import { createContext, useContext, useEffect, useRef } from "react";
+import { Link, NavLink, Outlet, useLocation, useParams } from "react-router-dom";
 import type { LeagueDetail } from "../../api/client";
 import { useSession } from "../../auth/session";
 import { useApi } from "../../hooks/useApi";
@@ -16,6 +16,8 @@ import { EmptyState, Loading } from "../../components/Feedback";
 //
 // A league is the lasting group (members, settings); a season is one run of play inside it. The
 // league opens on its current season, so most of the time the season layer stays out of the way.
+// YGO-32 flattened the header: the league is one light line (name, your role and a "League" menu
+// for Seasons, Members and Settings), and the season below it is the main thing on screen.
 
 interface LeagueContext {
   league: LeagueDetail;
@@ -61,15 +63,36 @@ export default function LeagueLayout() {
           <h1><Link to={`/leagues/${l.id}`}>{l.name}</Link></h1>
           <span className="badge neutral">{roleLabel[l.myRole]}</span>
         </div>
-        <nav className="league-nav" aria-label="League">
-          <NavLink to="seasons" end>Seasons</NavLink>
-          <NavLink to="members">Members</NavLink>
-          <NavLink to="settings">Settings</NavLink>
-        </nav>
+        <LeagueMenu owner={l.myRole === "OWNER"} />
       </div>
       <LeagueCtx.Provider value={{ league: l, reload: league.reload }}>
         <Outlet />
       </LeagueCtx.Provider>
     </section>
+  );
+}
+
+/** The league's own pages, in a small menu (a native <details>, closed again on navigation). */
+function LeagueMenu({ owner }: { owner: boolean }) {
+  const ref = useRef<HTMLDetailsElement>(null);
+  const location = useLocation();
+  useEffect(() => { if (ref.current) ref.current.open = false; }, [location.pathname]);
+  useEffect(() => {
+    const close = (e: PointerEvent) => {
+      if (ref.current?.open && !ref.current.contains(e.target as Node)) ref.current.open = false;
+    };
+    window.addEventListener("pointerdown", close);
+    return () => window.removeEventListener("pointerdown", close);
+  }, []);
+  return (
+    <details className="menu league-menu" ref={ref}>
+      <summary>League</summary>
+      <nav className="menu-list" aria-label="League">
+        <NavLink to="seasons" end>Seasons</NavLink>
+        <NavLink to="members">Members</NavLink>
+        <NavLink to="settings">Settings</NavLink>
+        {owner && <NavLink to="seasons/new" className="menu-extra">New season</NavLink>}
+      </nav>
+    </details>
   );
 }

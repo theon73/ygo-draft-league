@@ -664,6 +664,18 @@ With the league's backbone built (accounts through playoffs), the app works but 
       - The league wizard creates the league and its first season in one flow, so a new commissioner never sees an empty league.
       - Together with "next season" as one button (YGO-37), most people only ever see "my league's season".
     - A league opens on its running season (drafting or active) ahead of one being set up for later (YGO-31).
+    - **Built:**
+      - **Backend:**
+        - V29 adds `season.setup_step` (null for every earlier season), set with `PUT …/seasons/{s}/setup-step` and shown as `SeasonDetail.setupStep`.
+        - `POST …/seasons` takes optional `copyFrom`, `copyPlayers`, `copyRules`, `copyDraft`, `copyPool` and `guided`. `SeasonCopier` copies players and commissioners (seats, team names, season avatars); the rules without dates; the draft settings without the planned start; and the old season's final pool, logged as generated from a copy.
+        - "Finish setting up" in Needs you leads to the wizard step, else the Overview.
+      - **The season wizard** (`…/setup/1-6`): Calendar, Players, Card pool, Draft, Season, Review. Each step reuses the real editors: the Rules form with only some sections and a "Save and continue", the Players page without its seat controls, and the draft settings form. The season tabs are hidden while in the wizard, and every step notes that everything can be changed later.
+      - **"New season"** (`…/seasons/new`): a name, and start from blank or from an earlier season (the current one by default) with each part ticked.
+      - **The league wizard** (`/leagues/new`): the league (name, time zone, week start); its people (an invite link to copy, placeholders); its first season. Then the season wizard.
+      - **The seat draw** is a card on the Overview (draw, draw again, adjust by hand), with "Continue setup (step N of 6)" above it.
+      - **Invite landing:** after joining, a welcome with avatar, team name (if in the current season) and Discord pings, all optional.
+      - **Navigation:** the league bar is one line with a "League" menu (Seasons, Members, Settings, New season).
+
   - **YGO-33 to 36: Page passes,** one critique-and-polish pass per group (the draft room had its pass in YGO-29, the playoffs in YGO-30): rules and pool; rosters, free agents, trades and transactions (card art wherever a card is named, e.g. claims, drops, offers); schedule and standings; members, settings and the Explorer.
   - **YGO-37: Next season.** When a season completes, "start the next season" (the wizard, starting from a copy of it).
 - **The season setup wizard (decided with Theo, 2026-11-27).** The process is non-linear today, so the first pass is *directed*: one guided route that gets a season close to final; editing afterwards stays non-linear on the Rules, Pool and Draft pages.

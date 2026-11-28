@@ -17,6 +17,9 @@ import SeasonRulesPage from "./pages/leagues/SeasonRulesPage";
 import SeasonPoolPage from "./pages/leagues/SeasonPoolPage";
 import SeasonDraftPage from "./pages/leagues/SeasonDraftPage";
 import OverviewPage from "./pages/leagues/OverviewPage";
+import SetupWizard from "./pages/leagues/SetupWizard";
+import NewSeasonPage from "./pages/leagues/NewSeasonPage";
+import NewLeagueWizard from "./pages/leagues/NewLeagueWizard";
 import RostersPage from "./pages/leagues/RostersPage";
 import RosterPage from "./pages/leagues/RosterPage";
 import FreeAgentsPage from "./pages/leagues/FreeAgentsPage";
@@ -55,11 +58,13 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/leagues" element={<MyLeagues />} />
+          <Route path="/leagues/new" element={<NewLeagueWizard />} />
           {/* League pages share LeagueLayout (loads the league, shows the tabs); children render inside it. */}
           <Route path="/leagues/:leagueId" element={<LeagueLayout />}>
             <Route index element={<LeagueHome />} />
             <Route path="members" element={<MembersPage />} />
             <Route path="seasons" element={<SeasonsPage />} />
+            <Route path="seasons/new" element={<NewSeasonPage />} />
             <Route path="settings" element={<LeagueSettings />} />
             {/* A season's own pages. The index opens the tab that fits the season's state (see SeasonIndex). */}
             <Route path="seasons/:seasonId" element={<SeasonLayout />}>
@@ -77,6 +82,8 @@ export default function App() {
               <Route path="playoffs" element={<PlayoffsRedirect />} />
               <Route path="trades" element={<TradesPage />} />
               <Route path="overview" element={<OverviewPage />} />
+              <Route path="setup" element={<SetupWizard />} />
+              <Route path="setup/:step" element={<SetupWizard />} />
               <Route path="schedule" element={<SchedulePage />} />
               <Route path="transactions" element={<TransactionsPage />} />
             </Route>

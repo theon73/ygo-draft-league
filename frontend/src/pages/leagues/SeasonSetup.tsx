@@ -31,7 +31,11 @@ interface Row {
   teamName: string | null;
 }
 
-export default function SeasonSetup() {
+/**
+ * The Players tab. In the setup wizard (YGO-32, `wizard`) the seat order is left out: drawing it is
+ * its own moment on the Overview, so the wizard is only about who's in and what they do.
+ */
+export default function SeasonSetup({ wizard = false }: { wizard?: boolean } = {}) {
   const { league } = useLeague();
   const { season, reload } = useSeason();
   const [error, setError] = useState<string | null>(null);
@@ -137,7 +141,7 @@ export default function SeasonSetup() {
         <div className="table-scroll">
         <table>
           <thead>
-            <tr><th>Seat</th><th>Member</th><th>Role</th><th>Team name</th>{manage && season.editable && <th />}</tr>
+            <tr>{!wizard && <th>Seat</th>}<th>Member</th><th>Role</th><th>Team name</th>{manage && season.editable && !wizard && <th />}</tr>
           </thead>
           <tbody>
             {rows.map((r) => {
@@ -145,7 +149,7 @@ export default function SeasonSetup() {
               const current = roleOf(r.commissioner || r.owner, r.seat !== null);
               return (
                 <tr key={r.memberId} className={current === "none" ? "dim" : undefined}>
-                  <td>{r.seat ?? ""}</td>
+                  {!wizard && <td>{r.seat ?? ""}</td>}
                   <td className="player-cell">
                     <PlayerAvatar name={r.displayName} size="sm"
                                   passcode={players.find((p) => p.memberId === r.memberId)?.avatar ?? league.members.find((m) => m.id === r.memberId)?.avatar} />
@@ -170,7 +174,7 @@ export default function SeasonSetup() {
                                 onSave={(teamName) => act(() => apiPatch(`${base}/participants/${r.memberId}`, { teamName }))} />
                     )}
                   </td>
-                  {manage && season.editable && (
+                  {manage && season.editable && !wizard && (
                     <td className="actions">
                       {r.seat !== null && (
                         <>
@@ -188,16 +192,16 @@ export default function SeasonSetup() {
         </div>
       )}
 
-      {manage && season.editable && (
+      {manage && season.editable && !wizard && (
         <p><button onClick={() => void randomize()} disabled={players.length < 2}>Randomize seats</button></p>
       )}
-      {season.lastDraw && (
+      {!wizard && season.lastDraw && (
         <p className="muted">
           Seats last drawn at random by {season.lastDraw.drawnBy} on {new Date(season.lastDraw.drawnAt).toLocaleString()}:{" "}
           {season.lastDraw.order.map((name, i) => `${i + 1}. ${name}`).join(", ")}
         </p>
       )}
-      <p className="muted">The calendar, format and ban list are on the Rules tab; the card pool is on the Pool tab.</p>
+      {!wizard && <p className="muted">The calendar, format and ban list are on the Rules tab; the card pool is on the Pool tab.</p>}
     </>
   );
 }

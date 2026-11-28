@@ -1,4 +1,8 @@
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { apiPost, apiPut } from "../../api/client";
+import { useConfirm } from "../../components/Feedback";
+import { SETUP_STEPS } from "./SetupWizard";
 import type {
   DraftState, NeedsYouItem, Playoffs, Schedule, SeasonRules, SeasonStandings, SeasonTransaction,
 } from "../../api/client";
@@ -30,10 +34,11 @@ export default function OverviewPage() {
 
   return (
     <div className="overview">
-      {needs.data && needs.data.length > 0 && (
+      {/* "Finish setting up" is the setup section's own job here (Continue setup, the checklist). */}
+      {needs.data && needs.data.some((i) => i.kind !== "FINISH_SETUP") && (
         <section className="overview-section">
           <h4>Needs you</h4>
-          <NeedsYou items={needs.data} />
+          <NeedsYou items={needs.data.filter((i) => i.kind !== "FINISH_SETUP")} />
         </section>
       )}
       {season.status === "SETUP" && <SetupOverview base={base} />}
@@ -49,7 +54,8 @@ export default function OverviewPage() {
 const READINESS_TAB: Record<string, string> = { players: "players", rounds: "draft", pool: "pool", "enough cards": "pool", calendar: "rules" };
 
 function SetupOverview({ base }: { base: string }) {
-  const { season, draftVersion } = useSeason();
+  const { season, draftVersion, reload } = useSeason();
+  const navigate = useNavigate();
   const draft = useApi<DraftState>(`${base}/draft`, String(draftVersion));
   const rules = useApi<SeasonRules>(`${base}/rules`);
   if (!draft.data || !rules.data) return <Loading />;
@@ -57,8 +63,22 @@ function SetupOverview({ base }: { base: string }) {
   const r = rules.data;
   const done = d.readiness.filter((c) => c.ok).length;
 
+  const startGuided = async () => {
+    await apiPut(`${base}/setup-step`, { step: 1 });
+    reload();
+    navigate(`${base}/setup/1`);
+  };
+  const resume = season.setupStep ? SETUP_STEPS[season.setupStep - 1] : null;
+
   return (
     <>
+      {season.canManage && resume && (
+        <div className="callout setup-resume">
+          <span className="grow"><strong>Continue setup</strong> · step {resume.n} of {SETUP_STEPS.length}: {resume.title}</span>
+          <Link className="button primary sm" to={`${base}/setup/${resume.n}`}>Continue</Link>
+        </div>
+      )}
+      {season.canManage && <SeatDraw base={base} />}
       {season.canManage && (
         <section className="overview-section">
           <div className="section-head">
@@ -75,8 +95,8 @@ function SetupOverview({ base }: { base: string }) {
             ))}
           </ul>
           <p className="muted small">
-            Seats are set on the <Link to="../players">Players</Link> tab (drawn at random or by hand), and the draft is started
-            from the <Link to="../draft">Draft</Link> tab. Everything stays editable until then.
+            The draft is started from the <Link to="../draft">Draft</Link> tab. Everything stays editable until then.
+            {!resume && <> Prefer a walkthrough? <button type="button" className="link" onClick={() => void startGuided()}>Use the guided setup</button></>}
           </p>
         </section>
       )}
@@ -121,6 +141,60 @@ function SetupOverview({ base }: { base: string }) {
         )}
       </section>
     </>
+  );
+}
+
+/**
+ * The seat draw (YGO-32): its own moment, not a wizard step. The order is drawn at random (and
+ * recorded for the league to see); it can be drawn again, or adjusted by hand on the Players tab,
+ * until the draft starts.
+ */
+function SeatDraw({ base }: { base: string }) {
+  const { season, reload } = useSeason();
+  const confirm = useConfirm();
+  const [error, setError] = useState<string | null>(null);
+  const seated = [...season.participants].sort((a, b) => a.seat - b.seat);
+  if (seated.length < 2) return null;
+  const drawn = season.lastDraw;
+
+  const draw = async () => {
+    if (drawn && !(await confirm({
+      title: "Draw the seats again?", message: "A new random order replaces the current one. Every draw is recorded.", confirmLabel: "Draw again",
+    }))) return;
+    setError(null);
+    try {
+      await apiPost(`${base}/seats/randomize`);
+      reload();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
+  return (
+    <section className="overview-section seat-draw">
+      <div className="section-head">
+        <h4>Draft order</h4>
+        <span className="muted small">{drawn ? `Drawn by ${drawn.drawnBy}, ${new Date(drawn.drawnAt).toLocaleString()}` : "Not drawn yet"}</span>
+      </div>
+      <ol className="seat-order">
+        {seated.map((p) => (
+          <li key={p.memberId}>
+            <span className="seat-no">{p.seat}</span>
+            <PlayerAvatar name={p.displayName} passcode={p.avatar} size="sm" />
+            {p.displayName}
+          </li>
+        ))}
+      </ol>
+      <p className="button-row">
+        <button type="button" className={drawn ? undefined : "primary"} onClick={() => void draw()}>{drawn ? "Draw again" : "Draw the order"}</button>
+        <Link className="button ghost" to="../players">Adjust by hand</Link>
+      </p>
+      <p className="muted small">
+        The order is drawn at random and the draw is shown to the league. If something's off, draw again or move players by hand on
+        the Players tab, until the draft starts.
+      </p>
+      {error && <p className="bad">{error}</p>}
+    </section>
   );
 }
 

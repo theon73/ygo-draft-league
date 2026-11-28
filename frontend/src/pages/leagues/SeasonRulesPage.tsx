@@ -1,5 +1,5 @@
 import InfoTip from "../../components/InfoTip";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { apiPut, type BanListOption, type SeasonRules, type Tiebreaker } from "../../api/client";
 import { useApi } from "../../hooks/useApi";
 import { currentWeekNote } from "./currentWeek";
@@ -30,7 +30,16 @@ const today = (zone: string) => new Intl.DateTimeFormat("en-CA", { timeZone: zon
 
 const TIEBREAKERS: Record<Tiebreaker, string> = { GAME_DIFF: "Game difference", GAMES_WON: "Games won", HEAD_TO_HEAD: "Head-to-head" };
 
-export default function SeasonRulesPage() {
+export type RulesSection = "competition" | "calendar" | "format" | "transactions" | "results" | "playoffs";
+
+/**
+ * The Rules tab, or (for the setup wizard, YGO-32) some of its sections: `sections` limits what's
+ * shown, `saveLabel` renames the button and `onSaved` runs after a save. The form always saves the
+ * whole rules, so the sections not shown keep their values.
+ */
+export default function SeasonRulesPage({ sections, saveLabel, onSaved: afterSave, extraFooter }: {
+  sections?: RulesSection[]; saveLabel?: string; onSaved?: () => void; extraFooter?: ReactNode;
+} = {}) {
   const { league } = useLeague();
   const { season } = useSeason();
   const base = `/leagues/${league.id}/seasons/${season.id}`;
@@ -39,11 +48,16 @@ export default function SeasonRulesPage() {
 
   if (rules.error) return <p className="bad">Couldn't load the rules ({rules.error})</p>;
   if (!rules.data) return <Loading />;
-  return <RulesForm key={rules.data.version ?? 0} rules={rules.data} banLists={banLists.data ?? []} base={base} onSaved={rules.reload} />;
+  return <RulesForm key={rules.data.version ?? 0} rules={rules.data} banLists={banLists.data ?? []} base={base}
+                    onSaved={() => { rules.reload(); afterSave?.(); }} sections={sections} saveLabel={saveLabel} extraFooter={extraFooter} />;
 }
 
-function RulesForm({ rules, banLists, base, onSaved }: { rules: SeasonRules; banLists: BanListOption[]; base: string; onSaved: () => void }) {
+function RulesForm({ rules, banLists, base, onSaved, sections, saveLabel, extraFooter }: {
+  rules: SeasonRules; banLists: BanListOption[]; base: string; onSaved: () => void; sections?: RulesSection[]; saveLabel?: string;
+  extraFooter?: ReactNode;
+}) {
   const edit = rules.canManage;
+  const show = (s: RulesSection) => !sections || sections.includes(s);
   const [startDate, setStartDate] = useState(rules.calendar.startDate ?? "");
   // A new season starts from sensible defaults (round-robin, each pair once, best of 3), so saving
   // the form gives a playable season; the format is only prefilled before the season starts.
@@ -83,7 +97,8 @@ function RulesForm({ rules, banLists, base, onSaved }: { rules: SeasonRules; ban
         roundRobinCycles: roundRobin && cycles ? Number(cycles) : null,
         matchBestOf: Number(bestOf),
         // An empty cutoff means "today" (in the league's zone): every card released so far.
-        tcgCutoff: cutoff || today(rules.calendar.timeZone),
+        // (Unless the cutoff isn't on screen, e.g. an earlier step of the setup wizard: then it stays unset.)
+        tcgCutoff: cutoff || (show("format") ? today(rules.calendar.timeZone) : null),
         banListRevisionId: banList ? Number(banList) : null,
         freeAgencyPerWeek: faPerWeek === "" ? null : Number(faPerWeek),
         tradesPerWeek: tradesPerWeek === "" ? null : Number(tradesPerWeek),
@@ -120,6 +135,7 @@ function RulesForm({ rules, banLists, base, onSaved }: { rules: SeasonRules; ban
         </p>
       )}
 
+      {show("competition") && (<>
       <h4>Competition</h4>
       <div className="form-grid">
         <label><span className="label-text">Format <InfoTip>
@@ -155,6 +171,8 @@ function RulesForm({ rules, banLists, base, onSaved }: { rules: SeasonRules; ban
         </p>
       )}
 
+      </>)}
+      {show("calendar") && (<>
       <h4>Calendar</h4>
       <div className="form-grid">
         <label><span className="label-text">Start date <InfoTip>
@@ -189,6 +207,8 @@ function RulesForm({ rules, banLists, base, onSaved }: { rules: SeasonRules; ban
         </details>
       )}
 
+      </>)}
+      {show("format") && (<>
       <h4>Format</h4>
       <div className="form-grid">
         <label><span className="label-text">TCG cutoff <InfoTip>
@@ -215,6 +235,8 @@ function RulesForm({ rules, banLists, base, onSaved }: { rules: SeasonRules; ban
         <p className="muted small">A newer revision of {pinned.name} (revision {pinned.latestRevision}) exists; pick it from the list to switch.</p>
       )}
 
+      </>)}
+      {show("transactions") && (<>
       <h4>Transactions <InfoTip>
         Limits reset when each week starts; the time between the draft and week 1 counts as week 1. This week's claims and trades
         can themselves be traded.
@@ -241,6 +263,8 @@ function RulesForm({ rules, banLists, base, onSaved }: { rules: SeasonRules; ban
         Commissioners approve accepted trades
       </label>
 
+      </>)}
+      {show("results") && (<>
       <h4>Results and standings</h4>
       <div className="form-grid">
         <label><span className="label-text">Unanswered reports confirm after (hours) <InfoTip>
@@ -267,6 +291,8 @@ function RulesForm({ rules, banLists, base, onSaved }: { rules: SeasonRules; ban
         ))}
       </ol>
 
+      </>)}
+      {show("playoffs") && (<>
       <h4>Playoffs</h4>
       {rules.playoffsStarted && <p className="muted">The playoffs have started, so these settings are fixed.</p>}
       <label className="check">
@@ -313,6 +339,7 @@ function RulesForm({ rules, banLists, base, onSaved }: { rules: SeasonRules; ban
         </>
       )}
 
+      </>)}
       {edit && (
         <p>
           {rules.started && (
@@ -321,12 +348,13 @@ function RulesForm({ rules, banLists, base, onSaved }: { rules: SeasonRules; ban
             </label>
           )}{" "}
           {rules.started && <span className="muted">{currentWeekNote(rules.currentWeek, rules.calendar.regularWeeks)}</span>}{" "}
-          <button className="primary" onClick={() => void save()}>Save rules</button>
+          {extraFooter}
+          <button className="primary" onClick={() => void save()}>{saveLabel ?? "Save rules"}</button>
         </p>
       )}
       {message && <p className={message.ok ? "good" : "bad"}>{message.text}</p>}
 
-      {rules.history.length > 0 && (
+      {!sections && rules.history.length > 0 && (
         <details>
           <summary>History ({rules.history.length} version{rules.history.length === 1 ? "" : "s"})</summary>
           <ul>

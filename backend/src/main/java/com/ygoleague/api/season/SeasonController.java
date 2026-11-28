@@ -22,7 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/leagues/{leagueId}/seasons")
 public class SeasonController {
 
-    public record CreateSeasonRequest(String name) {}
+    public record SetupStepRequest(Integer step) {}
 
     public record MembersRequest(List<String> memberIds) {}
 
@@ -41,9 +41,9 @@ public class SeasonController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public SeasonSummary create(@PathVariable String leagueId, @RequestBody CreateSeasonRequest body,
+    public SeasonSummary create(@PathVariable String leagueId, @RequestBody SeasonService.CreateRequest body,
                                 @AuthenticationPrincipal CurrentUser user) {
-        return seasons.create(leagueId, body.name(), user);
+        return seasons.create(leagueId, body, user);
     }
 
     @GetMapping("/{seasonId}")
@@ -85,6 +85,12 @@ public class SeasonController {
     @PostMapping("/{seasonId}/seats/randomize")
     public SeasonDetail randomize(@PathVariable String leagueId, @PathVariable String seasonId, @AuthenticationPrincipal CurrentUser user) {
         return seasons.randomizeSeats(leagueId, seasonId, user);
+    }
+
+    @PutMapping("/{seasonId}/setup-step")
+    public SeasonDetail setupStep(@PathVariable String leagueId, @PathVariable String seasonId, @RequestBody SetupStepRequest body,
+                                  @AuthenticationPrincipal CurrentUser user) {
+        return seasons.setSetupStep(leagueId, seasonId, body.step(), user);
     }
 
     @PatchMapping("/{seasonId}/participants/{memberId}")

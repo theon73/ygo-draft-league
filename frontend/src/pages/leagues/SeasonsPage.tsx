@@ -1,28 +1,12 @@
-import { useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { apiPost, type SeasonSummary } from "../../api/client";
+import { Link } from "react-router-dom";
+import type { SeasonSummary } from "../../api/client";
 import { useApi } from "../../hooks/useApi";
 import { useLeague } from "./LeagueLayout";
 import { seasonStatusLabel } from "./seasonStatus";
 
 export default function SeasonsPage() {
-  const { league, reload } = useLeague();
+  const { league } = useLeague();
   const seasons = useApi<SeasonSummary[]>(`/leagues/${league.id}/seasons`);
-  const navigate = useNavigate();
-  const [name, setName] = useState("");
-  const [error, setError] = useState<string | null>(null);
-
-  const create = async (e: FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    try {
-      const season = await apiPost<SeasonSummary>(`/leagues/${league.id}/seasons`, { name });
-      reload(); // the league's current season and tabs change
-      navigate(`../seasons/${season.id}`);
-    } catch (err) {
-      setError((err as Error).message);
-    }
-  };
 
   return (
     <>
@@ -49,15 +33,8 @@ export default function SeasonsPage() {
           </table>
         ))}
       {league.myRole === "OWNER" && (
-        <>
-          <h4>New season</h4>
-          <p className="muted">Each season has its own commissioners, players, card pool, draft and rules. Members and history carry over. You commission every season; you can add co-commissioners per season.</p>
-          <form onSubmit={create}>
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Season 1: March 2008" maxLength={60} required />
-            <button type="submit" className="primary" disabled={!name.trim()}>Create season</button>
-          </form>
-          {error && <p className="bad">{error}</p>}
-        </>
+        <p><Link className="button primary" to="new">New season</Link>{" "}
+          <span className="muted small">Start blank or from an earlier season, then a short guided setup.</span></p>
       )}
     </>
   );

@@ -648,7 +648,10 @@ function toRounds(blocks: Block[]): RoundBlock[] {
   });
 }
 
-function DraftSettings({ draft: d, base, onSaved }: { draft: DraftState; base: string; onSaved: () => void }) {
+/** The draft's settings form; exported for the setup wizard (YGO-32), which renames the button and adds a Back. */
+export function DraftSettings({ draft: d, base, onSaved, saveLabel, extraFooter }: {
+  draft: DraftState; base: string; onSaved: () => void; saveLabel?: string; extraFooter?: ReactNode;
+}) {
   const [order, setOrder] = useState(d.order);
   const [blocks, setBlocks] = useState<Block[]>(toBlocks(d.rounds));
   // The planned start is typed in a zone of the commissioner's choosing (the league's by default)
@@ -733,7 +736,7 @@ function DraftSettings({ draft: d, base, onSaved }: { draft: DraftState; base: s
         draft ends; any still owed when the last pick is made are forfeited. Commissioners can change the timer during the draft.
       </InfoTip></h5>
       <TimerFields value={timer} onChange={setTimer} timeZone={d.timeZone} />
-      <p><button className="primary" onClick={() => void save()}>Save draft settings</button></p>
+      <p className="form-actions">{extraFooter}<button className="primary" onClick={() => void save()}>{saveLabel ?? "Save draft settings"}</button></p>
       {error && <p className="bad">{error}</p>}
     </>
   );

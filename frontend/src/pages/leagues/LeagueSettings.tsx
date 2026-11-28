@@ -84,7 +84,7 @@ export default function LeagueSettings() {
 // A member's own pings: their Discord user id (entered by hand; the same for all their leagues) and
 // whether this league's "on the clock" messages should @mention them. Discord only pings by id, so
 // a typed @name wouldn't work.
-function MyDiscordPings({ leagueId }: { leagueId: string }) {
+export function MyDiscordPings({ leagueId }: { leagueId: string }) {
   const base = `/leagues/${leagueId}/notifications/me`;
   const mine = useApi<MyPings>(base);
   const [id, setId] = useState<string | null>(null);   // null = not edited yet: show the saved id

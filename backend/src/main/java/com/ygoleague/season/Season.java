@@ -37,6 +37,10 @@ public class Season {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
+    /** The setup wizard's step to resume at (YGO-32); null when it isn't in use. */
+    @Column(name = "setup_step")
+    private Integer setupStep;
+
     protected Season() {}
 
     public Season(League league, String name) {
@@ -48,6 +52,8 @@ public class Season {
     public League getLeague() { return league; }
     public String getName() { return name; }
     public SeasonStatus getStatus() { return status; }
+    public Integer getSetupStep() { return setupStep; }
+    public void setSetupStep(Integer setupStep) { this.setupStep = setupStep; }
     public Instant getCreatedAt() { return createdAt; }
 
     public void setName(String name) { this.name = name; }

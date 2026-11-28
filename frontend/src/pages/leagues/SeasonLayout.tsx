@@ -116,11 +116,12 @@ export default function SeasonLayout() {
           </label>
         )}
       </div>
-      <nav className="tabs" aria-label="Season">
+      {/* The setup wizard keeps its own steps in view instead of the tabs (YGO-32). */}
+      {here !== ("setup" as string) && <nav className="tabs" aria-label="Season">
         {shown.map((t) => (
           <NavLink key={t} to={t}>{TAB_LABEL[t]}</NavLink>
         ))}
-      </nav>
+      </nav>}
       {myTurn && !onDraftTab && (
         <div className="callout">
           <span className="grow"><strong>You're on the clock.</strong> It's your pick in the draft.</span>

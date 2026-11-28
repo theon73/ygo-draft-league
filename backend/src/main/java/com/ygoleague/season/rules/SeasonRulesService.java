@@ -226,6 +226,15 @@ public class SeasonRulesService {
         append(season, latest(season).withCalendar(before), 0, caller.userId());
     }
 
+    /**
+     * A new season's first rules, copied from another season (YGO-32). The caller has checked the
+     * owner; nothing is validated again because it came from a saved season.
+     */
+    @Transactional
+    public void seed(Season season, SeasonRulesDocument doc, long userId) {
+        append(season, doc, 0, userId);
+    }
+
     /** Writes a new version unless it would be identical to the latest. */
     private void append(Season season, SeasonRulesDocument doc, int effectiveFrom, long userId) {
         SeasonRules latestRow = rules.findFirstBySeasonIdOrderByVersionDesc(season.getId()).orElse(null);
