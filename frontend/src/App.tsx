@@ -1,4 +1,4 @@
-import { Link, NavLink, Route, Routes } from "react-router-dom";
+import { Link, Navigate, NavLink, Route, Routes, useLocation } from "react-router-dom";
 import Home from "./pages/Home";
 import Placeholder from "./pages/Placeholder";
 import AccountMenu from "./auth/AccountMenu";
@@ -34,7 +34,7 @@ import InvitePage, { PendingInviteRedirect } from "./pages/InvitePage";
 const NAV = [
   { to: "/", label: "Home" },
   { to: "/leagues", label: "Leagues" },
-  { to: "/explore", label: "Explorer" },
+  { to: "/cards", label: "Cards" },
 ];
 
 export default function App() {
@@ -90,13 +90,24 @@ export default function App() {
               <Route path="transactions" element={<TransactionsPage />} />
             </Route>
           </Route>
-          <Route path="/explore" element={<Explore />} />
-          <Route path="/explore/cards/:id" element={<CardView />} />
-          <Route path="/explore/banlists/:id" element={<BanListView />} />
+          <Route path="/cards" element={<Explore />} />
+          <Route path="/cards/:id" element={<CardView />} />
+          <Route path="/cards/banlists/:id" element={<BanListView />} />
+          {/* The Explorer became Cards (YGO-38); old links keep working. */}
+          <Route path="/explore" element={<OldExploreLink />} />
+          <Route path="/explore/cards/:id" element={<OldExploreLink />} />
+          <Route path="/explore/banlists/:id" element={<OldExploreLink />} />
           <Route path="/invite/:code" element={<InvitePage />} />
           <Route path="*" element={<Placeholder title="Not found" />} />
         </Routes>
       </main>
     </>
   );
+}
+
+/** An Explorer link from before YGO-38: the same page under /cards (search and filters kept). */
+function OldExploreLink() {
+  const { pathname, search } = useLocation();
+  const to = pathname.replace(/^\/explore\/cards\//, "/cards/").replace(/^\/explore/, "/cards");
+  return <Navigate to={to + search} replace />;
 }

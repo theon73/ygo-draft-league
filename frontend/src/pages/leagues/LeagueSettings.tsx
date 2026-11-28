@@ -9,6 +9,11 @@ import { useConfirm, useToast } from "../../components/Feedback";
 const ZONES: string[] = Intl.supportedValuesOf("timeZone");
 const WEEKDAYS: Weekday[] = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"];
 const dayLabel = (d: Weekday) => d.charAt(0) + d.slice(1).toLowerCase();
+/** "00:00" → "12:00 AM", in the viewer's locale. */
+const fmtTime = (hhmm: string) => {
+  const [h, m] = hhmm.split(":").map(Number);
+  return new Date(2000, 0, 1, h, m).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+};
 
 export default function LeagueSettings() {
   const { league, reload } = useLeague();
@@ -18,13 +23,23 @@ export default function LeagueSettings() {
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const toast = useToast();
 
-  // Every member gets their own Discord pings; the league settings are the owner's.
+  // Every member gets their own Discord pings; the league settings are the owner's (YGO-38: each
+  // group is its own panel with its own save, so it's clear what a button saves).
   if (league.myRole !== "OWNER") {
     return (
       <>
         <h3>Settings</h3>
-        <MyDiscordPings leagueId={league.id} />
-        <p className="muted">Only the league owner can change the league's settings.</p>
+        <div className="settings-grid">
+          <section className="panel">
+            <h4>League schedule</h4>
+            <p>
+              Times are in <strong>{league.timeZone.replaceAll("_", " ")}</strong>; weeks start{" "}
+              <strong>{dayLabel(league.weekStartsOn)}s at {fmtTime(league.weekStartsAt)}</strong>.
+            </p>
+            <p className="muted small">Only the league owner can change these.</p>
+          </section>
+          <section className="panel"><MyDiscordPings leagueId={league.id} /></section>
+        </div>
       </>
     );
   }
@@ -49,34 +64,41 @@ export default function LeagueSettings() {
   return (
     <>
       <h3>Settings</h3>
-
-      <h4>Time zone <InfoTip>Weeks, deadlines and draft times are in this zone.</InfoTip></h4>
-      <p className="muted small">It's currently {now} there.</p>
+      <div className="settings-grid">
+      <section className="panel">
+      <h4>League schedule</h4>
+      <h5>Time zone <InfoTip>Weeks, deadlines and draft times are in this zone.</InfoTip></h5>
       <select value={zone} onChange={(e) => setZone(e.target.value)} aria-label="League time zone">
         {(ZONES.includes(league.timeZone) ? ZONES : [league.timeZone, ...ZONES]).map((z) => (
           <option key={z} value={z}>{z.replaceAll("_", " ")}</option>
         ))}
       </select>
+      <p className="muted small">It's currently {now} there.</p>
 
-      <h4>Week starts <InfoTip>
+      <h5>Week starts <InfoTip>
         Each league week (weekly trade and free-agent limits, match deadlines, "this week's matchups") runs from this moment to
         the same moment a week later. Seasons lock in the week start when they begin, so changing it later won't reshuffle
         a running season.
-      </InfoTip></h4>
+      </InfoTip></h5>
       <select value={day} onChange={(e) => setDay(e.target.value as Weekday)} aria-label="Week starts on">
         {WEEKDAYS.map((d) => <option key={d} value={d}>{dayLabel(d)}</option>)}
       </select>{" "}
       at{" "}
       <input type="time" value={time} onChange={(e) => setTime(e.target.value)} aria-label="Week starts at" required />
-      <p className="muted">
-        This week (as saved): {fmt(league.currentWeek.start)} → {fmt(league.currentWeek.end)} ({league.timeZone.replaceAll("_", " ")}).
+      <p className="muted small">
+        This week{changed ? " (as saved)" : ""}: {fmt(league.currentWeek.start)} → {fmt(league.currentWeek.end)}.
       </p>
 
-      <p><button className="primary" onClick={() => void save()} disabled={!changed || !time}>Save settings</button></p>
+      <div className="panel-foot">
+        {changed && <span className="muted small">Unsaved changes</span>}
+        <button className="primary" onClick={() => void save()} disabled={!changed || !time}>Save schedule</button>
+      </div>
       {message && <p className={message.ok ? "good" : "bad"}>{message.text}</p>}
+      </section>
 
-      <DiscordSettings leagueId={league.id} />
-      <MyDiscordPings leagueId={league.id} />
+      <section className="panel"><DiscordSettings leagueId={league.id} /></section>
+      <section className="panel settings-wide"><MyDiscordPings leagueId={league.id} /></section>
+      </div>
     </>
   );
 }
@@ -109,11 +131,12 @@ export function MyDiscordPings({ leagueId }: { leagueId: string }) {
 
   return (
     <>
-      <h4>My Discord pings</h4>
-      <p className="muted">
-        Get @mentioned in this league's Discord when you're on the clock. Your user ID is saved for all your leagues; you choose
-        per league whether to be pinged.
-        {!m.leaguePostsOnTheClock && " This league doesn't post \"on the clock\" messages at the moment, so there's nothing to ping you with yet."}
+      <h4>Your Discord pings <InfoTip>
+        Your user ID is saved for all your leagues; you choose per league whether to be pinged.
+      </InfoTip></h4>
+      <p className="muted small">
+        Get @mentioned in this league's Discord when you're on the clock.
+        {!m.leaguePostsOnTheClock && " This league doesn't post \"on the clock\" messages yet, so there's nothing to ping you with."}
       </p>
       <details className="how-to">
         <summary>How do I find my Discord user ID?</summary>
@@ -123,9 +146,9 @@ export function MyDiscordPings({ leagueId }: { leagueId: string }) {
           <li>Paste it below.</li>
         </ol>
       </details>
-      <p>
+      <p className="input-row">
         <input value={shown} onChange={(e) => setId(e.target.value)} inputMode="numeric" placeholder="e.g. 284104569123456789"
-               aria-label="Your Discord user ID" />{" "}
+               aria-label="Your Discord user ID" />
         <button disabled={id === null || id.trim() === (m.discordUserId ?? "")}
                 onClick={() => void save({ discordUserId: (id ?? "").trim() }, (id ?? "").trim() ? "Discord user ID saved." : "Discord user ID removed.")}>
           Save ID
@@ -182,8 +205,8 @@ function DiscordSettings({ leagueId }: { leagueId: string }) {
 
   return (
     <>
-      <h4>Discord</h4>
-      <p className="muted">Post draft news, transactions and results to a Discord channel.</p>
+      <h4>Discord channel {s.webhookSet ? <span className="pill accent">Connected</span> : <span className="pill">Not set up</span>}</h4>
+      <p className="muted small">Post draft news, transactions and results to a channel in your server.</p>
       <details className="how-to">
         <summary>How do I get a webhook URL?</summary>
         <ol>
@@ -192,12 +215,10 @@ function DiscordSettings({ leagueId }: { leagueId: string }) {
           <li>Choose Copy Webhook URL and paste it below.</li>
         </ol>
       </details>
-      <p>
-        {s.webhookSet ? <>A webhook is set (ending <code>{s.webhookHint}</code>).</> : "No webhook yet."}
-      </p>
-      <p>
-        <input type="password" value={url} onChange={(e) => setUrl(e.target.value)} autoComplete="off" className="wide"
-               placeholder={s.webhookSet ? "Paste a new webhook URL to replace it" : "https://discord.com/api/webhooks/…"} aria-label="Discord webhook URL" />{" "}
+      {s.webhookSet && <p className="small">Webhook ending <code>{s.webhookHint}</code>.</p>}
+      <p className="input-row">
+        <input type="password" value={url} onChange={(e) => setUrl(e.target.value)} autoComplete="off"
+               placeholder={s.webhookSet ? "Paste a new webhook URL to replace it" : "https://discord.com/api/webhooks/…"} aria-label="Discord webhook URL" />
         <button disabled={busy || !url.trim()}
                 onClick={() => void act(() => apiPut(base, { webhookUrl: url.trim(), ...(s.webhookSet ? {} : { events: EVENTS.map((e) => e.value) }) }), "Webhook saved.")}>
           Save webhook
@@ -205,6 +226,7 @@ function DiscordSettings({ leagueId }: { leagueId: string }) {
       </p>
       {s.webhookSet && (
         <>
+          <h5>What to post</h5>
           {EVENTS.map((e) => (
             <label key={e.value} className="check">
               <input type="checkbox" checked={s.events.includes(e.value)} disabled={busy} onChange={(ev) => toggle(e.value, ev.target.checked)} />{" "}

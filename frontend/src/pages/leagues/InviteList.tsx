@@ -1,38 +1,44 @@
 import { useState } from "react";
 import { inviteLink, type InviteView } from "../../api/client";
 
+/** Copies to the clipboard, or (where the browser refuses) shows the text to copy by hand. */
+export async function copyText(text: string) {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    window.prompt("Copy this link:", text);
+  }
+}
+
+// The league's active invites, compact enough for the Members page's side panel (YGO-38).
 export default function InviteList({ invites, onRevoke }: { invites: InviteView[]; onRevoke: (code: string) => void }) {
   const [copied, setCopied] = useState<string | null>(null);
 
-  if (invites.length === 0) return <p className="muted">No active invites.</p>;
+  if (invites.length === 0) return <p className="muted small">No active links.</p>;
 
   const copy = async (code: string) => {
-    try {
-      await navigator.clipboard.writeText(inviteLink(code));
-      setCopied(code);
-    } catch {
-      window.prompt("Copy this invite link:", inviteLink(code));
-    }
+    await copyText(inviteLink(code));
+    setCopied(code);
   };
+  const expires = (iso: string | null) =>
+    iso ? `expires ${new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" })}` : "never expires";
 
   return (
-    <table>
-      <thead>
-        <tr><th>For</th><th>Uses</th><th>Expires</th><th /></tr>
-      </thead>
-      <tbody>
-        {invites.map((i) => (
-          <tr key={i.code}>
-            <td>{i.kind === "CLAIM" ? `Claim seat: ${i.seatName}` : "Join the league"}</td>
-            <td>{i.useCount} / {i.maxUses ?? "∞"}</td>
-            <td>{i.expiresAt ? new Date(i.expiresAt).toLocaleDateString() : "Never"}</td>
-            <td className="actions">
-              <button className="sm" onClick={() => void copy(i.code)}>{copied === i.code ? "Copied" : "Copy link"}</button>
-              <button className="danger sm" onClick={() => onRevoke(i.code)}>Revoke</button>
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <ul className="invite-list">
+      {invites.map((i) => (
+        <li key={i.code}>
+          <div>
+            <div>{i.kind === "CLAIM" ? <>Claim <strong>{i.seatName}</strong>'s seat</> : "Join the league"}</div>
+            <div className="muted small">
+              {i.maxUses === null ? `${i.useCount} used` : `${i.useCount} of ${i.maxUses} used`} · {expires(i.expiresAt)}
+            </div>
+          </div>
+          <div className="invite-actions">
+            <button className="sm" onClick={() => void copy(i.code)}>{copied === i.code ? "Copied" : "Copy"}</button>
+            <button className="ghost sm danger-text" onClick={() => onRevoke(i.code)}>Revoke</button>
+          </div>
+        </li>
+      ))}
+    </ul>
   );
 }

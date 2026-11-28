@@ -1,17 +1,19 @@
 import InfoTip from "../../components/InfoTip";
 import { useState, type FormEvent } from "react";
-import { apiDelete, apiPost, type InviteView, type LeagueMember } from "../../api/client";
+import { apiDelete, apiPost, apiPut, inviteLink, type InviteView, type LeagueMember } from "../../api/client";
 import { useApi } from "../../hooks/useApi";
-import InviteList from "./InviteList";
+import InviteList, { copyText } from "./InviteList";
 import { useLeague } from "./LeagueLayout";
 import { roleLabel } from "./roles";
-import { useConfirm } from "../../components/Feedback";
+import { useConfirm, useToast } from "../../components/Feedback";
 import AvatarPicker from "../../components/AvatarPicker";
 import PlayerAvatar from "../../components/PlayerAvatar";
-import { apiPut } from "../../api/client";
 
 // The league's group of people. The owner invites and removes people; who commissions or plays
 // is chosen per season (on each season's Players tab).
+//
+// Layout (YGO-38): the people list, and beside it (below on a phone) the owner's "Invite people"
+// panel: invite links, then placeholders. Each placeholder row offers its own claim link.
 export default function MembersPage() {
   const { league, reload } = useLeague();
   const isOwner = league.myRole === "OWNER";
@@ -19,6 +21,7 @@ export default function MembersPage() {
   const invites = useApi<InviteView[]>(isOwner ? `/leagues/${league.id}/invites` : null);
   const [error, setError] = useState<string | null>(null);
   const confirm = useConfirm();
+  const toast = useToast();
   const [picking, setPicking] = useState<LeagueMember | null>(null);
 
   // Runs a change, then refreshes what it affects. Errors (e.g. "is part of a season") show inline.
@@ -38,42 +41,86 @@ export default function MembersPage() {
     void act(() => apiDelete(`/leagues/${league.id}/members/${m.id}`), { members: true, invites: true });
   };
 
-  const claimLink = (m: LeagueMember) =>
-    act(() => apiPost(`/leagues/${league.id}/invites`, { placeholderId: m.id, expiresInDays: 30 }), { invites: true });
+  // A placeholder's claim link: the active one if there is one, else a new one (30 days). Copied either way.
+  const claimFor = (m: LeagueMember) => invites.data?.find((i) => i.kind === "CLAIM" && i.seatId === m.id) ?? null;
+  const copyClaimLink = (m: LeagueMember) => act(async () => {
+    const code = claimFor(m)?.code
+      ?? (await apiPost<InviteView>(`/leagues/${league.id}/invites`, { placeholderId: m.id, expiresInDays: 30 })).code;
+    await copyText(inviteLink(code));
+    toast(`Claim link for ${m.displayName} copied. Whoever opens it takes over this seat.`);
+  }, { invites: true });
+
+  const accounts = league.members.filter((m) => !m.placeholder).length;
+  const placeholders = league.members.length - accounts;
 
   return (
     <>
-      <h3>Members ({league.members.length}) <InfoTip>
-        Everyone in the league. Each season's commissioners and players are picked from here, and any member can follow every season.
-      </InfoTip></h3>
+      <div className="section-head members-head">
+        <h3>Members</h3>
+        <span className="pill">{league.members.length} {league.members.length === 1 ? "member" : "members"}</span>
+        {placeholders > 0 && <span className="pill">{placeholders} without an account</span>}
+        <InfoTip>
+          Everyone in the league. Each season's commissioners and players are picked from here (on the season's Players tab),
+          and any member can follow every season.
+        </InfoTip>
+        {isOwner && <a className="button sm primary members-jump" href="#invite">Invite</a>}
+        <span className="muted small members-since">League since {new Date(league.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}</span>
+      </div>
       {error && <p className="bad">{error}</p>}
-      <table>
-        <thead>
-          <tr><th>Name</th><th />{isOwner && <th />}</tr>
-        </thead>
-        <tbody>
-          {league.members.map((m) => (
-            <tr key={m.id}>
-              <td className="player-cell">
-                <PlayerAvatar name={m.displayName} passcode={m.avatar} size="sm" />
-                {m.displayName}
-                {m.you && <span className="badge">you</span>}
-                {(m.you || (isOwner && m.placeholder)) && (
-                  <button className="link" onClick={() => setPicking(m)}>{m.avatar ? "change avatar" : "choose an avatar"}</button>
+
+      <div className={isOwner ? "members-layout" : undefined}>
+        <ul className="member-list">
+          {league.members.map((m) => {
+            const canAvatar = m.you || (isOwner && m.placeholder);
+            const claim = m.placeholder ? claimFor(m) : null;
+            return (
+              <li key={m.id} className={m.you ? "you" : undefined}>
+                <PlayerAvatar name={m.displayName} passcode={m.avatar} size="md" />
+                <div className="member-text">
+                  <div className="member-name">
+                    <strong>{m.displayName}</strong>
+                    {m.you && <span className="badge">you</span>}
+                  </div>
+                  <div className="member-sub">
+                    <span className={m.role === "OWNER" ? "owner" : undefined}>{roleLabel[m.role]}</span>
+                    {m.placeholder && <span> · no account yet{claim ? " · claim link out" : ""}</span>}
+                    {canAvatar && (
+                      <> · <button className="link" onClick={() => setPicking(m)}>{m.avatar ? "change avatar" : "choose avatar"}</button></>
+                    )}
+                  </div>
+                </div>
+                {isOwner && (
+                  <div className="member-actions">
+                    {m.placeholder && (
+                      <button className="sm" onClick={() => void copyClaimLink(m)} title="A link that hands this seat to whoever opens it">
+                        {claim ? "Copy claim link" : "Claim link"}
+                      </button>
+                    )}
+                    {m.role !== "OWNER" && <button className="ghost sm danger-text" onClick={() => void remove(m)}>Remove</button>}
+                  </div>
                 )}
-                {m.placeholder && <span className="muted"> · no account yet</span>}
-              </td>
-              <td>{m.role === "OWNER" && roleLabel.OWNER}</td>
-              {isOwner && (
-                <td className="actions">
-                  {m.placeholder && <button className="sm" onClick={() => void claimLink(m)}>Create claim link</button>}
-                  {m.role !== "OWNER" && <button className="danger sm" onClick={() => void remove(m)}>Remove</button>}
-                </td>
-              )}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+              </li>
+            );
+          })}
+        </ul>
+
+        {isOwner && (
+          <aside className="panel invite-panel" id="invite">
+            <h4>Invite people <InfoTip>
+              Anyone with the link can join while it's valid. To hand a placeholder's seat to someone, use the claim link on their row instead.
+            </InfoTip></h4>
+            <CreateInvite leagueId={league.id} onCreated={invites.reload} />
+            {invites.error && <p className="bad">Couldn't load invites ({invites.error})</p>}
+            {invites.data && (
+              <InviteList
+                invites={invites.data}
+                onRevoke={(code) => void act(() => apiDelete(`/leagues/${league.id}/invites/${code}`), { invites: true })}
+              />
+            )}
+            <AddPlaceholder leagueId={league.id} onAdded={reload} />
+          </aside>
+        )}
+      </div>
 
       {picking && (
         <AvatarPicker name={picking.displayName} current={picking.avatar} canRemove={!!picking.ownAvatar} onClose={() => setPicking(null)}
@@ -84,24 +131,6 @@ export default function MembersPage() {
                         reload();
                       }} />
       )}
-
-      {isOwner && (
-        <>
-          <AddPlaceholder leagueId={league.id} onAdded={reload} />
-          <h3>Invites <InfoTip>
-            Send a link to anyone you want in the league. Claim links hand a placeholder seat to whoever opens them.
-          </InfoTip></h3>
-          <CreateInvite leagueId={league.id} onCreated={invites.reload} />
-          {invites.error && <p className="bad">Couldn't load invites ({invites.error})</p>}
-          {invites.data && (
-            <InviteList
-              invites={invites.data}
-              onRevoke={(code) => void act(() => apiDelete(`/leagues/${league.id}/invites/${code}`), { invites: true })}
-            />
-          )}
-        </>
-      )}
-      <p className="muted">Created {new Date(league.createdAt).toLocaleDateString()}.</p>
     </>
   );
 }
@@ -121,16 +150,16 @@ function AddPlaceholder({ leagueId, onAdded }: { leagueId: string; onAdded: () =
     }
   };
   return (
-    <>
-      <h4>Add a placeholder <InfoTip>
-        A named seat for someone without an account yet, so you can set up seasons now. Send them a claim link later.
-      </InfoTip></h4>
-      <form onSubmit={submit}>
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" maxLength={40} required />
+    <div className="invite-block">
+      <h5>Add a placeholder <InfoTip>
+        A named seat for someone without an account yet, so you can set up seasons now. Send them its claim link later.
+      </InfoTip></h5>
+      <form onSubmit={submit} className="stack-form">
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" maxLength={40} required aria-label="Placeholder name" />
         <button type="submit" disabled={!name.trim()}>Add</button>
       </form>
       {error && <p className="bad">{error}</p>}
-    </>
+    </div>
   );
 }
 
@@ -138,23 +167,26 @@ function CreateInvite({ leagueId, onCreated }: { leagueId: string; onCreated: ()
   const [days, setDays] = useState("7");
   const [maxUses, setMaxUses] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const toast = useToast();
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
     try {
-      await apiPost(`/leagues/${leagueId}/invites`, {
+      const created = await apiPost<InviteView>(`/leagues/${leagueId}/invites`, {
         expiresInDays: days === "never" ? null : Number(days),
         maxUses: maxUses.trim() === "" ? null : Number(maxUses),
       });
       setMaxUses("");
       onCreated();
+      await copyText(inviteLink(created.code));
+      toast("Invite link created and copied.");
     } catch (err) {
       setError((err as Error).message);
     }
   };
   return (
     <>
-      <form onSubmit={submit}>
+      <form onSubmit={submit} className="stack-form">
         <select value={days} onChange={(e) => setDays(e.target.value)} aria-label="Expires">
           <option value="1">Expires in 1 day</option>
           <option value="7">Expires in 7 days</option>
@@ -162,13 +194,13 @@ function CreateInvite({ leagueId, onCreated }: { leagueId: string; onCreated: ()
           <option value="never">Never expires</option>
         </select>
         <input
-          className="narrow"
           value={maxUses}
           onChange={(e) => setMaxUses(e.target.value.replace(/\D/g, ""))}
-          placeholder="Max uses (blank = unlimited)"
+          placeholder="Max uses (blank = any)"
           inputMode="numeric"
+          aria-label="Max uses"
         />
-        <button type="submit" className="primary">Create invite link</button>
+        <button type="submit" className="primary">Create link</button>
       </form>
       {error && <p className="bad">{error}</p>}
     </>

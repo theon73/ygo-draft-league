@@ -160,7 +160,59 @@ export interface CardDetail {
 export interface BanListDetail {
   info: BanListInfo;
   note: string | null;
-  entries: { cardId: number; name: string; cardType: string; status: BanStatus }[];
+  entries: { cardId: number; name: string; cardType: string; status: BanStatus; passcode: number }[];
+  previous: BanListInfo | null; // the official list in effect just before this one
+  changes: BanChange[]; // cards whose status differs from `previous`
+}
+
+/** A status change between two lists; null = unlimited. */
+export interface BanChange {
+  cardId: number;
+  name: string;
+  cardType: string;
+  passcode: number;
+  from: BanStatus | null;
+  to: BanStatus | null;
+}
+
+// The Cards page (YGO-38): the catalog, or one format's pool (a cutoff and an official ban list).
+
+export interface CatalogCard {
+  cardId: number;
+  name: string;
+  cardType: string;
+  archetype: string | null;
+  tcgDate: string;
+  passcode: number;
+  banStatus: BanStatus | null;
+  race: string;
+  attribute: string | null;
+  level: number | null;
+  rank: number | null;
+  linkRating: number | null;
+  atk: number | null;
+  def: number | null;
+}
+
+export interface CatalogPage {
+  total: number;
+  page: number;
+  pageSize: number;
+  items: CatalogCard[];
+}
+
+export interface FormatSummary {
+  cutoff: string | null;
+  banListId: number | null;
+  banList: string | null;
+  cards: number;
+  monsters: number;
+  extra: number;
+  spells: number;
+  traps: number;
+  forbidden: number; // listed cards in the format (a list can name later cards)
+  limited: number;
+  semiLimited: number;
 }
 
 // Leagues
@@ -292,6 +344,7 @@ export interface InviteView {
   useCount: number;
   expiresAt: string | null; // null = never
   createdAt: string;
+  seatId: string | null; // claim invites: the placeholder's member id
 }
 
 export interface InvitePreview {

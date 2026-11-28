@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import InfoTip from "../../components/InfoTip";
 import { useEffect, useState, type ReactNode } from "react";
 import { apiPut, type BanListOption, type SeasonRules, type Tiebreaker } from "../../api/client";
@@ -240,6 +241,19 @@ function RulesForm({ rules, banLists, base, onSaved, sections, saveLabel, extraF
       {pinnedIsOld && pinned && (
         <p className="muted small">A newer revision of {pinned.name} (revision {pinned.latestRevision}) exists; pick it from the list to switch.</p>
       )}
+      {(() => {
+        // The chosen official list, and this format, on the Cards page (YGO-38). League lists aren't public there.
+        const chosen = banLists.find((b) => String(b.latestRevisionId) === banList && b.official) ?? null;
+        const preview = new URLSearchParams();
+        if (cutoff) preview.set("cutoff", cutoff);
+        if (chosen) preview.set("banList", String(chosen.listId));
+        return (chosen || cutoff) && (
+          <p className="small format-links">
+            {chosen && <><Link to={`/cards/banlists/${chosen.listId}`}>See {chosen.name}</Link> · </>}
+            <Link to={`/cards?${preview.toString()}`}>Preview this format's cards</Link>
+          </p>
+        );
+      })()}
 
       </>)}
       {show("transactions") && (<>
@@ -416,7 +430,11 @@ function RulesSummary({ rules: r, onEdit }: { rules: SeasonRules; onEdit?: () =>
         ])}
         {card("Cards", [
           r.format.tcgCutoff ? <>Released in the TCG by <strong>{fmtDay(r.format.tcgCutoff)}</strong></> : "No cutoff yet",
-          r.format.banList ? <>Ban list: <strong>{r.format.banList.name}</strong></> : "No ban list: up to 3 copies of anything",
+          r.format.banList
+            ? <>Ban list: <strong>{r.format.banList.official
+                ? <Link to={`/cards/banlists/${r.format.banList.listId}`}>{r.format.banList.name}</Link>
+                : r.format.banList.name}</strong></>
+            : "No ban list: up to 3 copies of anything",
           "One owner per card; house rules per card are on the Pool tab",
         ])}
         {card("Trades and free agents", [

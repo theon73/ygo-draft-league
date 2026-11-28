@@ -29,7 +29,7 @@ export default function Home() {
           ) : session?.providers.includes("google") ? (
             <a className="button primary" href="/api/oauth2/authorization/google">Sign in with Google</a>
           ) : null}
-          <Link className="button" to="/explore">Browse the card catalog</Link>
+          <Link className="button" to="/cards">Browse the cards</Link>
         </div>
       </div>
       <div className="features">
