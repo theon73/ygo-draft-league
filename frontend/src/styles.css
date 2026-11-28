@@ -999,3 +999,45 @@ ul.league-cards strong .count-badge { margin-left: 0.5rem; }
 /* Messages (YGO-35): the conversation scrolls in its own box, so the composer stays in reach. */
 .thread { max-height: min(62vh, 40rem); overflow-y: auto; overscroll-behavior: contain; padding-right: 0.25rem; }
 .thread-hint { margin: 0 0 0.5rem; }
+
+/* Schedule and standings pass (YGO-36) */
+.schedule-summary, .standings-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.5rem; margin: 0 0 0.9rem; }
+.schedule-summary button.sm { margin-left: 0.25rem; }
+/* All weeks: a grid of week cards instead of a full-width row per week. */
+/* Each week is a card with a header band, so one week reads as separate from the next even when it
+   holds a single match (YGO-36, after Theo's review). The tiles inside are flatter than the card. */
+ol.schedule-weeks { display: grid; grid-template-columns: repeat(auto-fill, minmax(19rem, 1fr)); gap: 1.1rem; }
+ol.schedule-weeks > li { padding: 0; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface);
+  min-width: 0; overflow: hidden; }
+ol.schedule-weeks .week-band { padding: 0.55rem 0.8rem 0.5rem; background: var(--surface-3); border-bottom: 1px solid var(--border); }
+ol.schedule-weeks .week-body { padding: 0.65rem 0.8rem 0.8rem; }
+ol.schedule-weeks > li.current { border-color: var(--accent-line); }
+ol.schedule-weeks > li.current .week-band { background: var(--accent-wash); border-bottom-color: var(--accent-line); box-shadow: inset 0 3px 0 var(--accent); }
+ol.schedule-weeks > li.past .week-body { opacity: 0.8; }
+ol.schedule-weeks > li.open { grid-column: 1 / -1; }
+ol.schedule-weeks > li.open .week-body { opacity: 1; }
+ol.schedule-weeks .week-head { margin: 0; align-items: center; gap: 0.5rem; }
+ol.schedule-weeks .week-sub { font-size: 0.8rem; margin-top: 0.1rem; }
+ol.schedule-weeks ul.matchups.compact { grid-template-columns: minmax(0, 1fr); }
+ol.schedule-weeks > li.open ul.matchups.compact { grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr)); }
+ol.schedule-weeks ul.matchups.compact > li { background: transparent; border-color: var(--border-soft); }
+/* The bracket's box hugs the tree instead of spanning the page. */
+.bracket-scroll { width: fit-content; max-width: 100%; }
+/* Standings: form squares, playoff spots and the cut line. */
+table.standings { min-width: min(100%, 36rem); }
+.form { display: inline-flex; gap: 3px; vertical-align: middle; }
+.form > span { display: inline-grid; place-items: center; width: 1.15rem; height: 1.15rem; border-radius: 3px; font-size: 0.65rem; font-weight: 700; cursor: default; }
+.form .form-W { background: var(--good-wash); color: var(--good); }
+.form .form-L { background: var(--bad-wash); color: var(--bad); }
+.form .form-D { background: var(--surface-3); color: var(--text-2); }
+table.standings tr.cut td { border-bottom: 2px dashed var(--accent-line); }
+td.seed-col .badge { font-size: 0.72rem; }
+.schedule-summary, .standings-summary { font-size: 0.92rem; }
+@media (max-width: 600px) {
+  table.standings .hide-phone { display: none; }
+  table.standings td, table.standings th { padding: 0.5rem 0.4rem; }
+  .form > span:nth-last-child(n+4) { display: none; }   /* the last 3 results on a phone */
+}
+ol.schedule-weeks .week-band.toggles { cursor: pointer; }
+ol.schedule-weeks .week-band.toggles:hover .week-toggle { color: var(--text); }
+ol.schedule-weeks .week-toggle { margin-left: auto; }
