@@ -81,6 +81,12 @@ public class SeasonController {
         return seasons.setSeatOrder(leagueId, seasonId, body.memberIds(), user);
     }
 
+    /** Seats in the reverse of the copied-from season's final standings (YGO-39; setup only). */
+    @PostMapping("/{seasonId}/seats/reverse-standings")
+    public SeasonDetail reverseStandings(@PathVariable String leagueId, @PathVariable String seasonId, @AuthenticationPrincipal CurrentUser user) {
+        return seasons.reverseStandingsSeats(leagueId, seasonId, user);
+    }
+
     /** Randomizes the seats and records the draw (setup only). */
     @PostMapping("/{seasonId}/seats/randomize")
     public SeasonDetail randomize(@PathVariable String leagueId, @PathVariable String seasonId, @AuthenticationPrincipal CurrentUser user) {

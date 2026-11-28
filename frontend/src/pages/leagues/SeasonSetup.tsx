@@ -197,7 +197,9 @@ export default function SeasonSetup({ wizard = false }: { wizard?: boolean } = {
       )}
       {!wizard && season.lastDraw && (
         <p className="muted">
-          Seats last drawn at random by {season.lastDraw.drawnBy} on {new Date(season.lastDraw.drawnAt).toLocaleString()}:{" "}
+          {season.lastDraw.method === "REVERSE_STANDINGS"
+            ? `Seats last set from the reverse of ${season.lastDraw.basedOn}'s standings by ${season.lastDraw.drawnBy}`
+            : `Seats last drawn at random by ${season.lastDraw.drawnBy}`} on {new Date(season.lastDraw.drawnAt).toLocaleString()}:{" "}
           {season.lastDraw.order.map((name, i) => `${i + 1}. ${name}`).join(", ")}
         </p>
       )}

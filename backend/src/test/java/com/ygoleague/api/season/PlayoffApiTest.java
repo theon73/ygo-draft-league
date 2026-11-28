@@ -206,6 +206,27 @@ class PlayoffApiTest {
                 .andExpect(jsonPath("$.complete").value(true));
         Assertions.assertEquals("COMPLETE", jdbc.queryForObject("select status from season", String.class));
         Assertions.assertTrue(posts().getLast().contains("**Kaiba** won the final and is the S1 champion"), posts().getLast());
+
+        // Next season (YGO-39): copied with its players, its seats can be the reverse of the final placement:
+        // the champion picks last, the final's loser just before, everyone else in reverse standings order.
+        List<String> standings = JsonPath.read(mvc.perform(get(s("/standings")).with(as(yugi))).andReturn().getResponse().getContentAsString(),
+                "$.rows[*].name");
+        List<String> placement = new java.util.ArrayList<>(List.of("Kaiba", "P2"));
+        standings.stream().filter(n -> !placement.contains(n)).forEach(placement::add);
+        java.util.Collections.reverse(placement);
+        String s2 = JsonPath.read(send(post(l("/seasons")), yugi, "{\"name\":\"S2\",\"copyFrom\":\"" + season + "\",\"copyPlayers\":true}")
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString(), "$.id");
+        mvc.perform(get(l("/seasons/" + season)).with(as(joey))).andExpect(jsonPath("$.next.name").value("S2"));
+        mvc.perform(get(l("/seasons/" + s2)).with(as(joey)))
+                .andExpect(jsonPath("$.copiedFrom.name").value("S1")).andExpect(jsonPath("$.copiedFrom.status").value("COMPLETE"));
+        send(post(l("/seasons/" + s2 + "/seats/reverse-standings")), joey, null).andExpect(status().isForbidden());
+        String detail = send(post(l("/seasons/" + s2 + "/seats/reverse-standings")), yugi, null)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.lastDraw.method").value("REVERSE_STANDINGS"))
+                .andExpect(jsonPath("$.lastDraw.basedOn").value("S1"))
+                .andReturn().getResponse().getContentAsString();
+        Assertions.assertEquals(placement, JsonPath.read(detail, "$.participants[*].displayName"));
+        Assertions.assertEquals(placement, JsonPath.read(detail, "$.lastDraw.order"));
     }
 
     @Test
