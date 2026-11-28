@@ -30,8 +30,9 @@ export function countsLine(r: Roster): string {
 /** Fetches the rosters, refetching whenever the live draft moves (picks land on rosters as they're made). */
 export function useRosters() {
   const { league } = useLeague();
-  const { season, draftVersion } = useSeason();
-  return useApi<Rosters>(`/leagues/${league.id}/seasons/${season.id}/rosters`, String(draftVersion));
+  const { season, draftVersion, messagesVersion } = useSeason();
+  // Refetched as the draft moves and when a conversation changes (a trade may have gone through).
+  return useApi<Rosters>(`/leagues/${league.id}/seasons/${season.id}/rosters`, `${draftVersion}-${messagesVersion}`);
 }
 
 /** All rosters, a player chooser and the free agents, above every roster page. */

@@ -25,7 +25,7 @@ import RosterPage from "./pages/leagues/RosterPage";
 import FreeAgentsPage from "./pages/leagues/FreeAgentsPage";
 import SeasonCardPage from "./pages/leagues/SeasonCardPage";
 import TransactionsPage from "./pages/leagues/TransactionsPage";
-import TradesPage from "./pages/leagues/TradesPage";
+import MessagesPage, { TradesRedirect } from "./pages/leagues/MessagesPage";
 import SchedulePage from "./pages/leagues/SchedulePage";
 import StandingsPage from "./pages/leagues/StandingsPage";
 import PlayoffsRedirect from "./pages/leagues/PlayoffsPage";
@@ -80,7 +80,9 @@ export default function App() {
               <Route path="cards/:cardId" element={<SeasonCardPage />} />
               <Route path="standings" element={<StandingsPage />} />
               <Route path="playoffs" element={<PlayoffsRedirect />} />
-              <Route path="trades" element={<TradesPage />} />
+              <Route path="messages" element={<MessagesPage />} />
+              {/* The tab was "Trades" until YGO-35; old links (and Needs-you items) still land. */}
+              <Route path="trades" element={<TradesRedirect />} />
               <Route path="overview" element={<OverviewPage />} />
               <Route path="setup" element={<SetupWizard />} />
               <Route path="setup/:step" element={<SetupWizard />} />

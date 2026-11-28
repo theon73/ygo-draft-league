@@ -32,7 +32,7 @@ export default function TransactionsPage() {
     <>
       <p className="muted small">
         {season.status === "ACTIVE"
-          ? <>Claim from the <Link to="../rosters/free-agents">Free agents</Link>, or make offers on the <Link to="../trades">Trades</Link> tab.</>
+          ? <>Claim from the <Link to="../rosters/free-agents">Free agents</Link>, or propose trades in <Link to="../messages">Messages</Link>.</>
           : season.status === "COMPLETE" ? "The season is over." : "Free agency opens when the draft is complete."}
       </p>
       {feed.data.length === 0 ? (
