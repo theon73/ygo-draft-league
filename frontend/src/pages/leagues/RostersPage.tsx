@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import PlayerAvatar from "../../components/PlayerAvatar";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import type { PoolCard, Roster, RosterCard, RosterGroup, Rosters } from "../../api/client";
@@ -82,19 +83,103 @@ export default function RostersPage() {
         <>
           {season.status === "SETUP" && <p className="muted">Rosters fill up as the draft is made.</p>}
           {season.status === "DRAFTING" && <p className="muted">The draft is on: rosters update with every pick.</p>}
-          <div className="roster-columns">
-            {r.players.map((p) => <RosterColumn key={p.memberId} roster={p} />)}
-          </div>
+          <RosterBoard players={r.players} />
         </>
       )}
     </>
   );
 }
 
-// One player's cards as a compact list, grouped by deck. Hover a name for the card.
-function RosterColumn({ roster }: { roster: Roster }) {
+/**
+ * Every roster side by side, in a row that scrolls sideways (YGO-37). With many players (or huge
+ * rosters, as pack formats make) the row is wider than the screen, so:
+ * - a strip of player chips above it jumps to a column, and lights the chips whose columns are in
+ *   view: it's also the "where am I";
+ * - ‹ › page through it, columns snap into place, and a fade marks the side with more.
+ * The strip sticks to the top of the window while you scroll down a long roster, so getting to
+ * another column never means scrolling back up (columns aren't height-capped: Theo preferred one
+ * page scroll to a scroll inside each column).
+ */
+function RosterBoard({ players }: { players: Roster[] }) {
+  const board = useRef<HTMLDivElement>(null);
+  const [inView, setInView] = useState<Set<string>>(new Set());
+  const [edges, setEdges] = useState({ left: false, right: false });
+  const [flash, setFlash] = useState<string | null>(null);
+
+  // Which columns are mostly visible inside the board (an IntersectionObserver rooted at the board).
+  useEffect(() => {
+    const root = board.current;
+    if (!root) return;
+    const observer = new IntersectionObserver((entries) => {
+      setInView((prev) => {
+        const next = new Set(prev);
+        for (const e of entries) {
+          const id = (e.target as HTMLElement).dataset.member!;
+          if (e.intersectionRatio >= 0.6) next.add(id); else next.delete(id);
+        }
+        return next;
+      });
+    }, { root, threshold: [0, 0.6, 1] });
+    root.querySelectorAll<HTMLElement>("[data-member]").forEach((el) => observer.observe(el));
+    return () => observer.disconnect();
+  }, [players]);
+
+  // Whether there's more to either side (for the fades and the ‹ › buttons).
+  useEffect(() => {
+    const root = board.current;
+    if (!root) return;
+    const update = () => setEdges({
+      left: root.scrollLeft > 4,
+      right: root.scrollLeft + root.clientWidth < root.scrollWidth - 4,
+    });
+    update();
+    root.addEventListener("scroll", update, { passive: true });
+    window.addEventListener("resize", update);
+    return () => { root.removeEventListener("scroll", update); window.removeEventListener("resize", update); };
+  }, [players]);
+
+  const jumpTo = (memberId: string) => {
+    const column = board.current?.querySelector<HTMLElement>(`[data-member="${memberId}"]`);
+    if (!column || !board.current) return;
+    board.current.scrollTo({ left: column.offsetLeft - board.current.offsetLeft, behavior: "smooth" });
+    setFlash(memberId);
+    window.setTimeout(() => setFlash((f) => (f === memberId ? null : f)), 1200);
+  };
+  const page = (dir: 1 | -1) => board.current?.scrollBy({ left: dir * board.current.clientWidth * 0.9, behavior: "smooth" });
+  const scrolls = edges.left || edges.right;
+
   return (
-    <section className={`roster-column${roster.you ? " mine" : ""}`}>
+    <div className="roster-board">
+      {scrolls && (
+        <div className="roster-strip">
+          <button type="button" className="ghost strip-arrow" aria-label="Previous rosters" disabled={!edges.left} onClick={() => page(-1)}>‹</button>
+          <ul>
+            {players.map((p) => (
+              <li key={p.memberId}>
+                <button type="button" className={`roster-chip${inView.has(p.memberId) ? " in-view" : ""}${p.you ? " you" : ""}`}
+                        onClick={() => jumpTo(p.memberId)} title={p.teamName ? `${p.displayName} · ${p.teamName}` : p.displayName}>
+                  <PlayerAvatar name={p.displayName} passcode={p.avatar} size="xs" />
+                  {p.displayName}
+                </button>
+              </li>
+            ))}
+          </ul>
+          <button type="button" className="ghost strip-arrow" aria-label="More rosters" disabled={!edges.right} onClick={() => page(1)}>›</button>
+        </div>
+      )}
+      <div className={`roster-columns-wrap${edges.left ? " more-left" : ""}${edges.right ? " more-right" : ""}`}>
+        <div className="roster-columns" ref={board}>
+          {players.map((p) => <RosterColumn key={p.memberId} roster={p} flash={flash === p.memberId} />)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// One player's cards as a compact list, grouped by deck. Hover a name for the card.
+function RosterColumn({ roster, flash }: { roster: Roster; flash: boolean }) {
+  return (
+    <section className={`roster-column${roster.you ? " mine" : ""}${flash ? " flash" : ""}`} data-member={roster.memberId}>
       <h5 className="roster-head">
         <PlayerAvatar name={roster.displayName} passcode={roster.avatar} size="md" />
         <Link to={roster.memberId}>{roster.displayName}</Link>
