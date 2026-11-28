@@ -28,6 +28,10 @@ export default function SchedulePage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Selected | null>(null);
+  // Finished weeks start collapsed on a phone, where every week stacked makes a very long page;
+  // tapping a week's band toggles it. On wider screens they start open.
+  const [toggled, setToggled] = useState<Set<number>>(new Set());
+  const narrow = typeof window !== "undefined" && window.matchMedia("(max-width: 600px)").matches;
   const confirm = useConfirm();
   const po = playoffs.data && hasPlayoffsSection(playoffs.data) ? playoffs.data : null;
   // Arriving from the old Playoffs tab (…/schedule#playoffs): scroll there once it has loaded.
@@ -58,6 +62,10 @@ export default function SchedulePage() {
   const playing = s.weeks.some((w) => w.matches.some((m) => m.mine));
   const shown = s.weeks.map((w) => (mineOnly ? { ...w, matches: w.matches.filter((m) => m.mine) } : w));
   const over = s.weeks.length > 0 && s.currentWeek > s.weeks.length;
+  const sameBestOf = s.weeks.length > 0 && s.weeks.every((w) => w.bestOf === s.weeks[0].bestOf);
+  const byesHappen = s.weeks.some((w) => w.matches.some((m) => m.b === null));
+  // The week whose result form is open in "All weeks": its card takes the full row, so the form has room.
+  const openWeek = selected?.where === "all" ? s.weeks.find((w) => w.matches.some((m) => m.id === selected.matchId))?.week : undefined;
 
   // Before the playoffs start, the regular season comes first and the playoffs (seeding preview,
   // Start) follow; once they've started, or the season is over, the bracket and champion lead.
@@ -86,25 +94,34 @@ export default function SchedulePage() {
             : "There's no schedule yet."}
         </p>
       ) : (
-        <p className="muted">
-          Round-robin, one round a week, {s.weeks.length} weeks.{" "}
-          {s.drawnBy ? `Drawn by ${s.drawnBy}` : "Drawn automatically when the draft completed"}
-          {s.drawnAt && `, ${new Date(s.drawnAt).toLocaleString()}`}
-          {s.draws > 1 && ` (draw ${s.draws})`}.
+        // The format at a glance (YGO-36); who drew it, when, and whether it can still change are in the tip.
+        <p className="schedule-summary">
+          <span className="pill">Round-robin</span>
+          <span className="pill">{s.weeks.length} week{s.weeks.length === 1 ? "" : "s"}</span>
+          {sameBestOf && <span className="pill">Best of {s.weeks[0].bestOf}</span>}
+          <InfoTip>
+            One round a week: everyone plays once{byesHappen ? ", or sits the week out with a bye" : ""}.{" "}
+            {s.drawnBy ? `Drawn by ${s.drawnBy}` : "Drawn automatically when the draft completed"}
+            {s.drawnAt && `, ${new Date(s.drawnAt).toLocaleString()}`}
+            {s.draws > 1 && ` (draw ${s.draws})`}.{" "}
+            {s.canGenerate ? "It can be drawn again until week 1 begins." : s.why ? `${s.why}.` : "It's fixed now."}
+          </InfoTip>
+          {s.canManage && s.canGenerate && (
+            <button className="sm" onClick={() => void draw()} disabled={busy}>Draw again</button>
+          )}
         </p>
       )}
 
-      {s.canManage && (s.canGenerate ? (
+      {s.canManage && s.canGenerate && !s.generated && (
         <p>
-          <button onClick={() => void draw()} disabled={busy}>{s.generated ? "Draw again" : "Draw the schedule"}</button>{" "}
-          <InfoTip>
-            {s.generated ? "Until week 1 begins, you can draw new matchups; after that the schedule is fixed." : "A random draw of the players, recorded."}
-          </InfoTip>
+          <button onClick={() => void draw()} disabled={busy}>Draw the schedule</button>{" "}
+          <InfoTip>A random draw of the players, recorded. It can be drawn again until week 1 begins.</InfoTip>
         </p>
-      ) : s.generated && s.why && <p className="muted">{s.why}.</p>)}
+      )}
       {error && <p className="bad">{error}</p>}
 
-      {current && !over && (
+      {/* Once the playoffs are on, "this week" of the regular season is history (the bracket leads). */}
+      {current && !over && !playoffsFirst && (
         <section className="panel this-week">
           <h5>
             {s.currentWeek === 0 ? "First up: week 1" : `This week: week ${current.week}`}
@@ -115,7 +132,7 @@ export default function SchedulePage() {
                  onDone={() => { setSelected(null); schedule.reload(); playoffs.reload(); }} />
         </section>
       )}
-      {over && <p className="muted">The regular season's weeks are over.</p>}
+      {over && !playoffsFirst && <p className="muted">The regular season's weeks are over.</p>}
 
       {s.weeks.length > 0 && (
         <>
@@ -128,17 +145,34 @@ export default function SchedulePage() {
             )}
           </div>
           <ol className="schedule-weeks">
-            {shown.map((w) => (
-              <li key={w.week} className={`${w.current ? "current" : ""}${w.week < s.currentWeek ? " past" : ""}`}>
+            {shown.map((w) => {
+              const done = w.week < s.currentWeek && w.matches.every((m) => !m.b || m.result?.status === "CONFIRMED");
+              const collapsed = done && narrow !== toggled.has(w.week) && w.week !== openWeek;
+              const toggle = () => setToggled((t) => { const n = new Set(t); if (n.has(w.week)) n.delete(w.week); else n.add(w.week); return n; });
+              return (
+              <li key={w.week} className={[w.current ? "current" : "", w.week < s.currentWeek ? "past" : "", w.week === openWeek ? "open" : ""]
+                .filter(Boolean).join(" ") || undefined}>
+                <div className={`week-band${done ? " toggles" : ""}`} onClick={done ? toggle : undefined}
+                     role={done ? "button" : undefined} tabIndex={done ? 0 : undefined} aria-expanded={done ? !collapsed : undefined}
+                     onKeyDown={done ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } } : undefined}>
                 <div className="week-head">
                   <strong>Week {w.week}</strong>
-                  <span className="muted">{dates(w, zone)}{w.start ? " · " : ""}Bo{w.bestOf}<Byes week={w} /></span>
+                  {w.current && <span className="pill accent">{s.currentWeek === 0 ? "First up" : "This week"}</span>}
+                  {done && <span className="muted small">✓ done</span>}
+                  {done && <span className="week-toggle muted small">{collapsed ? "Show ▾" : "Hide ▴"}</span>}
                 </div>
+                <div className="week-sub muted">
+                  {dates(w, zone)}{!sameBestOf && `${w.start ? " · " : ""}best of ${w.bestOf}`}<Byes week={w} />
+                </div>
+                </div>
+                {!collapsed && <div className="week-body">
                 <Matchups week={w} compact where="all" selected={selected} onSelect={setSelected} />
                 <Panel week={w} where="all" selected={selected} base={base.replace(/\/schedule$/, "")} onClose={() => setSelected(null)}
                        onDone={() => { setSelected(null); schedule.reload(); playoffs.reload(); }} />
+                </div>}
               </li>
-            ))}
+              );
+            })}
           </ol>
         </>
       )}

@@ -5,6 +5,7 @@ import { apiPost, type BracketMatch, type Playoffs, type SchedulePlayer } from "
 import { GameLinks, Player, ResultForm, type Action } from "./SchedulePage";
 import { useSeason } from "./SeasonLayout";
 import { useConfirm, type ConfirmOptions } from "../../components/Feedback";
+import InfoTip from "../../components/InfoTip";
 
 // The playoffs (YGO-27), shown as a section of the Schedule tab (YGO-28): the seeding (a preview
 // from the standings until a commissioner starts the playoffs), the bracket as a tree (YGO-30) with
@@ -82,10 +83,12 @@ export function PlayoffsSection({ playoffs: p, base, onChanged }: { playoffs: Pl
         </>
       ) : (
         <>
-          <p className="muted">
-            {p.shape} Playoff matches are best of {p.playoffBestOf}
-            {(p.settings.playInTeams ?? 0) > 0 && (p.playInBestOf === p.playoffBestOf ? ", the play-in too" : `; the play-in, best of ${p.playInBestOf}`)}.
-            {" "}Each match has a week from when both players are known; finishing sooner moves things on.
+          {/* The shape in words, the best-of as pills, and the timing rule in the tip (YGO-36). */}
+          <p className="schedule-summary">
+            <span className="muted">{p.shape}</span>
+            <span className="pill">Best of {p.playoffBestOf}</span>
+            {(p.settings.playInTeams ?? 0) > 0 && p.playInBestOf !== p.playoffBestOf && <span className="pill">Play-in best of {p.playInBestOf}</span>}
+            <InfoTip>Each match has a week from when both its players are known; finishing sooner moves things on.</InfoTip>
           </p>
           {!p.started && (
             <>
