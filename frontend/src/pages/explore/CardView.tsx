@@ -5,6 +5,7 @@ import type { CardDetail } from "../../api/client";
 import { useApi } from "../../hooks/useApi";
 import { statusLabel } from "./banStatus";
 import { Loading } from "../../components/Feedback";
+import { fmtDay } from "./Explore";
 
 export default function CardView() {
   const { id } = useParams();
@@ -26,8 +27,8 @@ export default function CardView() {
 
   return (
     <section>
-      <p><Link to="/explore">← Explorer</Link></p>
-      <h2>{c.name}</h2>
+      <p><Link to="/cards">← Cards</Link></p>
+      <div className="card-detail">
       <div className="card-art">
         <CardImage passcode={c.passcodes[Math.min(art, c.passcodes.length - 1)]} size="full" alt={c.name} />
         {c.passcodes.length > 1 && (
@@ -40,28 +41,33 @@ export default function CardView() {
           </div>
         )}
       </div>
+      <div className="card-detail-text">
+      <h2>{c.name}</h2>
       <p>
         {c.cardType} · {stats.join(" · ")}
         <br />
         <span className="muted">
-          TCG release {c.tcgDate}
+          TCG release {fmtDay(c.tcgDate)}
           {c.archetype && ` · ${c.archetype}`} · passcode{c.passcodes.length > 1 ? "s" : ""} {c.passcodes.join(", ")}
         </span>
       </p>
       <p className="card-text">{c.description}</p>
 
-      <h3>Official ban lists</h3>
+      <h4>Official ban lists</h4>
       {c.banStatuses.length === 0 ? (
         <p className="muted">Unlimited on every imported list.</p>
       ) : (
-        <ul>
+        <ul className="plain-list">
           {c.banStatuses.map((b) => (
             <li key={b.banListId}>
-              <Link to={`/explore/banlists/${b.banListId}`}>{b.banList}</Link>: {statusLabel[b.status]}
+              <span className={`badge ban-${b.status.toLowerCase()}`}>{statusLabel[b.status]}</span>{" "}
+              on <Link to={`/cards/banlists/${b.banListId}`}>{b.banList}</Link>
             </li>
           ))}
         </ul>
       )}
+      </div>
+      </div>
 
       <h3>Prints ({c.prints.length})</h3>
       <table>

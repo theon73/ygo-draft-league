@@ -43,7 +43,8 @@ export function usePoolParams() {
   const clearFilters = () => {
     setSearchParams((prev) => {
       const next = new URLSearchParams();
-      for (const keep of ["show", "available"]) if (prev.get(keep)) next.set(keep, prev.get(keep)!);
+      // "cutoff" and "banList": the Cards page's format, which isn't a filter.
+      for (const keep of ["show", "available", "cutoff", "banList"]) if (prev.get(keep)) next.set(keep, prev.get(keep)!);
       return next;
     });
   };

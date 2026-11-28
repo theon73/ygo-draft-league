@@ -43,8 +43,9 @@ public class LeagueMembership {
     public enum InviteStatus { VALID, EXPIRED, REVOKED, USED_UP }
 
     /** An invite as the owner sees it. {@code code} goes in the link. */
+    /** @param seatId claim invites: the placeholder's member id (YGO-38, so the members list can offer its link) */
     public record InviteView(String code, InviteKind kind, String seatName, Integer maxUses, int useCount,
-                             Instant expiresAt, Instant createdAt) {}
+                             Instant expiresAt, Instant createdAt, String seatId) {}
 
     /** What someone holding an invite link sees before accepting it. */
     public record InvitePreview(String leagueName, InviteKind kind, String seatName, InviteStatus status, boolean alreadyMember) {}
@@ -90,7 +91,7 @@ public class LeagueMembership {
         Instant now = Instant.now();
         return invites.findByLeagueIdAndRevokedAtIsNullOrderByCreatedAtDesc(league.getId()).stream()
                 .filter(i -> status(i, now) == InviteStatus.VALID)
-                .map(LeagueMembership::view)
+                .map(this::view)
                 .toList();
     }
 
@@ -235,8 +236,9 @@ public class LeagueMembership {
         return InviteStatus.VALID;
     }
 
-    private static InviteView view(LeagueInvite i) {
-        return new InviteView(i.getCode(), kind(i), seatName(i), i.getMaxUses(), i.getUseCount(), i.getExpiresAt(), i.getCreatedAt());
+    private InviteView view(LeagueInvite i) {
+        return new InviteView(i.getCode(), kind(i), seatName(i), i.getMaxUses(), i.getUseCount(), i.getExpiresAt(), i.getCreatedAt(),
+                i.isClaimInvite() ? publicIds.encode(PublicIdType.LEAGUE_MEMBER, i.getMember().getId()) : null);
     }
 
     private static InviteKind kind(LeagueInvite i) {

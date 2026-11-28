@@ -55,9 +55,15 @@ public class ExploreController {
 
     public record BanStatusRow(long banListId, String banList, String status) {}
 
-    public record BanListDetail(BanListInfo info, String note, List<BanEntryRow> entries) {}
+    /**
+     * @param previous the official list in effect just before this one (null for the first)
+     * @param changes  cards whose status differs from {@code previous}: from/to null = unlimited (YGO-38)
+     */
+    public record BanListDetail(BanListInfo info, String note, List<BanEntryRow> entries, BanListInfo previous, List<BanChangeRow> changes) {}
 
-    public record BanEntryRow(long cardId, String name, String cardType, String status) {}
+    public record BanEntryRow(long cardId, String name, String cardType, String status, long passcode) {}
+
+    public record BanChangeRow(long cardId, String name, String cardType, long passcode, String from, String to) {}
 
     /** Latest revision of each official list, newest list first. */
     private static final String OFFICIAL_LISTS = """
@@ -166,15 +172,34 @@ public class ExploreController {
                 .optional()
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No such official ban list"));
         List<BanEntryRow> entries = jdbc.sql("""
-                        select c.id, c.name, c.card_type, e.status
+                        select c.id, c.name, c.card_type, e.status, c.passcodes[1]
                         from ban_list_entry e join card c on c.id = e.card_id
                         where e.revision_id = :rev
                         order by case e.status when 'FORBIDDEN' then 0 when 'LIMITED' then 1 else 2 end, lower(c.name)
                         """)
                 .param("rev", head.revisionId())
-                .query((rs, i) -> new BanEntryRow(rs.getLong(1), rs.getString(2), rs.getString(3), rs.getString(4)))
+                .query((rs, i) -> new BanEntryRow(rs.getLong(1), rs.getString(2), rs.getString(3), rs.getString(4), rs.getLong(5)))
                 .list();
-        return new BanListDetail(head.info(), head.note(), entries);
+
+        // The previous official list (by date), and every card whose status moved between the two.
+        record Prev(BanListInfo info, long revisionId) {}
+        Prev prev = jdbc.sql(OFFICIAL_LISTS + " and l.effective_date < :date" + OFFICIAL_LISTS_GROUP + " limit 1")
+                .param("date", head.info().effectiveDate())
+                .query((rs, i) -> new Prev(banListInfo(rs), rs.getLong("revision_id")))
+                .optional().orElse(null);
+        List<BanChangeRow> changes = prev == null ? List.of() : jdbc.sql("""
+                        select c.id, c.name, c.card_type, c.passcodes[1], o.status as was, n.status as now
+                        from (select card_id, status from ban_list_entry where revision_id = :old) o
+                        full join (select card_id, status from ban_list_entry where revision_id = :new) n on n.card_id = o.card_id
+                        join card c on c.id = coalesce(n.card_id, o.card_id)
+                        where o.status is distinct from n.status
+                        order by case coalesce(n.status, 'UNLIMITED') when 'FORBIDDEN' then 0 when 'LIMITED' then 1
+                                 when 'SEMI_LIMITED' then 2 else 3 end, lower(c.name)""")
+                .param("old", prev.revisionId()).param("new", head.revisionId())
+                .query((rs, i) -> new BanChangeRow(rs.getLong(1), rs.getString(2), rs.getString(3), rs.getLong(4),
+                        rs.getString(5), rs.getString(6)))
+                .list();
+        return new BanListDetail(head.info(), head.note(), entries, prev == null ? null : prev.info(), changes);
     }
 
     private static BanListInfo banListInfo(java.sql.ResultSet rs) throws java.sql.SQLException {

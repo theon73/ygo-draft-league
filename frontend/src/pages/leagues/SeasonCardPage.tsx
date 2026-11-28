@@ -19,7 +19,7 @@ export default function SeasonCardPage() {
   const info = useApi<SeasonCard>(`/leagues/${league.id}/seasons/${season.id}/cards/${encodeURIComponent(cardId)}`, String(draftVersion));
   const detail = useApi<CardDetail>(`/explore/cards/${encodeURIComponent(cardId)}`);
 
-  if (info.status === 404) return <p>That card isn't in this season's pool. <Link to={`/explore/cards/${cardId}`}>See it in the Explorer</Link></p>;
+  if (info.status === 404) return <p>That card isn't in this season's pool. <Link to={`/cards/${cardId}`}>See it in Cards</Link></p>;
   if (info.error) return <p className="bad">Couldn't load the card ({info.error})</p>;
   if (!info.data) return <Loading />;
   const { card: c, owners, history } = info.data;
@@ -36,7 +36,7 @@ export default function SeasonCardPage() {
           <p>
             {c.cardType} · {cardStats(c)}{c.archetype && ` · ${c.archetype}`}
             <br />
-            <span className="muted">TCG release {c.tcgDate} · <Link to={`/explore/cards/${c.cardId}`}>prints and ban lists</Link></span>
+            <span className="muted">TCG release {c.tcgDate} · <Link to={`/cards/${c.cardId}`}>prints and ban lists</Link></span>
           </p>
           {detail.data && <p className="card-text">{detail.data.description}</p>}
 
