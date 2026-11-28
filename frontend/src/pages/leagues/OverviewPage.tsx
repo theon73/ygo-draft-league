@@ -28,9 +28,10 @@ import { useSeason } from "./SeasonLayout";
 
 export default function OverviewPage() {
   const { league } = useLeague();
-  const { season, draftVersion } = useSeason();
+  const { season, draftVersion, messagesVersion } = useSeason();
   const base = `/leagues/${league.id}/seasons/${season.id}`;
-  const needs = useApi<NeedsYouItem[]>(`${base}/needs-you`, String(draftVersion));
+  // Live: refetched as the draft moves and when one of your conversations changes (YGO-35).
+  const needs = useApi<NeedsYouItem[]>(`${base}/needs-you`, `${draftVersion}-${messagesVersion}`);
 
   return (
     <div className="overview">
@@ -226,12 +227,12 @@ function DraftingOverview({ base }: { base: string }) {
 // ---- Active / complete ----------------------------------------------------------------------
 
 function SeasonOverview({ base }: { base: string }) {
-  const { season } = useSeason();
+  const { season, messagesVersion } = useSeason();
   const navigate = useNavigate();
   const schedule = useApi<Schedule>(`${base}/schedule`);
   const playoffs = useApi<Playoffs>(`${base}/playoffs`);
   const standings = useApi<SeasonStandings>(`${base}/standings`);
-  const feed = useApi<SeasonTransaction[]>(`${base}/transactions`);
+  const feed = useApi<SeasonTransaction[]>(`${base}/transactions`, String(messagesVersion));   // a trade can land live
   if (!schedule.data || !playoffs.data || !standings.data) return <Loading />;
   const s = schedule.data;
   const p = playoffs.data;

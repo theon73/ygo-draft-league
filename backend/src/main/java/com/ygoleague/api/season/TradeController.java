@@ -9,6 +9,7 @@ import com.ygoleague.season.transaction.TradeService.OfferView;
 import com.ygoleague.season.transaction.TradeService.ThreadView;
 import com.ygoleague.season.transaction.TradeService.TradesView;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -18,6 +19,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 /**
  * Trades: one private conversation per pair of players, with offers, counteroffers and messages.
@@ -38,6 +40,12 @@ public class TradeController {
     public TradesView overview(@PathVariable String leagueId, @PathVariable String seasonId, @RequestParam(required = false) String as,
                                @AuthenticationPrincipal CurrentUser user) {
         return trades.overview(leagueId, seasonId, as, user);
+    }
+
+    /** Live updates (YGO-35): a server-sent-event stream of "one of your conversations changed" signals (see MessageEvents). */
+    @GetMapping(value = "/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter events(@PathVariable String leagueId, @PathVariable String seasonId, @AuthenticationPrincipal CurrentUser user) {
+        return trades.subscribe(leagueId, seasonId, user);
     }
 
     /** The conversation with another player (empty if there's none yet). */

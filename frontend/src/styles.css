@@ -995,3 +995,7 @@ a.chat-link.unread { color: var(--accent); border-color: var(--accent-line); }
 a.chat-link .count-badge { position: absolute; top: -0.35rem; right: -0.45rem; margin: 0; box-shadow: 0 0 0 2px var(--bg); }
 ul.thread-list .count-badge { margin-left: auto; }
 ul.league-cards strong .count-badge { margin-left: 0.5rem; }
+
+/* Messages (YGO-35): the conversation scrolls in its own box, so the composer stays in reach. */
+.thread { max-height: min(62vh, 40rem); overflow-y: auto; overscroll-behavior: contain; padding-right: 0.25rem; }
+.thread-hint { margin: 0 0 0.5rem; }

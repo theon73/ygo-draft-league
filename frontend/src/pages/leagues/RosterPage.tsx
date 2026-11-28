@@ -68,6 +68,8 @@ function RosterHeader({ roster, onChanged }: { roster: Roster; onChanged: () => 
   const { season, reload: reloadSeason } = useSeason();
   const [picking, setPicking] = useState(false);
   const part = season.participants.find((p) => p.memberId === roster.memberId);
+  // Roughly when trading is open (the Messages page knows about the deadline and says so).
+  const tradingOpen = season.status === "ACTIVE" && !season.playoffsStarted;
   const scopes: { scope: AvatarScope; label: string }[] = [];
   if (roster.you || (league.myRole === "OWNER" && roster.placeholder)) {
     scopes.push({ scope: "default", label: `Every ${league.name} season` });
@@ -94,6 +96,12 @@ function RosterHeader({ roster, onChanged }: { roster: Roster; onChanged: () => 
           {countsLine(roster)}
         </p>
       </div>
+      {/* Trades are made in Messages (YGO-35); this is the way in from the cards you want. */}
+      {season.youPlay && !roster.you && (
+        <Link className="button sm" to={`/leagues/${league.id}/seasons/${season.id}/messages?with=${roster.memberId}${tradingOpen ? "&propose=1" : ""}`}>
+          {tradingOpen ? "Propose a trade" : `Message ${roster.displayName}`}
+        </Link>
+      )}
       {scopes.length > 0 && <button className="sm" onClick={() => setPicking(true)}>{roster.avatar ? "Change avatar" : "Choose an avatar"}</button>}
       {picking && (
         <AvatarPicker name={roster.displayName} current={roster.avatar} scopes={scopes}

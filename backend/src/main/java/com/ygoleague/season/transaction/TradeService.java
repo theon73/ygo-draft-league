@@ -25,6 +25,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
@@ -117,10 +118,13 @@ public class TradeService {
     private final PublicIds publicIds;
     private final JdbcClient jdbc;
     private final TradeInbox inbox;
+    private final MessageEvents events;
 
     public TradeService(SeasonAccess access, SeasonRulesService rules, SeasonPlayers players, WeeklyLimits limits, StaleOffers staleOffers,
-                        TransactionAnnouncer announcer, PublicIds publicIds, JdbcClient jdbc, TradeInbox inbox) {
+                        TransactionAnnouncer announcer, PublicIds publicIds, JdbcClient jdbc, TradeInbox inbox,
+                        MessageEvents events) {
         this.inbox = inbox;
+        this.events = events;
         this.access = access;
         this.rules = rules;
         this.players = players;
@@ -152,6 +156,16 @@ public class TradeService {
                 me.map(p -> limitsOf(season, p, budget)).orElse(null),
                 all.stream().filter(p -> me.isEmpty() || p.id() != me.get().id()).map(p -> ref(p, ref)).toList(),
                 threads, approvals);
+    }
+
+    /**
+     * Opens a live stream of "your conversations changed" signals for a member (YGO-35). Access is
+     * checked here, inside a short transaction; the stream itself holds no database connection.
+     */
+    @Transactional(readOnly = true)
+    public SseEmitter subscribe(String leagueId, String seasonId, CurrentUser caller) {
+        SeasonAccess.SeasonRef ref = access.member(leagueId, seasonId, caller);
+        return events.subscribe(ref.season().getId(), caller.userId(), ref.commissioner());
     }
 
     /** Opening the conversation as yourself (not as a placeholder you act for) marks it read. */
@@ -238,6 +252,7 @@ public class TradeService {
                     .param("q", a.quantity()).update();
         }
         if (req.message() != null && !req.message().isBlank()) postMessage(thread, me, req.message(), caller);
+        changed(season, me, other, false);
         return offer(season, offer, me, ref.commissioner());
     }
 
@@ -262,6 +277,7 @@ public class TradeService {
             jdbc.sql("update trade_offer set accepted_at = now(), accepted_by = :u where id = :o").param("u", caller.userId()).param("o", o.id()).update();
             execute(season, o, week, caller);
         }
+        changed(season, o.from(), o.to(), true);
         return offer(season, o.id(), me, ref.commissioner());
     }
 
@@ -287,6 +303,7 @@ public class TradeService {
         if (!o.status().equals("OPEN")) throw conflict("This offer is " + o.status().toLowerCase().replace('_', ' '));
         jdbc.sql("update trade_offer set status = :st, decided_at = now(), decided_by = :u where id = :o")
                 .param("st", status).param("u", caller.userId()).param("o", o.id()).update();
+        changed(season, o.from(), o.to(), false);
         return offer(season, o.id(), me, ref.commissioner());
     }
 
@@ -303,6 +320,7 @@ public class TradeService {
         checkExecutable(season, o, WeeklyLimits.allowanceWeek(week));
         jdbc.sql("update trade_offer set decided_at = now(), decided_by = :u where id = :o").param("u", caller.userId()).param("o", o.id()).update();
         execute(season, o, week, caller);
+        changed(season, o.from(), o.to(), true);
         return offer(season, o.id(), null, true);
     }
 
@@ -314,6 +332,7 @@ public class TradeService {
         Offer o = loadPending(season, offerId);
         jdbc.sql("update trade_offer set status = 'REJECTED', decided_at = now(), decided_by = :u where id = :o")
                 .param("u", caller.userId()).param("o", o.id()).update();
+        changed(season, o.from(), o.to(), true);
         return offer(season, o.id(), null, true);
     }
 
@@ -325,6 +344,7 @@ public class TradeService {
         Player me = actor(season, ref, req.as(), actors(players.list(season), ref));
         Player other = other(season, me, withMemberId);
         postMessage(threadFor(season, me, other), me, req.body(), caller);
+        changed(season, me, other, false);
         return thread(leagueId, seasonId, withMemberId, req.as(), caller);
     }
 
@@ -624,6 +644,11 @@ public class TradeService {
         Integer deadline = rules.inEffect(season, WeeklyLimits.allowanceWeek(week)).transactions().tradeDeadlineWeek();
         if (deadline != null && week > deadline) return "The trade deadline (week " + deadline + ") has passed";
         return null;
+    }
+
+    /** Tells both players' open pages (and commissioners', when it concerns them) that their conversation changed (YGO-35). */
+    private void changed(Season season, Player a, Player b, boolean commissioners) {
+        events.conversationChanged(season.getId(), java.util.Arrays.asList(a.userId(), b.userId()), commissioners);
     }
 
     private String memberId(long id) {

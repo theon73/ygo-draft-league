@@ -6,13 +6,15 @@ import { useApi } from "../../hooks/useApi";
 import { useLeague } from "./LeagueLayout";
 import { seasonStatusLabel } from "./seasonStatus";
 import CountBadge from "../../components/CountBadge";
+import { openEventStream } from "../../hooks/eventStream";
 
 // Everything under /leagues/:leagueId/seasons/:seasonId. Same pattern as LeagueLayout: load the
 // season once, show its tabs, and give it (and reload) to every page below via useSeason().
 //
 // It also holds the live draft connection (YGO-17), so every season tab knows when the draft moves
 // and can say "you're on the clock". The server sends a small "the draft changed" signal; pages
-// refetch what they show when draftVersion goes up.
+// refetch what they show when draftVersion goes up. Messages work the same way (YGO-35): a "one of
+// your conversations changed" signal bumps messagesVersion and refreshes the unread counts.
 
 interface SeasonContext {
   season: SeasonDetail;
@@ -20,6 +22,7 @@ interface SeasonContext {
   reloadLeague: () => void;
   draftVersion: number; // goes up on every live draft event (including on (re)connecting)
   draftLive: DraftChanged | null; // the latest event, null until connected
+  messagesVersion: number; // goes up when one of your conversations changes (YGO-35)
 }
 
 const SeasonCtx = createContext<SeasonContext | null>(null);
@@ -31,7 +34,7 @@ export function useSeason(): SeasonContext {
 }
 
 const TAB_LABEL = {
-  overview: "Overview", players: "Players", rules: "Rules", pool: "Pool", draft: "Draft", rosters: "Rosters", trades: "Trades",
+  overview: "Overview", players: "Players", rules: "Rules", pool: "Pool", draft: "Draft", rosters: "Rosters", messages: "Messages",
   schedule: "Schedule", standings: "Standings", transactions: "Transactions",
 } as const;
 type Tab = keyof typeof TAB_LABEL;
@@ -41,12 +44,13 @@ type Tab = keyof typeof TAB_LABEL;
 // their tab), they're just not offered where they'd be empty.
 // Every state opens on the Overview (YGO-31), which summarizes it and says what needs you.
 const TABS: Record<SeasonStatus, Tab[]> = {
-  SETUP: ["overview", "players", "rules", "pool", "draft"],
-  DRAFTING: ["overview", "draft", "rosters", "pool", "players", "rules"],
+  // Messages work in every state (YGO-35); trade offers wait until the season is active.
+  SETUP: ["overview", "players", "rules", "pool", "draft", "messages"],
+  DRAFTING: ["overview", "draft", "rosters", "messages", "pool", "players", "rules"],
   // Most used first; draft, players and rules are mostly history or for commissioners. The playoffs
   // are a section of the Schedule tab.
-  ACTIVE: ["overview", "schedule", "rosters", "pool", "standings", "trades", "transactions", "draft", "players", "rules"],
-  COMPLETE: ["overview", "schedule", "rosters", "pool", "standings", "trades", "transactions", "draft", "players", "rules"],
+  ACTIVE: ["overview", "schedule", "rosters", "pool", "standings", "messages", "transactions", "draft", "players", "rules"],
+  COMPLETE: ["overview", "schedule", "rosters", "pool", "standings", "messages", "transactions", "draft", "players", "rules"],
 };
 
 /** "Week 4 of 9" for a running season: before week 1, the weeks, then after the regular season. */
@@ -83,13 +87,7 @@ export default function SeasonLayout() {
   const myTurn = !!draftLive && draftLive.status === "IN_PROGRESS" && !draftLive.paused && draftLive.onTheClockSeat !== null
     && season.data?.participants.find((p) => p.you)?.seat === draftLive.onTheClockSeat;
   useTitlePrefix(myTurn ? "Your pick · " : "");
-  // New trade messages show up within a minute without a reload (YGO-34): the season (which carries
-  // the unread count) is refetched every minute while the tab is visible.
-  const reloadSeason = season.reload;
-  useEffect(() => {
-    const t = window.setInterval(() => { if (document.visibilityState === "visible") reloadSeason(); }, 60_000);
-    return () => window.clearInterval(t);
-  }, [reloadSeason]);
+  const messagesVersion = useLiveMessages(league.id, season.data, season.reload, reloadLeague);
 
   if (season.status === 404) {
     return <p className="bad">Season not found. <Link to="../seasons">All seasons</Link></p>;
@@ -110,10 +108,10 @@ export default function SeasonLayout() {
         <span className={`pill status-${s.status}`}>{seasonStatusLabel[s.status]}</span>
         {weekLabel(s) && <span className="pill">{weekLabel(s)}</span>}
         <span className="pill role">{roleLabel(s)}</span>
-        {/* Your trade conversations, with what's unread (YGO-34): only where there are trades. */}
-        {s.youPlay && (s.status === "ACTIVE" || s.status === "COMPLETE") && (
-          <Link to="trades" className={`chat-link${s.unreadMessages ? " unread" : ""}`} title="Trade messages"
-                aria-label={s.unreadMessages ? `Trade messages, ${s.unreadMessages} unread` : "Trade messages"}>
+        {/* Your messages, with what's unread (YGO-34): always in view, even when the tab row scrolls on a phone. */}
+        {s.youPlay && (
+          <Link to="messages" className={`chat-link${s.unreadMessages ? " unread" : ""}`} title="Messages"
+                aria-label={s.unreadMessages ? `Messages, ${s.unreadMessages} unread` : "Messages"}>
             <ChatIcon />
             <CountBadge count={s.unreadMessages} />
           </Link>
@@ -137,7 +135,7 @@ export default function SeasonLayout() {
       {/* The setup wizard keeps its own steps in view instead of the tabs (YGO-32). */}
       {here !== ("setup" as string) && <nav className="tabs" aria-label="Season">
         {shown.map((t) => (
-          <NavLink key={t} to={t}>{TAB_LABEL[t]}{t === "trades" && <CountBadge count={s.unreadMessages} />}</NavLink>
+          <NavLink key={t} to={t}>{TAB_LABEL[t]}{t === "messages" && <CountBadge count={s.unreadMessages} />}</NavLink>
         ))}
       </nav>}
       {myTurn && !onDraftTab && (
@@ -146,7 +144,7 @@ export default function SeasonLayout() {
           <Link className="button primary sm" to="draft">Go to the draft</Link>
         </div>
       )}
-      <SeasonCtx.Provider value={{ season: s, reload: season.reload, reloadLeague, draftVersion, draftLive }}>
+      <SeasonCtx.Provider value={{ season: s, reload: season.reload, reloadLeague, draftVersion, draftLive, messagesVersion }}>
         <Outlet />
       </SeasonCtx.Provider>
     </>
@@ -163,8 +161,8 @@ function ChatIcon() {
 
 // Listens to the season's draft events while there's something to follow: during the draft from
 // any tab, and on the Draft tab during setup (to see it start). EventSource is the browser's
-// built-in SSE client: it sends the session cookie and reconnects by itself after a dropped
-// connection, and the server answers every (re)connect with the current state, so nothing is missed.
+// built-in SSE client: it sends the session cookie; openEventStream keeps it reconnected, and the
+// server answers every (re)connect with the current state, so nothing is missed.
 function useLiveDraft(leagueId: string, season: SeasonDetail | null, onDraftTab: boolean,
                       reloadSeason: () => void, reloadLeague: () => void) {
   const [draftVersion, setDraftVersion] = useState(0);
@@ -179,9 +177,8 @@ function useLiveDraft(leagueId: string, season: SeasonDetail | null, onDraftTab:
     if (!listen || !seasonId) return;
     let lastStatus: DraftChanged["status"] | null = null;
     setDraftLive(null); // nothing known about this season's draft until its first event
-    const source = new EventSource(`/api/leagues/${leagueId}/seasons/${seasonId}/draft/events`);
-    source.addEventListener("draft", (e) => {
-      const change = JSON.parse((e as MessageEvent<string>).data) as DraftChanged;
+    return openEventStream(`/api/leagues/${leagueId}/seasons/${seasonId}/draft/events`, { draft: (e) => {
+      const change = JSON.parse(e.data) as DraftChanged;
       // Started or completed: the season's status changed too, so refresh the header and league.
       if (lastStatus !== null && change.status !== lastStatus) {
         reloads.current.reloadSeason();
@@ -190,11 +187,36 @@ function useLiveDraft(leagueId: string, season: SeasonDetail | null, onDraftTab:
       lastStatus = change.status;
       setDraftLive(change);
       setDraftVersion((v) => v + 1);
-    });
-    return () => source.close();
+    } });
   }, [listen, leagueId, seasonId]);
 
   return { draftVersion, draftLive: listen ? draftLive : null };
+}
+
+// Listens for changes to your conversations (YGO-35) while you play in the season or commission it
+// (commissioners act for placeholders and approve trades). Each event is a bare signal: refresh the
+// unread counts (season header, league switcher) and bump the version the Messages page refetches
+// on. The server sends one on every (re)connect; the first is skipped since the page just loaded,
+// but one after a reconnect catches up on anything missed while disconnected.
+function useLiveMessages(leagueId: string, season: SeasonDetail | null, reloadSeason: () => void, reloadLeague: () => void) {
+  const [version, setVersion] = useState(0);
+  const seasonId = season?.id;
+  const listen = !!season && (season.youPlay || season.canManage);
+  const reloads = useRef({ reloadSeason, reloadLeague });
+  reloads.current = { reloadSeason, reloadLeague };
+
+  useEffect(() => {
+    if (!listen || !seasonId) return;
+    let first = true;
+    return openEventStream(`/api/leagues/${leagueId}/seasons/${seasonId}/trades/events`, { messages: () => {
+      if (first) { first = false; return; }
+      reloads.current.reloadSeason();
+      reloads.current.reloadLeague();
+      setVersion((v) => v + 1);
+    } });
+  }, [listen, leagueId, seasonId]);
+
+  return version;
 }
 
 // Puts a prefix in front of the page title (e.g. "Your pick · "), so a background browser tab shows it.

@@ -783,8 +783,13 @@ class DraftApiTest {
 
     /** The data lines of the draft events a stream has received so far. */
     private static List<String> events(MvcResult stream) throws Exception {
-        return stream.getResponse().getContentAsString().lines()
-                .filter(l -> l.startsWith("data:")).map(l -> l.substring("data:".length())).toList();
+        // Each event is "event:draft" then "data:…" (heartbeats are "event:ping", left out).
+        List<String> lines = stream.getResponse().getContentAsString().lines().toList();
+        List<String> out = new java.util.ArrayList<>();
+        for (int i = 0; i + 1 < lines.size(); i++) {
+            if (lines.get(i).equals("event:draft") && lines.get(i + 1).startsWith("data:")) out.add(lines.get(i + 1).substring("data:".length()));
+        }
+        return out;
     }
 
     private ResultActions pick(AppUser user, String card, int overallPick) throws Exception {

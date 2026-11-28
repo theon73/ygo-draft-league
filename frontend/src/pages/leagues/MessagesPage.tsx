@@ -1,8 +1,8 @@
 import CountBadge from "../../components/CountBadge";
 import PlayerAvatar from "../../components/PlayerAvatar";
 import InfoTip from "../../components/InfoTip";
-import { useEffect, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { useEffect, useLayoutEffect, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
+import { Link, Navigate, useLocation, useSearchParams } from "react-router-dom";
 import {
   apiPost, type AllowanceKind, type Roster, type RosterCard, type TradeAsset, type TradeOffer, type TradesOverview, type TradeThread,
 } from "../../api/client";
@@ -15,9 +15,11 @@ import { GROUPS, seasonCardPath, useRosters } from "./RostersPage";
 import { useSeason } from "./SeasonLayout";
 import { useConfirm, Loading } from "../../components/Feedback";
 
-// The Trades tab (YGO-24): one private conversation per pair of players, with offers,
-// counteroffers and messages. Who you're talking to is in the URL (?with=…), and, for a
-// commissioner trading for a placeholder seat, who you're acting as (?as=…).
+// The Messages tab (YGO-24 as Trades; YGO-35): one private conversation per pair of players, and a
+// trade offer is one kind of message in it, proposed from the composer. Who you're talking to is in
+// the URL (?with=…), and, for a commissioner acting for a placeholder seat, who you're acting as
+// (?as=…); ?propose=1 opens the offer builder (the "Propose a trade" button on a roster). Messages
+// work from setup on; offers only while trading is open. The API keeps its /trades paths.
 
 const STATUS: Record<TradeOffer["status"], string> = {
   OPEN: "Open",
@@ -33,20 +35,24 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 // "unlimited trades" / "1 trade" / "3 claims"
 const left = (n: number | null, word: string) => (n === null ? `unlimited ${word}s` : plural(n, word));
 
-export default function TradesPage() {
+/** …/trades (the tab's name until YGO-35) goes to …/messages, keeping ?with= and the rest. */
+export function TradesRedirect() {
+  const { search } = useLocation();
+  return <Navigate to={{ pathname: "../messages", search }} replace />;
+}
+
+export default function MessagesPage() {
   const { league } = useLeague();
-  const { season } = useSeason();
+  const { season, messagesVersion } = useSeason();
   const base = `/leagues/${league.id}/seasons/${season.id}/trades`;
   const [params, setParams] = useSearchParams();
   const as = params.get("as") ?? "";
   const withId = params.get("with") ?? "";
   const [version, setVersion] = useState(0);
-  const overview = useApi<TradesOverview>(`${base}${as ? `?as=${encodeURIComponent(as)}` : ""}`, String(version));
+  // Refetched on live changes to your conversations (messagesVersion), so each one's unread count keeps up.
+  const overview = useApi<TradesOverview>(`${base}${as ? `?as=${encodeURIComponent(as)}` : ""}`, `${version}-${messagesVersion}`);
   const refresh = () => setVersion((v) => v + 1);
-  // The season header refetches its unread total every minute; when it changes, refetch the
-  // conversation list too so each conversation's own count keeps up.
-  const unread = season.unreadMessages ?? 0;
-  useEffect(() => { refresh(); }, [unread]);
+  const propose = params.get("propose") === "1";
 
   const choose = (values: Record<string, string>) => setParams((prev) => {
     const next = new URLSearchParams(prev);
@@ -54,25 +60,29 @@ export default function TradesPage() {
     return next;
   });
 
-  if (overview.error) return <p className="bad">Couldn't load trades ({overview.error})</p>;
+  if (overview.error) return <p className="bad">Couldn't load messages ({overview.error})</p>;
   if (!overview.data) return <Loading />;
   const o = overview.data;
   const r = o.rules;
+  const preSeason = season.status === "SETUP" || season.status === "DRAFTING";
 
   return (
     <>
 
-      {!o.open && <p className="bad">{o.closedReason}.</p>}
+      {/* Before the season, that's expected and not a problem; later (deadline, playoffs, over) it's worth flagging. */}
+      {!o.open && (preSeason
+        ? <p className="muted">Trades open when the season starts, after the draft. Until then, conversations are for talking.</p>
+        : <p className="bad">{o.closedReason}. Conversations stay open.</p>)}
 
       {o.approvals.length > 0 && <Approvals base={base} offers={o.approvals} onDone={refresh} />}
 
       {o.actors.length === 0 ? (
-        <p className="muted">You aren't playing this season, so you have no trades of your own.</p>
+        <p className="muted">You aren't playing this season, so you have no conversations of your own.</p>
       ) : (
         <>
           <div className="pool-toolbar">
             {o.actors.length > 1 && (
-              <label className="inline-label">Trading as{" "}
+              <label className="inline-label">Messaging as{" "}
                 <select value={o.as ?? ""} onChange={(e) => choose({ as: e.target.value, with: "" })}>
                   {o.actors.map((a) => <option key={a.memberId} value={a.memberId}>{a.name}{a.you ? " (you)" : " (placeholder)"}</option>)}
                 </select>
@@ -80,23 +90,30 @@ export default function TradesPage() {
             )}
             {/* What's left this week, with the league's trade rules in the tip (YGO-34). */}
             <span className="limits">
-              {o.mine && (
+              {o.mine && o.open && (
                 <>
                   <span className="pill accent">{left(o.mine.tradesLeft, "trade")} left</span>
                   <span className="pill">{left(o.mine.claimsLeft, "claim")} left</span>
                   <span className="muted small">{o.week === 0 ? "before week 1 (counts as week 1)" : `week ${o.week}`}</span>
                 </>
               )}
-              <InfoTip>
+              {o.open && <InfoTip>
                 {r.tradesPerWeek === null ? "Unlimited trades" : `${r.tradesPerWeek} trade${r.tradesPerWeek === 1 ? "" : "s"} a week`}, each counting for
                 both players{r.tradeDeadlineWeek !== null && `; the deadline is the end of week ${r.tradeDeadlineWeek}`}
                 {r.commissionerApproval && "; accepted trades need a commissioner's approval"}. Trades are even: both sides give the same
                 number of cards. Conversations are private to the two players.
-              </InfoTip>
+              </InfoTip>}
             </span>
           </div>
           <div className="trades-layout">
             <aside>
+              {o.threads.length === 0 && (
+                <p className="muted small thread-hint">
+                  {o.open
+                    ? "Trades happen in conversations: pick a player below, then propose a trade or just say hello."
+                    : "Pick a player below to start a conversation."}
+                </p>
+              )}
               <ul className="thread-list">
                 {o.threads.map((t) => (
                   <li key={t.withMemberId} className={t.withMemberId === withId ? "selected" : undefined}>
@@ -111,15 +128,20 @@ export default function TradesPage() {
                 ))}
               </ul>
               <select aria-label="Start a conversation" value="" onChange={(e) => e.target.value && choose({ with: e.target.value })}>
-                <option value="">Trade with…</option>
+                <option value="">{o.threads.length ? "New conversation…" : "Message a player…"}</option>
                 {o.players.map((p) => <option key={p.memberId} value={p.memberId}>{p.name}</option>)}
               </select>
             </aside>
             <section>
               {withId ? (
-                <Thread key={`${o.as}-${withId}`} base={base} as={o.as ?? ""} withId={withId} open={o.open} rules={o.rules} onChange={refresh} />
+                <Thread key={`${o.as}-${withId}`} base={base} as={o.as ?? ""} withId={withId} open={o.open} rules={o.rules} onChange={refresh}
+                        propose={propose && o.open} onProposeHandled={() => choose({ propose: "" })} />
               ) : (
-                <p className="muted">Choose a conversation, or start one with “Trade with…”.</p>
+                <p className="muted">
+                  {o.open
+                    ? "Choose a conversation, or start one. To trade, open a conversation with that player and use “Propose a trade”."
+                    : "Choose a conversation, or start one."}
+                </p>
               )}
             </section>
           </div>
@@ -201,24 +223,46 @@ function Approvals({ base, offers, onDone }: { base: string; offers: TradeOffer[
   );
 }
 
-function Thread({ base, as, withId, open, rules, onChange }: {
+function Thread({ base, as, withId, open, rules, onChange, propose, onProposeHandled }: {
   base: string; as: string; withId: string; open: boolean; rules: TradesOverview["rules"]; onChange: () => void;
+  propose: boolean; onProposeHandled: () => void;
 }) {
   const [version, setVersion] = useState(0);
-  const thread = useApi<TradeThread>(`${base}/threads/${withId}${as ? `?as=${encodeURIComponent(as)}` : ""}`, String(version));
+  const { reload: reloadSeason, reloadLeague, messagesVersion } = useSeason();
+  // Refetched live when the other player writes or acts (YGO-35).
+  const thread = useApi<TradeThread>(`${base}/threads/${withId}${as ? `?as=${encodeURIComponent(as)}` : ""}`, `${version}-${messagesVersion}`);
   const rosters = useRosters();
-  const [composing, setComposing] = useState<{ counterOf: string | null; give: number[]; get: number[] } | null>(null);
+  const [composing, setComposing] = useState<{ counterOf: string | null; give: number[]; get: number[] } | null>(
+    propose ? { counterOf: null, give: [], get: [] } : null);
+  // The conversation scrolls inside its box and stays on the newest message as new ones arrive,
+  // unless you've scrolled up to read older ones.
+  const box = useRef<HTMLDivElement>(null);
+  const atBottom = useRef(true);
+  const itemCount = thread.data?.items.length ?? 0;
+  useLayoutEffect(() => {
+    if (atBottom.current && box.current) box.current.scrollTop = box.current.scrollHeight;
+  }, [itemCount]);
+  // The offer builder opens under the conversation: bring it into view (from "Propose a trade", a
+  // counter, or a roster's ?propose=1).
+  const builder = useRef<HTMLDivElement>(null);
+  const isComposing = composing !== null;
+  const loadedOnce = !!thread.data;
+  useEffect(() => {
+    if (isComposing && loadedOnce) builder.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [isComposing, loadedOnce]);
+  // ?propose=1 is used once (opening the builder), then dropped so a reload doesn't reopen it.
+  useEffect(() => { if (propose) onProposeHandled(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [message, setMessage] = useState("");
   const [error, setError] = useState<string | null>(null);
   const confirm = useConfirm();
   const reload = () => { setVersion((v) => v + 1); onChange(); };
-  // Opening the conversation marks it read on the server; once it has loaded, refresh what shows
-  // the unread counts (the season header and tab, and this page's conversation list).
-  const { reload: reloadSeason, reloadLeague } = useSeason();
-  const loaded = !!thread.data;
+  // Every load of the conversation marks it read on the server (including a live refetch while you
+  // look at it), so refresh what shows the unread counts afterwards: the season header and tab, the
+  // league's season switcher, and this page's conversation list.
+  const data = thread.data;
   useEffect(() => {
-    if (loaded) { reloadSeason(); reloadLeague(); onChange(); }
-  }, [loaded, withId]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (data) { reloadSeason(); reloadLeague(); onChange(); }
+  }, [data]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (thread.error) return <p className="bad">Couldn't load the conversation ({thread.error})</p>;
   if (!thread.data) return <Loading />;
@@ -259,13 +303,16 @@ function Thread({ base, as, withId, open, rules, onChange }: {
     <>
       <h5 className="thread-head">
         With {t.with}
-        <span className="muted">
+        {open && <span className="muted">
           You: {left(t.mine.tradesLeft, "trade")}, {left(t.mine.claimsLeft, "claim")} left · {t.with}: {left(t.theirs.tradesLeft, "trade")},{" "}
           {left(t.theirs.claimsLeft, "claim")}
-        </span>
+        </span>}
       </h5>
-      {t.items.length === 0 && <p className="muted">No offers or messages yet.</p>}
-      <div className="thread">
+      {t.items.length === 0 && (
+        <p className="muted">No messages yet. {open ? `Say hello, or propose a trade to ${t.with}.` : `Say hello to ${t.with}.`}</p>
+      )}
+      <div className="thread" ref={box}
+           onScroll={(e) => { const el = e.currentTarget; atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48; }}>
         {t.items.map((item, i) => item.offer ? (
           <OfferBox key={item.offer.id} offer={item.offer}>
             {(item.offer.canAccept || item.offer.canWithdraw || (open && item.offer.status === "OPEN")) && (
@@ -285,10 +332,11 @@ function Thread({ base, as, withId, open, rules, onChange }: {
         <form className="thread-composer" onSubmit={(e) => { e.preventDefault(); if (message.trim()) void send(); }}>
           <input value={message} onChange={(e) => setMessage(e.target.value)} placeholder={`Message ${t.with}`} maxLength={1000} aria-label="Message" />
           <button type="submit" disabled={!message.trim()}>Send</button>
-          {open && <button type="button" onClick={() => setComposing({ counterOf: null, give: [], get: [] })}>New offer</button>}
+          {open && <button type="button" className="primary" onClick={() => setComposing({ counterOf: null, give: [], get: [] })}>Propose a trade</button>}
         </form>
       )}
 
+      <div ref={builder} />
       {composing && (
         <OfferBuilder key={composing.counterOf ?? "new"} base={base} as={as} withId={withId} withName={t.with} initial={composing}
                       mine={myRoster} theirs={theirRoster} rules={rules} onCancel={() => setComposing(null)}

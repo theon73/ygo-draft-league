@@ -159,25 +159,26 @@ public class NeedsYouService {
                     add.add("COMPLETE_SEASON", "Complete the season", pv.enabled() ? "The final has a result." : "Every match has a final result.",
                             "schedule", null, null, true);
                 }
-                TradeService.TradesView tv = trades.overview(leagueId, seasonId, null, caller);
-                if (isPlayer(tv)) {
-                    for (TradeService.ThreadSummary t : tv.threads()) {
-                        String thread = "trades?with=" + t.withMemberId();
-                        if (t.awaitingYou() > 0) {
-                            add.add("TRADE_OFFER", t.with() + (t.awaitingYou() == 1 ? " sent you a trade offer" : " sent you " + t.awaitingYou() + " trade offers"),
-                                    "Accept, decline or counter it.", thread, null, null, false);
-                        } else if (t.unread() > 0) {
-                            // New messages (YGO-34); an offer waiting for you already says the same and more.
-                            add.add("MESSAGE", t.with() + " messaged you", t.unread() == 1 ? "1 new message" : t.unread() + " new messages",
-                                    thread, null, null, false);
-                        }
-                    }
-                }
-                for (TradeService.OfferView o : tv.approvals()) {
-                    add.add("TRADE_APPROVAL", "Approve a trade", o.from() + " ↔ " + o.to(), "trades", null, null, true);
-                }
             }
             default -> { }
+        }
+        // Messages work in every stage (YGO-35); offers and approvals only happen while trading is open.
+        TradeService.TradesView tv = trades.overview(leagueId, seasonId, null, caller);
+        if (isPlayer(tv)) {
+            for (TradeService.ThreadSummary t : tv.threads()) {
+                String thread = "messages?with=" + t.withMemberId();
+                if (t.awaitingYou() > 0) {
+                    add.add("TRADE_OFFER", t.with() + (t.awaitingYou() == 1 ? " sent you a trade offer" : " sent you " + t.awaitingYou() + " trade offers"),
+                            "Accept, decline or counter it.", thread, null, null, false);
+                } else if (t.unread() > 0) {
+                    // New messages (YGO-34); an offer waiting for you already says the same and more.
+                    add.add("MESSAGE", t.with() + " messaged you", t.unread() == 1 ? "1 new message" : t.unread() + " new messages",
+                            thread, null, null, false);
+                }
+            }
+        }
+        for (TradeService.OfferView o : tv.approvals()) {
+            add.add("TRADE_APPROVAL", "Approve a trade", o.from() + " ↔ " + o.to(), "messages", null, null, true);
         }
         return out;
     }

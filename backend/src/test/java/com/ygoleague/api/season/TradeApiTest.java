@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.jayway.jsonpath.JsonPath;
@@ -28,6 +29,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.ResultMatcher;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
@@ -240,7 +242,7 @@ class TradeApiTest {
         mvc.perform(get(s("/trades")).with(as(joey))).andExpect(jsonPath("$.threads[0].unread").value(2));
         mvc.perform(get(s("/needs-you")).with(as(joey)))
                 .andExpect(jsonPath("$[?(@.kind == 'MESSAGE')].title").value("Kaiba messaged you"))
-                .andExpect(jsonPath("$[?(@.kind == 'MESSAGE')].tab").value("trades?with=" + kaibaId));
+                .andExpect(jsonPath("$[?(@.kind == 'MESSAGE')].tab").value("messages?with=" + kaibaId));
         mvc.perform(get(s("")).with(as(kaiba))).andExpect(jsonPath("$.unreadMessages").value(0));   // your own don't count
 
         // An offer counts too; opening the conversation reads everything.
@@ -251,7 +253,55 @@ class TradeApiTest {
         mvc.perform(get(s("/trades")).with(as(joey))).andExpect(jsonPath("$.threads[0].unread").value(0));
     }
 
+    @Test
+    void conversationChangesAreStreamedOnlyToThoseInvolved() throws Exception {
+        ready(",\"tradesPerWeek\":1");
+        String joeyId = memberId("Joey"), p1 = memberId("P1");
+        mvc.perform(get(s("/trades/events")).with(as(users.save(new AppUser("Outsider"))))).andExpect(status().isNotFound());
+        MvcResult joeys = stream(joey), kaibas = stream(kaiba), yugis = stream(yugi);
+        // Each stream says "current" straight away.
+        Assertions.assertEquals(List.of(1, 1, 1), List.of(events(joeys), events(kaibas), events(yugis)));
+
+        // Kaiba and Joey talk: their streams hear it, the commissioner's doesn't.
+        send(post(s("/trades/threads/" + joeyId + "/messages")), kaiba, "{\"body\":\"Hi\"}").andExpect(status().isCreated());
+        offer(kaiba, null, joeyId, cards("Card 2"), cards("Card 4"), null, null).andExpect(status().isCreated());
+        Assertions.assertEquals(List.of(3, 3, 1), List.of(events(joeys), events(kaibas), events(yugis)));
+
+        // A placeholder's conversation reaches the commissioners who act for it.
+        send(post(s("/trades/threads/" + p1 + "/messages")), kaiba, "{\"body\":\"Hi P1\"}").andExpect(status().isCreated());
+        Assertions.assertEquals(List.of(3, 4, 2), List.of(events(joeys), events(kaibas), events(yugis)));
+
+        // Refused actions say nothing.
+        offer(kaiba, null, joeyId, cards("Card 1"), cards("Card 4"), null, null).andExpect(status().isConflict());
+        Assertions.assertEquals(List.of(3, 4, 2), List.of(events(joeys), events(kaibas), events(yugis)));
+    }
+
+    @Test
+    void playersCanMessageBeforeTheSeasonButNotTrade() throws Exception {
+        // Setup: no rules, pool or draft yet.
+        String joeyId = memberId("Joey"), kaibaId = memberId("Kaiba");
+        mvc.perform(get(s("/trades")).with(as(joey))).andExpect(status().isOk())
+                .andExpect(jsonPath("$.open").value(false))
+                .andExpect(jsonPath("$.closedReason").value("Trading opens when the draft is complete"));
+        send(post(s("/trades/threads/" + joeyId + "/messages")), kaiba, "{\"body\":\"Good luck in the draft\"}").andExpect(status().isCreated());
+        mvc.perform(get(s("/trades")).with(as(joey))).andExpect(jsonPath("$.threads[0].unread").value(1));
+        mvc.perform(get(s("/needs-you")).with(as(joey))).andExpect(jsonPath("$[?(@.kind == 'MESSAGE')].title").value("Kaiba messaged you"));
+        mvc.perform(get(s("/trades/threads/" + kaibaId)).with(as(joey))).andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].message.body").value("Good luck in the draft"));
+        offer(kaiba, null, joeyId, "[]", "[]", null, null).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("Trading opens when the draft is complete"));
+    }
+
     // ---- helpers ----
+
+    private MvcResult stream(AppUser user) throws Exception {
+        return mvc.perform(get(s("/trades/events")).with(as(user)).accept(MediaType.TEXT_EVENT_STREAM))
+                .andExpect(request().asyncStarted()).andReturn();
+    }
+
+    private static int events(MvcResult stream) throws Exception {
+        return (int) stream.getResponse().getContentAsString().lines().filter(l -> l.equals("event:messages")).count();   // not the "event:ping" heartbeats
+    }
 
     private ResultActions offer(AppUser user, String as, String to, String give, String get, String counterOf, String message) throws Exception {
         return send(post(s("/trades/offers")), user, "{" + (as == null ? "" : "\"as\":\"" + as + "\",") + "\"toMemberId\":\"" + to + "\","
