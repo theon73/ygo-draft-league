@@ -400,13 +400,22 @@ function Byes({ week }: { week: ScheduleWeek }) {
   return <> · {byes.map((m) => (m.a.you ? "you have" : `${m.a.name} has`)).join(", ")} a bye</>;
 }
 
+/**
+ * A player in a matchup: avatar, then the name with the team name on a smaller line under it, so a
+ * team name never makes the row wider than the name (YGO-37). Long names shorten with "…" (the full
+ * text is in the tooltip) instead of wrapping the tile.
+ */
 export function Player({ p }: { p: SchedulePlayer }) {
   return (
-    <span className="matchup-player">
+    <span className="matchup-player" title={p.teamName ? `${p.name} · ${p.teamName}` : undefined}>
       <PlayerAvatar name={p.name} passcode={p.avatar} size="sm" />
-      <Link to={`../rosters/${p.memberId}`}>{p.name}</Link>
-      {p.you && <span className="badge">you</span>}
-      {p.teamName && <span className="muted team"> {p.teamName}</span>}
+      <span className="who">
+        <span className="who-name">
+          <Link to={`../rosters/${p.memberId}`}>{p.name}</Link>
+          {p.you && <span className="badge">you</span>}
+        </span>
+        {p.teamName && <span className="team">{p.teamName}</span>}
+      </span>
     </span>
   );
 }

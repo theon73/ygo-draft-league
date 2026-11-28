@@ -16,6 +16,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Profile;
+import org.springframework.core.annotation.Order;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,6 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Component
 @Profile(DevLoginController.PROFILE)
+@Order(1)   // before DevDemoLeague, which needs the users
 class DevSeed implements ApplicationRunner {
 
     private static final Logger log = LoggerFactory.getLogger(DevSeed.class);

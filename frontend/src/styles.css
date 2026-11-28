@@ -495,7 +495,28 @@ dialog.confirm .dialog-body.with-media .dialog-actions { grid-column: 1 / -1; }
 .confirm-slot strong { color: var(--accent-strong); }
 
 /* Rosters (YGO-22): side-by-side columns that scroll sideways inside their box, never the page. */
-.roster-columns { display: flex; gap: 0.75rem; overflow-x: auto; padding-bottom: 0.5rem; align-items: flex-start; }
+.roster-columns { display: flex; gap: 0.75rem; overflow-x: auto; padding-bottom: 0.5rem; align-items: flex-start;
+  scroll-snap-type: x mandatory; scroll-padding-left: 0; overscroll-behavior-x: contain; }
+/* The rosters board (YGO-37): a sticky strip of player chips, then the columns, with a fade on the
+   side that has more. */
+.roster-strip { position: sticky; top: 0; z-index: 3; display: flex; align-items: center; gap: 0.25rem;
+  background: var(--bg); padding: 0.4rem 0; margin-bottom: 0.4rem; border-bottom: 1px solid var(--border-soft); }
+.roster-strip ul { list-style: none; margin: 0; padding: 0; display: flex; gap: 0.3rem; overflow-x: auto; flex: 1; min-width: 0; scrollbar-width: none; }
+.roster-strip ul::-webkit-scrollbar { display: none; }
+button.strip-arrow { flex: none; font-size: 1.3rem; line-height: 1; padding: 0.15rem 0.55rem; }
+button.roster-chip { display: inline-flex; align-items: center; white-space: nowrap; font-size: 0.8rem; padding: 0.2rem 0.6rem 0.2rem 0.3rem;
+  border-radius: 999px; background: transparent; border-color: var(--border-soft); color: var(--text-2); }
+button.roster-chip.in-view { background: var(--surface-2); border-color: var(--text-3); color: var(--text); }
+button.roster-chip.you { border-color: var(--accent-line); }
+button.roster-chip.you.in-view { background: var(--accent-wash); color: var(--accent-strong); }
+.roster-columns-wrap { position: relative; }
+.roster-columns-wrap::before, .roster-columns-wrap::after { content: ""; position: absolute; top: 0; bottom: 0.5rem; width: 2.5rem;
+  pointer-events: none; opacity: 0; transition: opacity 0.2s; z-index: 2; }
+.roster-columns-wrap::before { left: 0; background: linear-gradient(to right, var(--bg), transparent); }
+.roster-columns-wrap::after { right: 0; background: linear-gradient(to left, var(--bg), transparent); }
+.roster-columns-wrap.more-left::before, .roster-columns-wrap.more-right::after { opacity: 1; }
+.roster-column.flash { animation: tile-flash 1.2s ease-out; }
+.roster-column { scroll-snap-align: start; }
 .roster-column { flex: 0 0 13.5rem; border: 1px solid var(--border-soft); background: var(--surface); border-radius: var(--radius); padding: 0.6rem 0.75rem; font-size: 0.85rem; }
 .roster-column.mine { border-color: var(--accent-line); }
 .roster-column h5 { margin: 0; font-size: 0.98rem; }
@@ -605,7 +626,6 @@ ul.matchups > li.mine { border-color: var(--accent-line); box-shadow: inset 3px 
 ul.matchups > li.selected { outline: 2px solid var(--accent); outline-offset: 1px; }
 ul.matchups .vs { color: var(--text-3); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; }
 ul.matchups .bye { font-size: 0.85rem; }
-ul.matchups .team { font-size: 0.8rem; }
 ul.matchups.compact { grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); }
 ul.matchups.compact > li { padding: 0.45rem 0.65rem; font-size: 0.9rem; background: var(--surface); }
 .matchup-player { min-width: 0; }
@@ -620,6 +640,18 @@ ol.schedule-weeks > li.past { opacity: 0.7; }
 .week-head { display: flex; gap: 0.75rem; align-items: baseline; flex-wrap: wrap; margin-bottom: 0.4rem; }
 .week-head .muted { font-size: 0.85rem; }
 .matchup-line { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+/* In a tile, A · score · B always share one row (YGO-37): A on the left, B on the right, the score
+   centred between. Each side takes what it needs and only a long one shortens (with "…"), so ten
+   players with team names don't break the grid. */
+ul.matchups .matchup-line { flex-wrap: nowrap; gap: 0.4rem; }
+ul.matchups .matchup-line > .matchup-player { flex: 0 1 auto; }
+/* A team name is the first thing to shorten: a player without one keeps their name whole (up to
+   half the row), so a short name opposite a long team doesn't get cut. */
+ul.matchups .matchup-line > .matchup-player:not(:has(.team)) { flex-shrink: 0; max-width: calc(50% - 1.6rem); }
+ul.matchups .matchup-line > .score { flex: none; margin: 0 auto; }
+ul.matchups .matchup-line > .matchup-player:last-child { flex-direction: row-reverse; text-align: right; }
+ul.matchups .matchup-line > .matchup-player:last-child .player-avatar { margin-right: 0; margin-left: 0.4rem; }
+ul.matchups .matchup-line > .matchup-player:last-child .who-name { justify-content: flex-end; }
 .matchup-line .score { font-variant-numeric: tabular-nums; color: var(--text-2); min-width: 2.5rem; text-align: center; }
 .matchup-line .score.final { color: var(--text); font-weight: 700; font-size: 1.05rem; }
 .matchup-status { display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.35rem; font-size: 0.8rem; }
@@ -762,7 +794,13 @@ details.how-to li { margin: 0.15rem 0; }
 .player-avatar.sm { width: 1.6rem; height: 1.6rem; font-size: 0.62rem; margin-right: 0.4rem; }
 .player-avatar.md { width: 2.1rem; height: 2.1rem; font-size: 0.75rem; margin-right: 0.45rem; }
 .player-avatar.lg { width: 4rem; height: 4rem; font-size: 1.2rem; box-shadow: 0 0 0 2px var(--accent-line); }
-.matchup-player { display: inline-flex; align-items: center; flex-wrap: wrap; }
+.matchup-player { display: inline-flex; align-items: center; min-width: 0; max-width: 100%; }
+.matchup-player .player-avatar { flex: none; }
+.matchup-player .who { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
+.matchup-player .who-name { display: flex; align-items: center; min-width: 0; }
+.matchup-player .who-name a { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.matchup-player .who-name .badge { flex: none; }
+.matchup-player .team { font-size: 0.75rem; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tree-name { display: flex; align-items: center; }
 td.standings-player, td.player-cell { white-space: nowrap; }
 td.standings-player > *, td.player-cell > * { vertical-align: middle; }
